@@ -108,6 +108,7 @@ type keyMap struct {
 	NewTask      key.Binding
 	NewColumn    key.Binding
 	Search       key.Binding
+	Edit         key.Binding
 	Open         key.Binding
 	Delete       key.Binding
 	Help         key.Binding
@@ -115,41 +116,42 @@ type keyMap struct {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.RenameCol, k.DeleteCol, k.Search, k.Open, k.Quit}
+	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.RenameCol, k.DeleteCol, k.Search, k.Open, k.Edit, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Left, k.Right, k.Up, k.Down},
 		{k.MoveColLeft, k.MoveColRight, k.MoveLeft, k.MoveRight},
-		{k.ReorderUp, k.ReorderDown, k.NewTask, k.NewColumn, k.RenameCol, k.DeleteCol},
+		{k.ReorderUp, k.ReorderDown, k.NewTask, k.NewColumn, k.RenameCol, k.DeleteCol, k.Search, k.Open, k.Edit, k.Delete},
 		{k.Help, k.Quit},
 	}
 }
 
 type model struct {
-	board        *domain.Board
-	store        store.BoardStore
-	dataPath     string
-	width        int
-	height       int
-	activeColumn int
-	selected     map[domain.Status]int
-	scroll       map[domain.Status]int
-	visible      map[domain.Status][]string
-	filter       string
-	filterDraft  string
-	columnInput  textinput.Model
-	mode         mode
-	columnRename domain.Status
-	titleInput   textinput.Model
-	descInput    textarea.Model
-	searchInput  textinput.Model
-	help         help.Model
-	keys         keyMap
-	showHelp     bool
-	lastStatus   string
-	lastErr      error
+	board         *domain.Board
+	store         store.BoardStore
+	dataPath      string
+	width         int
+	height        int
+	activeColumn  int
+	selected      map[domain.Status]int
+	scroll        map[domain.Status]int
+	visible       map[domain.Status][]string
+	filter        string
+	filterDraft   string
+	columnInput   textinput.Model
+	mode          mode
+	columnRename  domain.Status
+	titleInput    textinput.Model
+	descInput     textarea.Model
+	searchInput   textinput.Model
+	help          help.Model
+	keys          keyMap
+	editingTaskID string
+	showHelp      bool
+	lastStatus    string
+	lastErr       error
 }
 
 // ansiStripRe matches ANSI escape sequences for the dim/blur effect.
@@ -227,6 +229,7 @@ func New(board *domain.Board, boardStore store.BoardStore, dataPath string) tea.
 			RenameCol:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rename column")),
 			DeleteCol:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete column")),
 			Search:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
+			Edit:         key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit selected")),
 			Open:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("\u23ce", "details")),
 			Delete:       key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
 			Help:         key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
@@ -341,6 +344,7 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.ReorderDown):
 		return m.reorderSelected(1)
 	case key.Matches(msg, m.keys.NewTask):
+		m.editingTaskID = ""
 		m.mode = modeCreate
 		m.titleInput.SetValue("")
 		m.descInput.SetValue("")
@@ -348,6 +352,8 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.descInput.Blur()
 		m.lastErr = nil
 		return m, textinput.Blink
+	case key.Matches(msg, m.keys.Edit):
+		return m.beginEditSelected()
 	case key.Matches(msg, m.keys.NewColumn):
 		m.mode = modeAddColumn
 		m.columnInput.SetValue("")
@@ -397,7 +403,7 @@ func (m *model) openEditorWithDraft() (tea.Model, tea.Cmd) {
 	content += "# First line = task title\n"
 	content += "# Everything after = description\n"
 	content += "# Lines starting with # are ignored\n"
-	content += "# Save and quit to create, empty to cancel\n"
+	content += "# Save and quit to apply, empty to cancel\n"
 
 	if _, err := tmpFile.WriteString(content); err != nil {
 		tmpFile.Close()
@@ -435,9 +441,32 @@ func (m *model) handleEditorResult(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
 
 	title, description := parseEditorContent(string(content))
 	if title == "" {
-		m.lastStatus = "task creation cancelled"
+		if m.editingTaskID == "" {
+			m.lastStatus = "task creation cancelled"
+		} else {
+			m.lastStatus = "task edit cancelled"
+			m.editingTaskID = ""
+		}
 		m.lastErr = nil
+		m.mode = modeBoard
 		return m, nil
+	}
+
+	if m.editingTaskID != "" {
+		task, err := m.board.UpdateTask(m.editingTaskID, title, description)
+		m.editingTaskID = ""
+		if err != nil {
+			m.lastErr = err
+			return m, nil
+		}
+
+		m.mode = modeBoard
+		m.lastStatus = fmt.Sprintf("updated %s", shortID(task.ID))
+		m.lastErr = nil
+		m.recalculateVisible()
+		m.selectTask(task.ID)
+
+		return m, saveBoardCmd(m.store, m.board.Clone())
 	}
 
 	task, err := m.board.AddTask(title, description)
@@ -494,6 +523,7 @@ func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeBoard
 		m.titleInput.Blur()
 		m.descInput.Blur()
+		m.editingTaskID = ""
 		return m, nil
 	case "tab", "shift+tab":
 		if m.titleInput.Focused() {
@@ -505,7 +535,7 @@ func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "ctrl+s":
-		return m.createTask()
+		return m.saveTask()
 	case "ctrl+e":
 		m.mode = modeBoard
 		m.titleInput.Blur()
@@ -523,8 +553,28 @@ func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *model) createTask() (tea.Model, tea.Cmd) {
-	task, err := m.board.AddTask(m.titleInput.Value(), m.descInput.Value())
+func (m *model) saveTask() (tea.Model, tea.Cmd) {
+	title := m.titleInput.Value()
+	description := m.descInput.Value()
+
+	if m.editingTaskID != "" {
+		task, err := m.board.UpdateTask(m.editingTaskID, title, description)
+		if err != nil {
+			m.lastErr = err
+			return m, nil
+		}
+
+		m.mode = modeBoard
+		m.lastStatus = fmt.Sprintf("updated %s", shortID(task.ID))
+		m.lastErr = nil
+		m.editingTaskID = ""
+		m.recalculateVisible()
+		m.selectTask(task.ID)
+
+		return m, saveBoardCmd(m.store, m.board.Clone())
+	}
+
+	task, err := m.board.AddTask(title, description)
 	if err != nil {
 		m.lastErr = err
 		return m, nil
@@ -643,6 +693,24 @@ func (m *model) moveColumn(delta int) (tea.Model, tea.Cmd) {
 	return m, saveBoardCmd(m.store, m.board.Clone())
 }
 
+func (m *model) beginEditSelected() (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
+	if task == nil {
+		return m, nil
+	}
+
+	m.editingTaskID = task.ID
+	m.mode = modeCreate
+	m.titleInput.SetValue(task.Title)
+	m.descInput.SetValue(task.Description)
+	m.titleInput.Focus()
+	m.descInput.Blur()
+	m.lastErr = nil
+	m.lastStatus = ""
+
+	return m, textinput.Blink
+}
+
 func (m *model) beginRenameColumn() (tea.Model, tea.Cmd) {
 	statuses := m.board.Statuses()
 	if len(statuses) == 0 {
@@ -694,6 +762,8 @@ func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "enter", "q":
 		m.mode = modeBoard
+	case "e":
+		return m.beginEditSelected()
 	}
 
 	return m, nil
@@ -1172,6 +1242,7 @@ func (m *model) renderFooter() string {
 			keyStyle.Render("j/k") + descStyle.Render(" select") + sep +
 			keyStyle.Render("H") + descStyle.Render(" move col") + sep +
 			keyStyle.Render("L") + descStyle.Render(" move col") + sep +
+			keyStyle.Render("e") + descStyle.Render(" edit") + sep +
 			keyStyle.Render("c") + descStyle.Render(" column") + sep +
 			keyStyle.Render("r") + descStyle.Render(" rename") + sep +
 			keyStyle.Render("d") + descStyle.Render(" delete") + sep +
@@ -1192,10 +1263,18 @@ func (m *model) renderFooter() string {
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
 
 func (m *model) renderCreateDialog() string {
+	isEditing := m.editingTaskID != ""
+	titleText := "New Task"
+	saveHint := "save"
+	if isEditing {
+		titleText = "Edit Task"
+		saveHint = "update"
+	}
+
 	title := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(theme.Mauve).
-		Render("\u25c6  New Task")
+		Render(fmt.Sprintf("\u25c6  %s", titleText))
 
 	titleLabel := lipgloss.NewStyle().
 		Foreground(theme.Overlay0).
@@ -1213,7 +1292,7 @@ func (m *model) renderCreateDialog() string {
 	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
 	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
 	hint := keyStyle.Render("tab") + hintStyle.Render(" switch  ") +
-		keyStyle.Render("ctrl+s") + hintStyle.Render(" save  ") +
+		keyStyle.Render("ctrl+s") + hintStyle.Render(" "+saveHint+"  ") +
 		keyStyle.Render("ctrl+e") + hintStyle.Render(" editor  ") +
 		keyStyle.Render("esc") + hintStyle.Render(" cancel")
 
@@ -1343,7 +1422,8 @@ func (m *model) renderDetailDialog() string {
 
 	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
 	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	hint := keyStyle.Render("esc") + hintStyle.Render(" close")
+	hint := keyStyle.Render("e") + hintStyle.Render(" edit  ") +
+		keyStyle.Render("esc") + hintStyle.Render(" close")
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,

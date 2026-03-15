@@ -51,6 +51,7 @@ Existing JSON data is migrated automatically on first run:
 - `d`: delete active column (at least one column always kept; tasks are moved to the nearest adjacent column)
 - `n`: create task
 - `/`: search tasks
+- `e`: edit selected task
 - `[` / `]`: move task left or right across columns
 - `J` / `K`: reorder inside a column
 - `enter`: open task details

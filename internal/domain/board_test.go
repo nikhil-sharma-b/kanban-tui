@@ -159,6 +159,32 @@ func TestRenameColumnRejectsExistingName(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskChangesTitleAndDescription(t *testing.T) {
+	board := NewBoard()
+	task, _ := board.AddTask("old title", "old description")
+
+	updated, err := board.UpdateTask(task.ID, "new title", "new description")
+	if err != nil {
+		t.Fatalf("update task: %v", err)
+	}
+
+	if updated.Title != "new title" {
+		t.Fatalf("unexpected title: got %q want %q", updated.Title, "new title")
+	}
+	if updated.Description != "new description" {
+		t.Fatalf("unexpected description: got %q want %q", updated.Description, "new description")
+	}
+}
+
+func TestUpdateTaskRejectsEmptyTitle(t *testing.T) {
+	board := NewBoard()
+	task, _ := board.AddTask("title", "")
+
+	if _, err := board.UpdateTask(task.ID, "   ", "desc"); err == nil {
+		t.Fatal("expected update with empty title to fail")
+	}
+}
+
 func TestDeleteColumnDisallowsRemovingLastColumn(t *testing.T) {
 	board := NewBoard()
 

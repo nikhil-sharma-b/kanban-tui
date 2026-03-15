@@ -195,6 +195,24 @@ func (b *Board) AddTask(title, description string) (*Task, error) {
 	return task, nil
 }
 
+func (b *Board) UpdateTask(id, title, description string) (*Task, error) {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil, fmt.Errorf("title cannot be empty")
+	}
+
+	task, ok := b.Tasks[id]
+	if !ok || task == nil {
+		return nil, fmt.Errorf("task %s not found", id)
+	}
+
+	task.Title = title
+	task.Description = strings.TrimSpace(description)
+	task.Touch()
+
+	return task, nil
+}
+
 func (b *Board) DeleteTask(id string) bool {
 	task, ok := b.Tasks[id]
 	if !ok {
