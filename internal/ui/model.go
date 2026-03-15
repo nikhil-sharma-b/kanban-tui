@@ -2,6 +2,9 @@ package ui
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,7 +19,12 @@ import (
 	"github.com/nikhilsharma/kanban-tui/internal/store"
 )
 
-const cardSlotHeight = 6
+const cardSlotHeight = 4
+
+// leftAccentBorder defines a border with only a left accent bar for modern card styling.
+var leftAccentBorder = lipgloss.Border{
+	Left: "┃",
+}
 
 var theme = struct {
 	Rosewater lipgloss.Color
@@ -77,6 +85,11 @@ type saveFinishedMsg struct {
 	err error
 }
 
+type editorFinishedMsg struct {
+	err  error
+	path string
+}
+
 type keyMap struct {
 	Left        key.Binding
 	Right       key.Binding
@@ -130,19 +143,22 @@ type model struct {
 	lastErr      error
 }
 
+// ansiStripRe matches ANSI escape sequences for the dim/blur effect.
+var ansiStripRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
 func New(board *domain.Board, boardStore store.BoardStore, dataPath string) tea.Model {
 	titleInput := textinput.New()
-	titleInput.Placeholder = "Task title"
+	titleInput.Prompt = ""
+	titleInput.Placeholder = "What needs to be done?"
 	titleInput.CharLimit = 120
-	titleInput.Width = 48
-	titleInput.PromptStyle = lipgloss.NewStyle().Foreground(theme.Mauve)
+	titleInput.Width = 84
 	titleInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
 	titleInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	descInput := textarea.New()
-	descInput.Placeholder = "Description"
-	descInput.SetWidth(48)
-	descInput.SetHeight(6)
+	descInput.Placeholder = "Add details (optional)"
+	descInput.SetWidth(84)
+	descInput.SetHeight(12)
 	descInput.ShowLineNumbers = false
 	descInput.FocusedStyle.Base = lipgloss.NewStyle().Foreground(theme.Text).BorderForeground(theme.Mauve)
 	descInput.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(theme.Overlay0)
@@ -150,9 +166,9 @@ func New(board *domain.Board, boardStore store.BoardStore, dataPath string) tea.
 	descInput.BlurredStyle.Placeholder = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	searchInput := textinput.New()
-	searchInput.Placeholder = "Search title or description"
+	searchInput.Prompt = ""
+	searchInput.Placeholder = "Type to filter tasks..."
 	searchInput.Width = 42
-	searchInput.PromptStyle = lipgloss.NewStyle().Foreground(theme.Blue)
 	searchInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
 	searchInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
@@ -181,17 +197,17 @@ func New(board *domain.Board, boardStore store.BoardStore, dataPath string) tea.
 		help:        help.New(),
 		showHelp:    true,
 		keys: keyMap{
-			Left:        key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("h/left", "column left")),
-			Right:       key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("l/right", "column right")),
-			Up:          key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("k/up", "previous task")),
-			Down:        key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("j/down", "next task")),
-			MoveLeft:    key.NewBinding(key.WithKeys("["), key.WithHelp("[", "move task left")),
-			MoveRight:   key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "move task right")),
+			Left:        key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("h/\u2190", "column left")),
+			Right:       key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("l/\u2192", "column right")),
+			Up:          key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("k/\u2191", "prev task")),
+			Down:        key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("j/\u2193", "next task")),
+			MoveLeft:    key.NewBinding(key.WithKeys("["), key.WithHelp("[", "move left")),
+			MoveRight:   key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "move right")),
 			ReorderUp:   key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "reorder up")),
 			ReorderDown: key.NewBinding(key.WithKeys("J"), key.WithHelp("J", "reorder down")),
 			NewTask:     key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new task")),
 			Search:      key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
-			Open:        key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "details")),
+			Open:        key.NewBinding(key.WithKeys("enter"), key.WithHelp("\u23ce", "details")),
 			Delete:      key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
 			Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
 			Quit:        key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
@@ -221,6 +237,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastStatus = "saved"
 		}
 		return m, nil
+	case editorFinishedMsg:
+		return m.handleEditorResult(msg)
 	case tea.KeyMsg:
 		switch m.mode {
 		case modeCreate:
@@ -239,7 +257,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) View() string {
 	if m.width == 0 || m.height == 0 {
-		return "Loading..."
+		return ""
 	}
 
 	header := m.renderHeader()
@@ -249,11 +267,11 @@ func (m *model) View() string {
 
 	switch m.mode {
 	case modeCreate:
-		return placeOverlay(view, m.width, m.height, m.renderCreateDialog())
+		return m.placeOverlayCenter(view, m.renderCreateDialog())
 	case modeSearch:
-		return placeOverlay(view, m.width, m.height, m.renderSearchDialog())
+		return m.placeOverlayCenter(view, m.renderSearchDialog())
 	case modeDetail:
-		return placeOverlay(view, m.width, m.height, m.renderDetailDialog())
+		return m.placeOverlayCenter(view, m.renderDetailDialog())
 	default:
 		return view
 	}
@@ -313,6 +331,116 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *model) openEditorWithDraft() (tea.Model, tea.Cmd) {
+	tmpFile, err := os.CreateTemp("", "kanban-*.md")
+	if err != nil {
+		m.lastErr = fmt.Errorf("create temp file: %w", err)
+		return m, nil
+	}
+
+	// Carry over any draft content from the dialog
+	draftTitle := strings.TrimSpace(m.titleInput.Value())
+	draftDesc := strings.TrimSpace(m.descInput.Value())
+
+	var content string
+	if draftTitle != "" || draftDesc != "" {
+		content = draftTitle + "\n\n" + draftDesc + "\n"
+	}
+	content += "\n# ─── kanban-tui ──────────────────────────────\n"
+	content += "# First line = task title\n"
+	content += "# Everything after = description\n"
+	content += "# Lines starting with # are ignored\n"
+	content += "# Save and quit to create, empty to cancel\n"
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		m.lastErr = fmt.Errorf("write template: %w", err)
+		return m, nil
+	}
+	tmpFile.Close()
+
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "nvim"
+	}
+
+	path := tmpFile.Name()
+	c := exec.Command(editor, path)
+	return m, tea.ExecProcess(c, func(err error) tea.Msg {
+		return editorFinishedMsg{err: err, path: path}
+	})
+}
+
+func (m *model) handleEditorResult(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
+	defer os.Remove(msg.path)
+
+	if msg.err != nil {
+		m.lastErr = fmt.Errorf("editor: %w", msg.err)
+		return m, nil
+	}
+
+	content, err := os.ReadFile(msg.path)
+	if err != nil {
+		m.lastErr = fmt.Errorf("read file: %w", err)
+		return m, nil
+	}
+
+	title, description := parseEditorContent(string(content))
+	if title == "" {
+		m.lastStatus = "task creation cancelled"
+		m.lastErr = nil
+		return m, nil
+	}
+
+	task, err := m.board.AddTask(title, description)
+	if err != nil {
+		m.lastErr = err
+		return m, nil
+	}
+
+	m.lastStatus = fmt.Sprintf("created %s", shortID(task.ID))
+	m.lastErr = nil
+	m.filter = ""
+	m.searchInput.SetValue("")
+	m.activeColumn = 0
+	m.recalculateVisible()
+	m.selected[task.Status] = len(m.visible[task.Status]) - 1
+	m.syncScroll(task.Status)
+
+	return m, saveBoardCmd(m.store, m.board.Clone())
+}
+
+func parseEditorContent(content string) (title, description string) {
+	lines := strings.Split(content, "\n")
+
+	var nonComment []string
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		nonComment = append(nonComment, line)
+	}
+
+	// First non-empty line is the title
+	titleFound := false
+	var descLines []string
+	for _, line := range nonComment {
+		if !titleFound {
+			trimmed := strings.TrimSpace(line)
+			if trimmed != "" {
+				title = trimmed
+				titleFound = true
+			}
+			continue
+		}
+		descLines = append(descLines, line)
+	}
+
+	description = strings.TrimSpace(strings.Join(descLines, "\n"))
+	return title, description
+}
+
 func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -331,6 +459,11 @@ func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "ctrl+s":
 		return m.createTask()
+	case "ctrl+e":
+		m.mode = modeBoard
+		m.titleInput.Blur()
+		m.descInput.Blur()
+		return m.openEditorWithDraft()
 	}
 
 	var cmd tea.Cmd
@@ -341,6 +474,26 @@ func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	m.descInput, cmd = m.descInput.Update(msg)
 	return m, cmd
+}
+
+func (m *model) createTask() (tea.Model, tea.Cmd) {
+	task, err := m.board.AddTask(m.titleInput.Value(), m.descInput.Value())
+	if err != nil {
+		m.lastErr = err
+		return m, nil
+	}
+
+	m.mode = modeBoard
+	m.lastStatus = fmt.Sprintf("created %s", shortID(task.ID))
+	m.lastErr = nil
+	m.filter = ""
+	m.searchInput.SetValue("")
+	m.activeColumn = 0
+	m.recalculateVisible()
+	m.selected[task.Status] = len(m.visible[task.Status]) - 1
+	m.syncScroll(task.Status)
+
+	return m, saveBoardCmd(m.store, m.board.Clone())
 }
 
 func (m *model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -375,25 +528,6 @@ func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *model) createTask() (tea.Model, tea.Cmd) {
-	task, err := m.board.AddTask(m.titleInput.Value(), m.descInput.Value())
-	if err != nil {
-		m.lastErr = err
-		return m, nil
-	}
-
-	m.mode = modeBoard
-	m.lastStatus = fmt.Sprintf("created %s", task.ID)
-	m.lastErr = nil
-	m.filter = ""
-	m.searchInput.SetValue("")
-	m.activeColumn = 0
-	m.recalculateVisible()
-	m.selected[task.Status] = len(m.visible[task.Status]) - 1
-	m.syncScroll(task.Status)
-
-	return m, saveBoardCmd(m.store, m.board.Clone())
-}
 
 func (m *model) shiftSelected(delta int) (tea.Model, tea.Cmd) {
 	task := m.selectedTask()
@@ -404,7 +538,7 @@ func (m *model) shiftSelected(delta int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.lastStatus = fmt.Sprintf("moved %s to %s", task.ID, task.Status.Title())
+	m.lastStatus = fmt.Sprintf("moved %s \u2192 %s", shortID(task.ID), task.Status.Title())
 	m.recalculateVisible()
 	m.selectTask(task.ID)
 	return m, saveBoardCmd(m.store, m.board.Clone())
@@ -424,7 +558,7 @@ func (m *model) reorderSelected(delta int) (tea.Model, tea.Cmd) {
 	}
 
 	m.selected[status] = target
-	m.lastStatus = "task reordered"
+	m.lastStatus = "reordered"
 	m.recalculateVisible()
 	m.syncScroll(status)
 	return m, saveBoardCmd(m.store, m.board.Clone())
@@ -440,7 +574,7 @@ func (m *model) deleteSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.lastStatus = fmt.Sprintf("deleted %s", task.ID)
+	m.lastStatus = fmt.Sprintf("deleted %s", shortID(task.ID))
 	m.lastErr = nil
 	m.recalculateVisible()
 	return m, saveBoardCmd(m.store, m.board.Clone())
@@ -553,48 +687,93 @@ func (m *model) selectedTask() *domain.Task {
 	return m.board.Tasks[visible[index]]
 }
 
+// ─── Header ──────────────────────────────────────────────────────────────────
+
 func (m *model) renderHeader() string {
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.Text).
-		Render("kanban-tui")
+	logo := lipgloss.NewStyle().Bold(true).Foreground(theme.Mauve).Render("\u25c6")
+	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Render(" kanban")
 
-	subtitle := lipgloss.NewStyle().
-		Foreground(theme.Subtext0).
-		Render("fast keyboard-first task board")
+	total := len(m.board.Tasks)
+	done := m.board.Count(domain.StatusDone)
+	inProgress := m.board.Count(domain.StatusInProgress)
 
-	filter := "filter: all"
-	if m.filter != "" {
-		filter = "filter: " + m.filter
+	// Visual progress bar
+	barWidth := 20
+	var progressBar string
+	if total > 0 {
+		doneW := (done * barWidth) / total
+		activeW := (inProgress * barWidth) / total
+		if done > 0 && doneW == 0 {
+			doneW = 1
+		}
+		if inProgress > 0 && activeW == 0 {
+			activeW = 1
+		}
+		if doneW+activeW > barWidth {
+			activeW = barWidth - doneW
+		}
+		remainW := barWidth - doneW - activeW
+		progressBar = lipgloss.NewStyle().Foreground(theme.Green).Render(strings.Repeat("\u2501", doneW)) +
+			lipgloss.NewStyle().Foreground(theme.Peach).Render(strings.Repeat("\u2501", activeW)) +
+			lipgloss.NewStyle().Foreground(theme.Surface1).Render(strings.Repeat("\u2501", remainW))
+	} else {
+		progressBar = lipgloss.NewStyle().Foreground(theme.Surface1).Render(strings.Repeat("\u2501", barWidth))
 	}
 
-	statusText := ""
+	// Compact stats
+	var stats string
+	if total > 0 {
+		stats = lipgloss.NewStyle().Foreground(theme.Peach).Render(fmt.Sprintf("%d active", inProgress)) +
+			lipgloss.NewStyle().Foreground(theme.Surface2).Render(" \u00b7 ") +
+			lipgloss.NewStyle().Foreground(theme.Green).Render(fmt.Sprintf("%d done", done)) +
+			lipgloss.NewStyle().Foreground(theme.Surface2).Render(" \u00b7 ") +
+			lipgloss.NewStyle().Foreground(theme.Subtext0).Render(fmt.Sprintf("%d total", total))
+	}
+
+	// Right side: filter + status
+	var rightParts []string
+	if m.filter != "" {
+		rightParts = append(rightParts,
+			lipgloss.NewStyle().Foreground(theme.Blue).Render("\u2315 "+m.filter))
+	}
 	switch {
 	case m.lastErr != nil:
-		statusText = lipgloss.NewStyle().Foreground(theme.Red).Render(m.lastErr.Error())
+		rightParts = append(rightParts,
+			lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 "+m.lastErr.Error()))
 	case m.lastStatus != "":
-		statusText = lipgloss.NewStyle().Foreground(theme.Green).Render(m.lastStatus)
+		rightParts = append(rightParts,
+			lipgloss.NewStyle().Foreground(theme.Green).Render("\u2713 "+m.lastStatus))
 	}
 
-	left := lipgloss.JoinVertical(lipgloss.Left, title, subtitle)
-	right := lipgloss.JoinVertical(
-		lipgloss.Right,
-		lipgloss.NewStyle().Foreground(theme.Subtext1).Render(filter),
-		lipgloss.NewStyle().Foreground(theme.Subtext0).Render(statusText),
-	)
+	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, title)
+	if total > 0 {
+		left = lipgloss.JoinHorizontal(lipgloss.Center, left, "  ", progressBar, "  ", stats)
+	}
 
-	style := lipgloss.NewStyle().
+	right := strings.Join(rightParts, "  ")
+	gap := max(2, m.width-lipgloss.Width(left)-lipgloss.Width(right)-6)
+
+	headerBar := lipgloss.JoinHorizontal(lipgloss.Center, left, spacer(gap), right)
+
+	// Thin separator line
+	sepWidth := max(0, m.width-4)
+	sep := lipgloss.NewStyle().Foreground(theme.Surface0).Render(strings.Repeat("\u2500", sepWidth))
+	content := headerBar + "\n" + sep
+
+	return lipgloss.NewStyle().
 		Width(m.width).
-		Padding(1, 2).
+		Padding(0, 2).
+		PaddingTop(1).
 		Background(theme.Mantle).
-		Foreground(theme.Text)
-
-	return style.Render(lipgloss.JoinHorizontal(lipgloss.Top, left, spacer(max(2, m.width-lipgloss.Width(left)-lipgloss.Width(right)-8)), right))
+		Foreground(theme.Text).
+		Render(content)
 }
+
+// ─── Board ───────────────────────────────────────────────────────────────────
 
 func (m *model) renderBoard() string {
 	gap := 2
-	columnWidth := max(24, (m.width-8-(gap*2))/3)
+	columnWidth := max(24, (m.width-6-(gap*(len(domain.StatusOrder)-1)))/len(domain.StatusOrder))
 	columns := make([]string, 0, len(domain.StatusOrder))
 
 	for i, status := range domain.StatusOrder {
@@ -602,36 +781,78 @@ func (m *model) renderBoard() string {
 	}
 
 	return lipgloss.NewStyle().
-		Padding(1, 2).
+		Padding(1, 2, 0, 2).
 		Render(joinHorizontal(columns, gap))
 }
 
 func (m *model) renderColumn(status domain.Status, active bool, width int) string {
 	ids := m.visible[status]
+	accent := statusAccent(status)
+
+	colHeight := max(12, m.height-10)
 	columnStyle := lipgloss.NewStyle().
 		Width(width).
-		Height(max(12, m.height-11)).
-		Padding(1).
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(theme.Surface1).
-		Background(theme.Crust)
+		Height(colHeight).
+		Padding(0, 1).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Surface0)
 
 	if active {
-		columnStyle = columnStyle.BorderForeground(statusAccent(status))
+		columnStyle = columnStyle.BorderForeground(accent)
 	}
 
-	label := lipgloss.NewStyle().Bold(true).Foreground(statusAccent(status)).Render(status.Title())
-	count := lipgloss.NewStyle().Foreground(theme.Subtext0).Render(fmt.Sprintf("%d tasks", len(ids)))
-	header := lipgloss.JoinHorizontal(lipgloss.Center, label, " ", count)
+	// Column header: icon + title + pill badge
+	icon := statusIcon(status)
+	label := lipgloss.NewStyle().Bold(true).Foreground(accent).Render(icon + " " + status.Title())
 
-	bodyHeight := max(6, m.height-17)
+	countBadge := lipgloss.NewStyle().
+		Foreground(theme.Subtext0).
+		Background(theme.Surface0).
+		PaddingLeft(1).
+		PaddingRight(1).
+		Render(fmt.Sprintf("%d", len(ids)))
+	header := lipgloss.JoinHorizontal(lipgloss.Center, label, " ", countBadge)
+
+	// Accent separator - uses column color when active
+	separatorWidth := width - 4
+	if separatorWidth < 1 {
+		separatorWidth = 1
+	}
+	sepChar := "\u2500"
+	sepColor := theme.Surface1
+	if active {
+		sepChar = "\u2501"
+		sepColor = accent
+	}
+	separator := lipgloss.NewStyle().
+		Foreground(sepColor).
+		Render(strings.Repeat(sepChar, separatorWidth))
+
+	// Task body
+	bodyHeight := colHeight - 5
 	scroll := m.scroll[status]
 	rows := m.taskRows()
 	end := min(len(ids), scroll+rows)
 
 	body := make([]string, 0, rows)
+
+	if scroll > 0 {
+		body = append(body,
+			lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(width-4).Render("\u25b2 more"),
+		)
+	}
+
 	if len(ids) == 0 {
-		body = append(body, lipgloss.NewStyle().Foreground(theme.Overlay0).Render("No tasks"))
+		emptyMsg := statusEmptyMessage(status)
+		body = append(body,
+			lipgloss.NewStyle().
+				Foreground(theme.Surface2).
+				Italic(true).
+				Align(lipgloss.Center).
+				Width(width-4).
+				PaddingTop(2).
+				Render(emptyMsg),
+		)
 	}
 
 	for i := scroll; i < end; i++ {
@@ -639,102 +860,196 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 		if task == nil {
 			continue
 		}
-		body = append(body, m.renderTaskCard(task, width-4, active && i == m.selected[status]))
+		if i > scroll {
+			body = append(body, "") // visual gap between cards
+		}
+		body = append(body, m.renderTaskCard(task, width-4, active && i == m.selected[status], accent))
 	}
 
 	if hidden := len(ids) - end; hidden > 0 {
-		body = append(body, lipgloss.NewStyle().Foreground(theme.Overlay0).Render(fmt.Sprintf("+%d more", hidden)))
+		body = append(body,
+			lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(width-4).Render(fmt.Sprintf("\u25bc %d more", hidden)),
+		)
 	}
 
 	bodyView := lipgloss.NewStyle().Height(bodyHeight).Render(strings.Join(body, "\n"))
-	return columnStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, "", bodyView))
+	return columnStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, separator, bodyView))
 }
 
-func (m *model) renderTaskCard(task *domain.Task, width int, selected bool) string {
-	title := truncate(task.Title, width-4)
-	desc := truncate(singleLine(task.Description), width-4)
-	if desc == "" {
-		desc = "No description"
+func (m *model) renderTaskCard(task *domain.Task, width int, selected bool, accent lipgloss.Color) string {
+	cardWidth := width
+	innerWidth := cardWidth - 3 // left border (1) + padding (2)
+
+	title := truncate(task.Title, innerWidth)
+	desc := truncate(singleLine(task.Description), innerWidth)
+
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Text)
+	descStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	metaStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+
+	// Apply background to each line individually so inner ANSI resets
+	// don't cancel the outer background color.
+	if selected {
+		titleStyle = titleStyle.Background(theme.Surface0).Width(innerWidth)
+		descStyle = descStyle.Background(theme.Surface0).Width(innerWidth)
+		metaStyle = metaStyle.Background(theme.Surface0).Width(innerWidth)
 	}
 
-	meta := fmt.Sprintf("%s  %s", shortID(task.ID), task.UpdatedAt.Local().Format("02 Jan 15:04"))
-	card := lipgloss.JoinVertical(
-		lipgloss.Left,
-		lipgloss.NewStyle().Bold(true).Render(title),
-		lipgloss.NewStyle().Foreground(theme.Subtext0).Render(meta),
-		lipgloss.NewStyle().Foreground(theme.Subtext1).Render(desc),
-	)
+	var cardParts []string
+	cardParts = append(cardParts, titleStyle.Render(title))
+	if desc != "" {
+		cardParts = append(cardParts, descStyle.Render(desc))
+	}
+	cardParts = append(cardParts, metaStyle.Render(
+		shortID(task.ID)+" \u00b7 "+relativeTime(task.UpdatedAt),
+	))
+
+	card := lipgloss.JoinVertical(lipgloss.Left, cardParts...)
+
+	borderColor := theme.Surface1
+	if selected {
+		borderColor = theme.Mauve
+	}
 
 	style := lipgloss.NewStyle().
-		Width(width).
+		Width(cardWidth).
 		Padding(0, 1).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Surface1).
-		Background(theme.Base).
-		Foreground(theme.Text)
+		Border(leftAccentBorder, false, false, false, true).
+		BorderForeground(borderColor)
 
 	if selected {
-		style = style.
-			BorderForeground(theme.Mauve).
-			Background(theme.Surface0)
+		style = style.Background(theme.Surface0)
 	}
 
 	return style.Render(card)
 }
 
+// ─── Footer ──────────────────────────────────────────────────────────────────
+
 func (m *model) renderFooter() string {
-	info := lipgloss.NewStyle().Foreground(theme.Overlay0).Render("data: " + m.dataPath)
-	helpView := ""
+	var content string
+
 	if m.showHelp {
-		helpView = m.help.View(m.keys)
+		content = m.help.View(m.keys)
 	} else {
-		helpView = "press ? for help"
+		keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext1).Bold(true)
+		descStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+		sepStyle := lipgloss.NewStyle().Foreground(theme.Surface1)
+		sep := sepStyle.Render("  \u2502  ")
+
+		content = keyStyle.Render("h/l") + descStyle.Render(" navigate") + sep +
+			keyStyle.Render("j/k") + descStyle.Render(" select") + sep +
+			keyStyle.Render("n") + descStyle.Render(" new") + sep +
+			keyStyle.Render("/") + descStyle.Render(" search") + sep +
+			keyStyle.Render("\u23ce") + descStyle.Render(" details") + sep +
+			keyStyle.Render("q") + descStyle.Render(" quit") + sep +
+			keyStyle.Render("?") + descStyle.Render(" more")
 	}
 
 	return lipgloss.NewStyle().
 		Width(m.width).
 		Padding(0, 2, 1, 2).
-		Foreground(theme.Subtext1).
-		Render(lipgloss.JoinVertical(lipgloss.Left, helpView, info))
+		Foreground(theme.Subtext0).
+		Render(content)
 }
 
+// ─── Dialogs ─────────────────────────────────────────────────────────────────
+
+
 func (m *model) renderCreateDialog() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Render("New task")
-	hint := lipgloss.NewStyle().Foreground(theme.Subtext0).Render("tab switches fields, ctrl+s saves, esc cancels")
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(theme.Mauve).
+		Render("\u25c6  New Task")
+
+	titleLabel := lipgloss.NewStyle().
+		Foreground(theme.Overlay0).
+		Bold(true).
+		Render("TITLE")
+	descLabel := lipgloss.NewStyle().
+		Foreground(theme.Overlay0).
+		Bold(true).
+		Render("DESCRIPTION")
+
+	separator := lipgloss.NewStyle().
+		Foreground(theme.Mauve).
+		Render(strings.Repeat("\u2501", 84))
+
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hint := keyStyle.Render("tab") + hintStyle.Render(" switch  ") +
+		keyStyle.Render("ctrl+s") + hintStyle.Render(" save  ") +
+		keyStyle.Render("ctrl+e") + hintStyle.Render(" editor  ") +
+		keyStyle.Render("esc") + hintStyle.Render(" cancel")
+
+	errView := ""
+	if m.lastErr != nil {
+		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
+	}
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		title,
+		separator,
 		"",
+		titleLabel,
 		m.titleInput.View(),
 		"",
+		descLabel,
 		m.descInput.View(),
-		"",
-		hint,
 	)
+	if errView != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
+	}
+	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
 
 	return lipgloss.NewStyle().
-		Width(56).
-		Padding(1, 2).
-		Border(lipgloss.ThickBorder()).
+		Width(92).
+		Padding(1, 3).
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(theme.Mauve).
 		Background(theme.Base).
 		Render(content)
 }
 
 func (m *model) renderSearchDialog() string {
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(theme.Blue).
+		Render("\u2315  Search")
+
+	separator := lipgloss.NewStyle().
+		Foreground(theme.Blue).
+		Render(strings.Repeat("\u2501", 46))
+
+	totalVisible := 0
+	for _, status := range domain.StatusOrder {
+		totalVisible += len(m.visible[status])
+	}
+	resultText := lipgloss.NewStyle().Foreground(theme.Subtext0).
+		Render(fmt.Sprintf("%d tasks matching", totalVisible))
+
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	hint := keyStyle.Render("enter") + hintStyle.Render(" apply  ") +
+		keyStyle.Render("esc") + hintStyle.Render(" restore")
+
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
-		lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Render("Search"),
+		title,
+		separator,
 		"",
 		m.searchInput.View(),
 		"",
-		lipgloss.NewStyle().Foreground(theme.Subtext0).Render("type to filter, enter applies, esc restores"),
+		resultText,
+		"",
+		hint,
 	)
 
 	return lipgloss.NewStyle().
 		Width(50).
 		Padding(1, 2).
-		Border(lipgloss.ThickBorder()).
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(theme.Blue).
 		Background(theme.Base).
 		Render(content)
@@ -746,36 +1061,79 @@ func (m *model) renderDetailDialog() string {
 		return ""
 	}
 
-	description := task.Description
-	if strings.TrimSpace(description) == "" {
-		description = "No description"
+	accent := statusAccent(task.Status)
+
+	titleView := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(theme.Text).
+		Render(task.Title)
+
+	statusBadge := lipgloss.NewStyle().
+		Foreground(theme.Mantle).
+		Background(accent).
+		Bold(true).
+		PaddingLeft(1).
+		PaddingRight(1).
+		Render(statusIcon(task.Status) + " " + task.Status.Title())
+
+	separator := lipgloss.NewStyle().
+		Foreground(accent).
+		Render(strings.Repeat("\u2501", 68))
+
+	labelStyle := lipgloss.NewStyle().Foreground(theme.Overlay0).Width(12)
+	valueStyle := lipgloss.NewStyle().Foreground(theme.Subtext1)
+
+	metaRows := []string{
+		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("ID"), valueStyle.Render(task.ID)),
+		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Status"), statusBadge),
+		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Created"), valueStyle.Render(task.CreatedAt.Local().Format("02 Jan 2006 15:04"))),
+		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Updated"), valueStyle.Render(task.UpdatedAt.Local().Format("02 Jan 2006 15:04"))),
 	}
+
+	description := strings.TrimSpace(task.Description)
+	descView := ""
+	if description != "" {
+		descView = lipgloss.NewStyle().
+			Width(64).
+			Foreground(theme.Subtext1).
+			PaddingTop(1).
+			Render(description)
+	} else {
+		descView = lipgloss.NewStyle().
+			Foreground(theme.Surface2).
+			Italic(true).
+			PaddingTop(1).
+			Render("No description")
+	}
+
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	hint := keyStyle.Render("esc") + hintStyle.Render(" close")
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
-		lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Render(task.Title),
+		titleView,
+		separator,
 		"",
-		lipgloss.NewStyle().Foreground(theme.Subtext0).Render("ID: "+task.ID),
-		lipgloss.NewStyle().Foreground(theme.Subtext0).Render("Status: "+task.Status.Title()),
-		lipgloss.NewStyle().Foreground(theme.Subtext0).Render("Created: "+task.CreatedAt.Local().Format(time.RFC822)),
-		lipgloss.NewStyle().Foreground(theme.Subtext0).Render("Updated: "+task.UpdatedAt.Local().Format(time.RFC822)),
+		strings.Join(metaRows, "\n"),
+		descView,
 		"",
-		lipgloss.NewStyle().Width(64).Foreground(theme.Subtext1).Render(description),
-		"",
-		lipgloss.NewStyle().Foreground(theme.Subtext0).Render("esc closes"),
+		hint,
 	)
 
 	return lipgloss.NewStyle().
 		Width(72).
 		Padding(1, 2).
-		Border(lipgloss.ThickBorder()).
-		BorderForeground(statusAccent(task.Status)).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(accent).
 		Background(theme.Base).
 		Render(content)
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 func (m *model) taskRows() int {
-	height := max(1, m.height-18)
+	height := max(1, m.height-16)
 	rows := height / cardSlotHeight
 	if rows < 1 {
 		return 1
@@ -783,19 +1141,48 @@ func (m *model) taskRows() int {
 	return rows
 }
 
+func (m *model) placeOverlayCenter(base string, overlay string) string {
+	// Dim the base to create a frosted backdrop
+	bg := dimContent(base)
+	bgLines := strings.Split(bg, "\n")
+	overlayLines := strings.Split(overlay, "\n")
+
+	// Pad background to fill terminal height
+	for len(bgLines) < m.height {
+		bgLines = append(bgLines, "")
+	}
+
+	// Center the overlay on top of the dimmed background
+	startRow := max(0, (m.height-len(overlayLines))/2)
+	for i, oLine := range overlayLines {
+		row := startRow + i
+		if row >= len(bgLines) {
+			break
+		}
+		oWidth := lipgloss.Width(oLine)
+		padLeft := max(0, (m.width-oWidth)/2)
+		bgLines[row] = spacer(padLeft) + oLine
+	}
+
+	return strings.Join(bgLines, "\n")
+}
+
+// dimContent strips ANSI codes and re-renders all visible characters
+// in a muted color to create a frosted/blurred backdrop effect.
+func dimContent(s string) string {
+	dimStyle := lipgloss.NewStyle().Foreground(theme.Surface0)
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		plain := ansiStripRe.ReplaceAllString(line, "")
+		lines[i] = dimStyle.Render(plain)
+	}
+	return strings.Join(lines, "\n")
+}
+
 func saveBoardCmd(boardStore store.BoardStore, board *domain.Board) tea.Cmd {
 	return func() tea.Msg {
 		return saveFinishedMsg{err: boardStore.Save(board)}
 	}
-}
-
-func placeOverlay(base string, width, height int, overlay string) string {
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		base,
-		"",
-		lipgloss.Place(width, 0, lipgloss.Center, lipgloss.Center, overlay),
-	)
 }
 
 func shortID(id string) string {
@@ -816,7 +1203,7 @@ func truncate(value string, width int) string {
 	if width <= 1 {
 		return string(runes[:width])
 	}
-	return string(runes[:width-1]) + "…"
+	return string(runes[:width-1]) + "\u2026"
 }
 
 func singleLine(value string) string {
@@ -857,6 +1244,60 @@ func statusAccent(status domain.Status) lipgloss.Color {
 		return theme.Green
 	default:
 		return theme.Lavender
+	}
+}
+
+func statusIcon(status domain.Status) string {
+	switch status {
+	case domain.StatusBacklog:
+		return "\u25cb" // ○
+	case domain.StatusInProgress:
+		return "\u25d0" // ◐
+	case domain.StatusDone:
+		return "\u25cf" // ●
+	default:
+		return "\u25cb"
+	}
+}
+
+func statusEmptyMessage(status domain.Status) string {
+	switch status {
+	case domain.StatusBacklog:
+		return "Press n to add a task"
+	case domain.StatusInProgress:
+		return "Move tasks here with ]"
+	case domain.StatusDone:
+		return "Completed tasks appear here"
+	default:
+		return "No tasks"
+	}
+}
+
+func relativeTime(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		mins := int(d.Minutes())
+		if mins == 1 {
+			return "1m ago"
+		}
+		return fmt.Sprintf("%dm ago", mins)
+	case d < 24*time.Hour:
+		hours := int(d.Hours())
+		if hours == 1 {
+			return "1h ago"
+		}
+		return fmt.Sprintf("%dh ago", hours)
+	case d < 7*24*time.Hour:
+		days := int(d.Hours() / 24)
+		if days == 1 {
+			return "yesterday"
+		}
+		return fmt.Sprintf("%dd ago", days)
+	default:
+		return t.Local().Format("02 Jan")
 	}
 }
 
