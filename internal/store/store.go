@@ -9,9 +9,9 @@ import (
 	"github.com/nikhilsharma/kanban-tui/internal/domain"
 )
 
-type BoardStore interface {
-	Load() (*domain.Board, error)
-	Save(*domain.Board) error
+type WorkspaceStore interface {
+	Load() (*domain.Workspace, error)
+	Save(*domain.Workspace) error
 }
 
 func ResolvePaths() (dbPath, legacyPath string, err error) {
@@ -29,7 +29,7 @@ func ResolvePaths() (dbPath, legacyPath string, err error) {
 	return filepath.Join(baseDir, "board.db"), filepath.Join(baseDir, "board.json"), nil
 }
 
-func Open(dbPath, legacyPath string) (BoardStore, error) {
+func Open(dbPath, legacyPath string) (WorkspaceStore, error) {
 	exists, err := fileExists(dbPath)
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func resolveEnvPaths(file string) (dbPath, legacyPath string) {
 	return file, base + ".json"
 }
 
-func importLegacyBoard(store BoardStore, legacyPath string) error {
+func importLegacyBoard(store WorkspaceStore, legacyPath string) error {
 	if legacyPath == "" {
 		return nil
 	}
@@ -79,16 +79,17 @@ func importLegacyBoard(store BoardStore, legacyPath string) error {
 		return nil
 	}
 
-	board, err := NewJSONStore(legacyPath).Load()
+	workspace, err := NewJSONStore(legacyPath).Load()
 	if err != nil {
-		return fmt.Errorf("load legacy board: %w", err)
+		return fmt.Errorf("load legacy workspace: %w", err)
 	}
-	if len(board.Tasks) == 0 {
+	project := workspace.ActiveProject()
+	if project == nil || len(project.Board.Tasks) == 0 {
 		return nil
 	}
 
-	if err := store.Save(board); err != nil {
-		return fmt.Errorf("import legacy board: %w", err)
+	if err := store.Save(workspace); err != nil {
+		return fmt.Errorf("import legacy workspace: %w", err)
 	}
 
 	return nil

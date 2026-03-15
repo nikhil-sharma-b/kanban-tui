@@ -50,10 +50,74 @@ func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
 
-func (s *SQLiteStore) Load() (*domain.Board, error) {
+func (s *SQLiteStore) Load() (*domain.Workspace, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	workspace, err := s.loadWorkspaceBlob()
+	if err != nil {
+		return nil, err
+	}
+	if workspace != nil {
+		return workspace, nil
+	}
+
+	board, err := s.loadLegacyBoard()
+	if err != nil {
+		return nil, err
+	}
+	return domain.WorkspaceFromBoard(board), nil
+}
+
+func (s *SQLiteStore) Save(workspace *domain.Workspace) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if workspace == nil {
+		workspace = domain.NewWorkspace()
+	}
+	clone := workspace.Clone()
+	if err := clone.Normalize(); err != nil {
+		return fmt.Errorf("normalize workspace: %w", err)
+	}
+
+	payload, err := json.Marshal(clone)
+	if err != nil {
+		return fmt.Errorf("encode workspace: %w", err)
+	}
+
+	if _, err := s.db.Exec(`
+		INSERT INTO meta (key, value) VALUES ('workspace', ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, string(payload)); err != nil {
+		return fmt.Errorf("store workspace: %w", err)
+	}
+
+	return nil
+}
+
+func (s *SQLiteStore) loadWorkspaceBlob() (*domain.Workspace, error) {
+	var raw string
+	err := s.db.QueryRow(`SELECT value FROM meta WHERE key = 'workspace'`).Scan(&raw)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("load workspace: %w", err)
+	}
+
+	workspace := domain.NewWorkspace()
+	if err := json.Unmarshal([]byte(raw), workspace); err != nil {
+		return nil, fmt.Errorf("decode workspace: %w", err)
+	}
+	if err := workspace.Normalize(); err != nil {
+		return nil, fmt.Errorf("normalize workspace: %w", err)
+	}
+
+	return workspace, nil
+}
+
+func (s *SQLiteStore) loadLegacyBoard() (*domain.Board, error) {
 	board := domain.NewBoard()
 
 	if columns, err := s.loadColumns(); err != nil {
@@ -115,70 +179,6 @@ func (s *SQLiteStore) Load() (*domain.Board, error) {
 	return board, nil
 }
 
-func (s *SQLiteStore) Save(board *domain.Board) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
-
-	if _, err = tx.Exec(`DELETE FROM tasks`); err != nil {
-		return fmt.Errorf("clear tasks: %w", err)
-	}
-
-	stmt, err := tx.Prepare(`
-		INSERT INTO tasks (id, title, description, status, position, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return fmt.Errorf("prepare insert: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, status := range board.Columns {
-		for position, id := range board.Order[status] {
-			task := board.Tasks[id]
-			if task == nil {
-				continue
-			}
-			if _, err = stmt.Exec(
-				task.ID,
-				task.Title,
-				task.Description,
-				string(status),
-				position,
-				task.CreatedAt.UTC().Format(timestampLayout),
-				task.UpdatedAt.UTC().Format(timestampLayout),
-			); err != nil {
-				return fmt.Errorf("insert task %s: %w", task.ID, err)
-			}
-		}
-	}
-
-	if _, err = tx.Exec(`
-		INSERT INTO meta (key, value) VALUES ('version', ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value
-	`, board.Version); err != nil {
-		return fmt.Errorf("store version: %w", err)
-	}
-	if err = s.saveColumns(tx, board); err != nil {
-		return fmt.Errorf("store columns: %w", err)
-	}
-
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("commit tx: %w", err)
-	}
-
-	return nil
-}
-
 func (s *SQLiteStore) loadColumns() ([]domain.Status, error) {
 	var raw string
 	if err := s.db.QueryRow(`SELECT value FROM meta WHERE key = 'columns'`).Scan(&raw); err != nil {
@@ -194,22 +194,6 @@ func (s *SQLiteStore) loadColumns() ([]domain.Status, error) {
 	}
 
 	return columns, nil
-}
-
-func (s *SQLiteStore) saveColumns(tx *sql.Tx, board *domain.Board) error {
-	columns, err := json.Marshal(board.Columns)
-	if err != nil {
-		return fmt.Errorf("encode columns: %w", err)
-	}
-
-	if _, err := tx.Exec(`
-		INSERT INTO meta (key, value) VALUES ('columns', ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value
-	`, string(columns)); err != nil {
-		return fmt.Errorf("store columns: %w", err)
-	}
-
-	return nil
 }
 
 func (s *SQLiteStore) init() error {

@@ -2,6 +2,8 @@
 
 Keyboard-first kanban task management TUI written in Go.
 
+Projects are first-class: each project owns its own kanban board, and you can create, rename, switch, and delete projects from inside the TUI.
+
 ## Why this shape
 
 The app is built around a normalized board model:
@@ -47,6 +49,7 @@ Existing JSON data is migrated automatically on first run:
 - `j` / `k`: move selection
 - `H` / `L`: move active column left/right
 - `c`: add custom column
+- `p`: open project manager
 - `r`: rename active column
 - `d`: delete active column (at least one column always kept; tasks are moved to the nearest adjacent column)
 - `n`: create task
@@ -64,3 +67,12 @@ Inside the create dialog:
 - `tab`: switch fields
 - `ctrl+s`: save
 - `esc`: cancel
+
+Inside the project manager:
+
+- `j` / `k`: move between projects
+- `enter`: switch to selected project
+- `n`: create project
+- `e`: rename selected project
+- `x`: delete selected project
+- `esc`: close

@@ -17,39 +17,48 @@ func TestSQLiteStoreRoundTrip(t *testing.T) {
 	}
 	defer sqliteStore.Close()
 
-	board := domain.NewBoard()
-	first, err := board.AddTask("first", "alpha")
+	workspace := domain.NewWorkspace()
+	project := workspace.ActiveProject()
+	if project == nil {
+		t.Fatal("expected default project")
+	}
+
+	first, err := project.Board.AddTask("first", "alpha")
 	if err != nil {
 		t.Fatalf("add first task: %v", err)
 	}
-	second, err := board.AddTask("second", "beta")
+	second, err := project.Board.AddTask("second", "beta")
 	if err != nil {
 		t.Fatalf("add second task: %v", err)
 	}
-	if !board.ShiftTask(second.ID, 1) {
+	if !project.Board.ShiftTask(second.ID, 1) {
 		t.Fatalf("expected second task to shift")
 	}
-	board.Version = 3
+	workspace.Version = 3
 
-	if err := sqliteStore.Save(board); err != nil {
-		t.Fatalf("save board: %v", err)
+	if err := sqliteStore.Save(workspace); err != nil {
+		t.Fatalf("save workspace: %v", err)
 	}
 
 	loaded, err := sqliteStore.Load()
 	if err != nil {
-		t.Fatalf("load board: %v", err)
+		t.Fatalf("load workspace: %v", err)
 	}
 
 	if loaded.Version != 3 {
 		t.Fatalf("unexpected version: got %d want %d", loaded.Version, 3)
 	}
-	if len(loaded.Tasks) != 2 {
-		t.Fatalf("unexpected task count: got %d want %d", len(loaded.Tasks), 2)
+	loadedProject := loaded.ActiveProject()
+	if loadedProject == nil {
+		t.Fatal("expected active project after load")
 	}
-	if got := loaded.Order[domain.StatusBacklog]; len(got) != 1 || got[0] != first.ID {
+	if len(loadedProject.Board.Tasks) != 2 {
+		t.Fatalf("unexpected task count: got %d want %d", len(loadedProject.Board.Tasks), 2)
+	}
+	if got := loadedProject.Board.Order[domain.StatusBacklog]; len(got) != 1 || got[0] != first.ID {
 		t.Fatalf("unexpected backlog order: %v", got)
 	}
-	if got := loaded.Order[domain.StatusInProgress]; len(got) != 1 || got[0] != second.ID {
+	if got := loadedProject.Board.Order[domain.StatusInProgress]; len(got) != 1 || got[0] != second.ID {
 		t.Fatalf("unexpected in-progress order: %v", got)
 	}
 }
@@ -67,8 +76,8 @@ func TestOpenImportsLegacyJSONOnFirstRun(t *testing.T) {
 		t.Fatalf("add legacy task: %v", err)
 	}
 
-	if err := NewJSONStore(legacyPath).Save(legacyBoard); err != nil {
-		t.Fatalf("save legacy board: %v", err)
+	if err := NewJSONStore(legacyPath).Save(domain.WorkspaceFromBoard(legacyBoard)); err != nil {
+		t.Fatalf("save legacy workspace: %v", err)
 	}
 
 	boardStore, err := Open(dbPath, legacyPath)
@@ -82,18 +91,22 @@ func TestOpenImportsLegacyJSONOnFirstRun(t *testing.T) {
 		t.Fatalf("load migrated board: %v", err)
 	}
 
-	if len(loaded.Tasks) != 1 {
-		t.Fatalf("unexpected migrated task count: %d", len(loaded.Tasks))
+	project := loaded.ActiveProject()
+	if project == nil {
+		t.Fatal("expected active project")
 	}
-	if loaded.Tasks[task.ID] == nil {
+	if len(project.Board.Tasks) != 1 {
+		t.Fatalf("unexpected migrated task count: %d", len(project.Board.Tasks))
+	}
+	if project.Board.Tasks[task.ID] == nil {
 		t.Fatalf("expected migrated task %s to exist", task.ID)
 	}
-	if got := loaded.Order[domain.StatusBacklog]; len(got) != 1 || got[0] != task.ID {
+	if got := project.Board.Order[domain.StatusBacklog]; len(got) != 1 || got[0] != task.ID {
 		t.Fatalf("unexpected migrated order: %v", got)
 	}
 }
 
-func TestSQLiteStorePersistsColumnMetadata(t *testing.T) {
+func TestSQLiteStorePersistsProjectsAndColumns(t *testing.T) {
 	t.Parallel()
 
 	dbPath := filepath.Join(t.TempDir(), "board-columns.db")
@@ -103,37 +116,59 @@ func TestSQLiteStorePersistsColumnMetadata(t *testing.T) {
 	}
 	defer sqliteStore.Close()
 
-	board := domain.NewBoard()
-	review, err := board.AddColumn("Review")
+	workspace := domain.NewWorkspace()
+	project := workspace.ActiveProject()
+	if project == nil {
+		t.Fatal("expected default project")
+	}
+	review, err := project.Board.AddColumn("Review")
 	if err != nil {
 		t.Fatalf("add column: %v", err)
 	}
 
-	task, err := board.AddTask("reviewed", "looks good")
+	other, err := workspace.CreateProject("Work")
+	if err != nil {
+		t.Fatalf("create second project: %v", err)
+	}
+
+	task, err := project.Board.AddTask("reviewed", "looks good")
 	if err != nil {
 		t.Fatalf("add task: %v", err)
 	}
-	if !board.MoveTask(task.ID, review, 0) {
+	if !project.Board.MoveTask(task.ID, review, 0) {
 		t.Fatalf("move task into custom column")
 	}
+	if _, err := other.Board.AddTask("ship it", "prod"); err != nil {
+		t.Fatalf("add second project task: %v", err)
+	}
 
-	if err := sqliteStore.Save(board); err != nil {
-		t.Fatalf("save board: %v", err)
+	if err := sqliteStore.Save(workspace); err != nil {
+		t.Fatalf("save workspace: %v", err)
 	}
 
 	loaded, err := sqliteStore.Load()
 	if err != nil {
-		t.Fatalf("load board: %v", err)
+		t.Fatalf("load workspace: %v", err)
 	}
 
-	if len(loaded.Columns) != 4 {
-		t.Fatalf("unexpected columns count: got %d want 4", len(loaded.Columns))
+	if len(loaded.Projects) != 2 {
+		t.Fatalf("unexpected projects count: got %d want 2", len(loaded.Projects))
 	}
-	if loaded.Columns[3] != review {
-		t.Fatalf("unexpected custom column order: %v", loaded.Columns)
+	loadedProject := loaded.ProjectByID(project.ID)
+	if loadedProject == nil {
+		t.Fatal("expected first project to load")
 	}
-	if got := loaded.Order[review]; len(got) != 1 || got[0] != task.ID {
+	if len(loadedProject.Board.Columns) != 4 {
+		t.Fatalf("unexpected columns count: got %d want 4", len(loadedProject.Board.Columns))
+	}
+	if loadedProject.Board.Columns[3] != review {
+		t.Fatalf("unexpected custom column order: %v", loadedProject.Board.Columns)
+	}
+	if got := loadedProject.Board.Order[review]; len(got) != 1 || got[0] != task.ID {
 		t.Fatalf("unexpected custom column order after load: %v", got)
+	}
+	if loaded.ProjectByID(other.ID) == nil {
+		t.Fatal("expected second project to load")
 	}
 }
 

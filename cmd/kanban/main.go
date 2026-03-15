@@ -26,13 +26,13 @@ func main() {
 		defer closer.Close()
 	}
 
-	board, err := boardStore.Load()
+	workspace, err := boardStore.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "load board: %v\n", err)
+		fmt.Fprintf(os.Stderr, "load workspace: %v\n", err)
 		os.Exit(1)
 	}
 
-	program := tea.NewProgram(ui.New(board, boardStore, dataPath), tea.WithAltScreen())
+	program := tea.NewProgram(ui.New(workspace, boardStore, dataPath), tea.WithAltScreen())
 	if _, err := program.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "run tui: %v\n", err)
 		os.Exit(1)

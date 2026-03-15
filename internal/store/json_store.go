@@ -19,30 +19,34 @@ func NewJSONStore(path string) *JSONStore {
 	return &JSONStore{path: path}
 }
 
-func (s *JSONStore) Load() (*domain.Board, error) {
+func (s *JSONStore) Load() (*domain.Workspace, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return domain.NewBoard(), nil
+			return domain.NewWorkspace(), nil
 		}
 		return nil, err
 	}
 
-	board := domain.NewBoard()
-	if err := json.Unmarshal(data, board); err != nil {
-		return nil, fmt.Errorf("decode board: %w", err)
+	workspace := domain.NewWorkspace()
+	if err := json.Unmarshal(data, workspace); err != nil {
+		legacyBoard := domain.NewBoard()
+		if legacyErr := json.Unmarshal(data, legacyBoard); legacyErr != nil {
+			return nil, fmt.Errorf("decode workspace: %w", err)
+		}
+		return domain.WorkspaceFromBoard(legacyBoard), nil
 	}
-	if err := board.Normalize(); err != nil {
-		return nil, fmt.Errorf("normalize board: %w", err)
+	if err := workspace.Normalize(); err != nil {
+		return nil, fmt.Errorf("normalize workspace: %w", err)
 	}
 
-	return board, nil
+	return workspace, nil
 }
 
-func (s *JSONStore) Save(board *domain.Board) error {
+func (s *JSONStore) Save(workspace *domain.Workspace) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -50,9 +54,9 @@ func (s *JSONStore) Save(board *domain.Board) error {
 		return err
 	}
 
-	data, err := json.MarshalIndent(board, "", "  ")
+	data, err := json.MarshalIndent(workspace, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode board: %w", err)
+		return fmt.Errorf("encode workspace: %w", err)
 	}
 
 	tempFile, err := os.CreateTemp(filepath.Dir(s.path), "board-*.json")
