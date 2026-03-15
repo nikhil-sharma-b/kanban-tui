@@ -23,15 +23,11 @@ var StatusOrder = []Status{
 }
 
 func (s Status) Valid() bool {
-	switch s {
-	case StatusBacklog, StatusInProgress, StatusDone:
-		return true
-	default:
-		return false
-	}
+	return strings.TrimSpace(string(s)) != ""
 }
 
 func (s Status) Title() string {
+	trimmed := strings.TrimSpace(string(s))
 	switch s {
 	case StatusBacklog:
 		return "Backlog"
@@ -40,7 +36,10 @@ func (s Status) Title() string {
 	case StatusDone:
 		return "Done"
 	default:
-		return "Unknown"
+		if trimmed == "" {
+			return "Unknown"
+		}
+		return strings.ReplaceAll(trimmed, "_", " ")
 	}
 }
 

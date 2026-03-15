@@ -93,6 +93,50 @@ func TestOpenImportsLegacyJSONOnFirstRun(t *testing.T) {
 	}
 }
 
+func TestSQLiteStorePersistsColumnMetadata(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "board-columns.db")
+	sqliteStore, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("new sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+
+	board := domain.NewBoard()
+	review, err := board.AddColumn("Review")
+	if err != nil {
+		t.Fatalf("add column: %v", err)
+	}
+
+	task, err := board.AddTask("reviewed", "looks good")
+	if err != nil {
+		t.Fatalf("add task: %v", err)
+	}
+	if !board.MoveTask(task.ID, review, 0) {
+		t.Fatalf("move task into custom column")
+	}
+
+	if err := sqliteStore.Save(board); err != nil {
+		t.Fatalf("save board: %v", err)
+	}
+
+	loaded, err := sqliteStore.Load()
+	if err != nil {
+		t.Fatalf("load board: %v", err)
+	}
+
+	if len(loaded.Columns) != 4 {
+		t.Fatalf("unexpected columns count: got %d want 4", len(loaded.Columns))
+	}
+	if loaded.Columns[3] != review {
+		t.Fatalf("unexpected custom column order: %v", loaded.Columns)
+	}
+	if got := loaded.Order[review]; len(got) != 1 || got[0] != task.ID {
+		t.Fatalf("unexpected custom column order after load: %v", got)
+	}
+}
+
 func TestResolvePathsWithLegacyJSONEnv(t *testing.T) {
 	t.Setenv("KANBAN_TUI_DATA_FILE", "/tmp/custom-board.json")
 

@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -55,6 +56,12 @@ func (s *SQLiteStore) Load() (*domain.Board, error) {
 
 	board := domain.NewBoard()
 
+	if columns, err := s.loadColumns(); err != nil {
+		return nil, fmt.Errorf("load columns: %w", err)
+	} else if len(columns) > 0 {
+		board.Columns = append([]domain.Status{}, columns...)
+	}
+
 	version, err := s.loadVersion()
 	if err != nil {
 		return nil, err
@@ -66,15 +73,7 @@ func (s *SQLiteStore) Load() (*domain.Board, error) {
 	rows, err := s.db.Query(`
 		SELECT id, title, description, status, created_at, updated_at
 		FROM tasks
-		ORDER BY
-			CASE status
-				WHEN 'backlog' THEN 0
-				WHEN 'in_progress' THEN 1
-				WHEN 'done' THEN 2
-				ELSE 3
-			END,
-			position ASC,
-			created_at ASC
+		ORDER BY position ASC, created_at ASC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query tasks: %w", err)
@@ -143,7 +142,7 @@ func (s *SQLiteStore) Save(board *domain.Board) error {
 	}
 	defer stmt.Close()
 
-	for _, status := range domain.StatusOrder {
+	for _, status := range board.Columns {
 		for position, id := range board.Order[status] {
 			task := board.Tasks[id]
 			if task == nil {
@@ -169,9 +168,45 @@ func (s *SQLiteStore) Save(board *domain.Board) error {
 	`, board.Version); err != nil {
 		return fmt.Errorf("store version: %w", err)
 	}
+	if err = s.saveColumns(tx, board); err != nil {
+		return fmt.Errorf("store columns: %w", err)
+	}
 
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("commit tx: %w", err)
+	}
+
+	return nil
+}
+
+func (s *SQLiteStore) loadColumns() ([]domain.Status, error) {
+	var raw string
+	if err := s.db.QueryRow(`SELECT value FROM meta WHERE key = 'columns'`).Scan(&raw); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("load columns: %w", err)
+	}
+
+	var columns []domain.Status
+	if err := json.Unmarshal([]byte(raw), &columns); err != nil {
+		return nil, fmt.Errorf("decode columns: %w", err)
+	}
+
+	return columns, nil
+}
+
+func (s *SQLiteStore) saveColumns(tx *sql.Tx, board *domain.Board) error {
+	columns, err := json.Marshal(board.Columns)
+	if err != nil {
+		return fmt.Errorf("encode columns: %w", err)
+	}
+
+	if _, err := tx.Exec(`
+		INSERT INTO meta (key, value) VALUES ('columns', ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value
+	`, string(columns)); err != nil {
+		return fmt.Errorf("store columns: %w", err)
 	}
 
 	return nil

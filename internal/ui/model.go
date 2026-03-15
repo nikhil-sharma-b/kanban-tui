@@ -79,6 +79,8 @@ const (
 	modeCreate
 	modeSearch
 	modeDetail
+	modeAddColumn
+	modeRenameColumn
 )
 
 type saveFinishedMsg struct {
@@ -91,31 +93,36 @@ type editorFinishedMsg struct {
 }
 
 type keyMap struct {
-	Left        key.Binding
-	Right       key.Binding
-	Up          key.Binding
-	Down        key.Binding
-	MoveLeft    key.Binding
-	MoveRight   key.Binding
-	ReorderUp   key.Binding
-	ReorderDown key.Binding
-	NewTask     key.Binding
-	Search      key.Binding
-	Open        key.Binding
-	Delete      key.Binding
-	Help        key.Binding
-	Quit        key.Binding
+	Left         key.Binding
+	Right        key.Binding
+	Up           key.Binding
+	Down         key.Binding
+	MoveLeft     key.Binding
+	MoveRight    key.Binding
+	ReorderUp    key.Binding
+	ReorderDown  key.Binding
+	MoveColLeft  key.Binding
+	MoveColRight key.Binding
+	RenameCol    key.Binding
+	DeleteCol    key.Binding
+	NewTask      key.Binding
+	NewColumn    key.Binding
+	Search       key.Binding
+	Open         key.Binding
+	Delete       key.Binding
+	Help         key.Binding
+	Quit         key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.Search, k.Open, k.Quit}
+	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.RenameCol, k.DeleteCol, k.Search, k.Open, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Left, k.Right, k.Up, k.Down},
-		{k.MoveLeft, k.MoveRight, k.ReorderUp, k.ReorderDown},
-		{k.NewTask, k.Search, k.Open, k.Delete},
+		{k.MoveColLeft, k.MoveColRight, k.MoveLeft, k.MoveRight},
+		{k.ReorderUp, k.ReorderDown, k.NewTask, k.NewColumn, k.RenameCol, k.DeleteCol},
 		{k.Help, k.Quit},
 	}
 }
@@ -132,7 +139,9 @@ type model struct {
 	visible      map[domain.Status][]string
 	filter       string
 	filterDraft  string
+	columnInput  textinput.Model
 	mode         mode
+	columnRename domain.Status
 	titleInput   textinput.Model
 	descInput    textarea.Model
 	searchInput  textinput.Model
@@ -162,6 +171,7 @@ func New(board *domain.Board, boardStore store.BoardStore, dataPath string) tea.
 	descInput.ShowLineNumbers = false
 	descInput.FocusedStyle.Base = lipgloss.NewStyle().Foreground(theme.Text).BorderForeground(theme.Mauve)
 	descInput.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(theme.Overlay0)
+	descInput.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	descInput.BlurredStyle.Base = lipgloss.NewStyle().Foreground(theme.Subtext1).BorderForeground(theme.Surface1)
 	descInput.BlurredStyle.Placeholder = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
@@ -172,45 +182,55 @@ func New(board *domain.Board, boardStore store.BoardStore, dataPath string) tea.
 	searchInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
 	searchInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
+	columnInput := textinput.New()
+	columnInput.Placeholder = "Column name"
+	columnInput.Width = 42
+	columnInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
+	columnInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
+
+	columns := board.Statuses()
+	selected := make(map[domain.Status]int, len(columns))
+	scroll := make(map[domain.Status]int, len(columns))
+	visible := make(map[domain.Status][]string, len(columns))
+	for _, status := range columns {
+		selected[status] = 0
+		scroll[status] = 0
+		visible[status] = []string{}
+	}
+
 	m := &model{
-		board:    board,
-		store:    boardStore,
-		dataPath: dataPath,
-		selected: map[domain.Status]int{
-			domain.StatusBacklog:    0,
-			domain.StatusInProgress: 0,
-			domain.StatusDone:       0,
-		},
-		scroll: map[domain.Status]int{
-			domain.StatusBacklog:    0,
-			domain.StatusInProgress: 0,
-			domain.StatusDone:       0,
-		},
-		visible: map[domain.Status][]string{
-			domain.StatusBacklog:    {},
-			domain.StatusInProgress: {},
-			domain.StatusDone:       {},
-		},
+		board:       board,
+		store:       boardStore,
+		dataPath:    dataPath,
+		selected:    selected,
+		scroll:      scroll,
+		visible:     visible,
 		titleInput:  titleInput,
 		descInput:   descInput,
 		searchInput: searchInput,
+		columnInput: columnInput,
 		help:        help.New(),
 		showHelp:    true,
 		keys: keyMap{
-			Left:        key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("h/\u2190", "column left")),
-			Right:       key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("l/\u2192", "column right")),
-			Up:          key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("k/\u2191", "prev task")),
-			Down:        key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("j/\u2193", "next task")),
-			MoveLeft:    key.NewBinding(key.WithKeys("["), key.WithHelp("[", "move left")),
-			MoveRight:   key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "move right")),
-			ReorderUp:   key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "reorder up")),
-			ReorderDown: key.NewBinding(key.WithKeys("J"), key.WithHelp("J", "reorder down")),
-			NewTask:     key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new task")),
-			Search:      key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
-			Open:        key.NewBinding(key.WithKeys("enter"), key.WithHelp("\u23ce", "details")),
-			Delete:      key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
-			Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
-			Quit:        key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+			Left:         key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("h/\u2190", "column left")),
+			Right:        key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("l/\u2192", "column right")),
+			Up:           key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("k/\u2191", "prev task")),
+			Down:         key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("j/\u2193", "next task")),
+			MoveLeft:     key.NewBinding(key.WithKeys("["), key.WithHelp("[", "move left")),
+			MoveRight:    key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "move right")),
+			ReorderUp:    key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "reorder up")),
+			ReorderDown:  key.NewBinding(key.WithKeys("J"), key.WithHelp("J", "reorder down")),
+			NewTask:      key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new task")),
+			NewColumn:    key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "new column")),
+			MoveColLeft:  key.NewBinding(key.WithKeys("H"), key.WithHelp("H", "move column left")),
+			MoveColRight: key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "move column right")),
+			RenameCol:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rename column")),
+			DeleteCol:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete column")),
+			Search:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
+			Open:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("\u23ce", "details")),
+			Delete:       key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
+			Help:         key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
+			Quit:         key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		},
 	}
 
@@ -247,6 +267,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSearch(msg)
 		case modeDetail:
 			return m.updateDetail(msg)
+		case modeAddColumn:
+			return m.updateColumnDialog(msg)
+		case modeRenameColumn:
+			return m.updateColumnDialog(msg)
 		default:
 			return m.updateBoard(msg)
 		}
@@ -272,12 +296,21 @@ func (m *model) View() string {
 		return m.placeOverlayCenter(view, m.renderSearchDialog())
 	case modeDetail:
 		return m.placeOverlayCenter(view, m.renderDetailDialog())
+	case modeAddColumn:
+		return m.placeOverlayCenter(view, m.renderAddColumnDialog())
+	case modeRenameColumn:
+		return m.placeOverlayCenter(view, m.renderAddColumnDialog())
 	default:
 		return view
 	}
 }
 
 func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	statuses := m.board.Statuses()
+	if len(statuses) == 0 {
+		return m, nil
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
@@ -285,12 +318,12 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.activeColumn > 0 {
 			m.activeColumn--
 		}
-		m.syncScroll(domain.StatusOrder[m.activeColumn])
+		m.syncScroll(statuses[m.activeColumn])
 	case key.Matches(msg, m.keys.Right):
-		if m.activeColumn < len(domain.StatusOrder)-1 {
+		if m.activeColumn < len(statuses)-1 {
 			m.activeColumn++
 		}
-		m.syncScroll(domain.StatusOrder[m.activeColumn])
+		m.syncScroll(statuses[m.activeColumn])
 	case key.Matches(msg, m.keys.Up):
 		m.moveSelection(-1)
 	case key.Matches(msg, m.keys.Down):
@@ -299,6 +332,10 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.shiftSelected(-1)
 	case key.Matches(msg, m.keys.MoveRight):
 		return m.shiftSelected(1)
+	case key.Matches(msg, m.keys.MoveColLeft):
+		return m.moveColumn(-1)
+	case key.Matches(msg, m.keys.MoveColRight):
+		return m.moveColumn(1)
 	case key.Matches(msg, m.keys.ReorderUp):
 		return m.reorderSelected(-1)
 	case key.Matches(msg, m.keys.ReorderDown):
@@ -311,6 +348,16 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.descInput.Blur()
 		m.lastErr = nil
 		return m, textinput.Blink
+	case key.Matches(msg, m.keys.NewColumn):
+		m.mode = modeAddColumn
+		m.columnInput.SetValue("")
+		m.columnInput.Focus()
+		m.lastErr = nil
+		return m, textinput.Blink
+	case key.Matches(msg, m.keys.RenameCol):
+		return m.beginRenameColumn()
+	case key.Matches(msg, m.keys.DeleteCol):
+		return m.deleteColumn()
 	case key.Matches(msg, m.keys.Search):
 		m.mode = modeSearch
 		m.filterDraft = m.filter
@@ -519,6 +566,130 @@ func (m *model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m *model) updateColumnDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.mode = modeBoard
+		m.columnInput.Blur()
+		m.lastErr = nil
+		m.columnRename = ""
+		return m, nil
+	case "enter":
+		if m.mode == modeRenameColumn {
+			if m.columnRename == "" {
+				m.lastErr = fmt.Errorf("column target missing")
+				return m, nil
+			}
+
+			renamed, err := m.board.RenameColumn(string(m.columnRename), m.columnInput.Value())
+			if err != nil {
+				m.lastErr = err
+				return m, nil
+			}
+
+			m.mode = modeBoard
+			m.columnInput.Blur()
+			m.lastErr = nil
+			m.lastStatus = fmt.Sprintf("renamed %s", renamed.Title())
+			m.columnRename = ""
+			m.activeColumn = m.board.StatusIndex(renamed)
+			m.ensureColumnState()
+			m.recalculateVisible()
+			m.syncAllScroll()
+			return m, saveBoardCmd(m.store, m.board.Clone())
+		}
+
+		status, err := m.board.AddColumn(m.columnInput.Value())
+		if err != nil {
+			m.lastErr = err
+			return m, nil
+		}
+
+		m.mode = modeBoard
+		m.columnInput.Blur()
+		m.lastErr = nil
+		m.lastStatus = fmt.Sprintf("added %s", status.Title())
+		m.ensureColumnState()
+		m.activeColumn = m.board.StatusIndex(status)
+		m.recalculateVisible()
+		m.syncAllScroll()
+
+		return m, saveBoardCmd(m.store, m.board.Clone())
+	}
+
+	var cmd tea.Cmd
+	m.columnInput, cmd = m.columnInput.Update(msg)
+	return m, cmd
+}
+
+func (m *model) moveColumn(delta int) (tea.Model, tea.Cmd) {
+	statuses := m.board.Statuses()
+	if len(statuses) == 0 {
+		return m, nil
+	}
+
+	target := m.activeColumn + delta
+	if !m.board.MoveColumn(m.activeColumn, target) {
+		return m, nil
+	}
+
+	m.activeColumn = target
+	m.lastStatus = fmt.Sprintf("moved column %s", m.board.Columns[m.activeColumn].Title())
+	m.lastErr = nil
+	m.ensureColumnState()
+	m.recalculateVisible()
+	m.syncAllScroll()
+
+	return m, saveBoardCmd(m.store, m.board.Clone())
+}
+
+func (m *model) beginRenameColumn() (tea.Model, tea.Cmd) {
+	statuses := m.board.Statuses()
+	if len(statuses) == 0 {
+		return m, nil
+	}
+	if m.activeColumn < 0 || m.activeColumn >= len(statuses) {
+		return m, nil
+	}
+
+	status := statuses[m.activeColumn]
+	m.columnRename = status
+	m.mode = modeRenameColumn
+	m.columnInput.SetValue(string(status))
+	m.columnInput.Focus()
+	m.lastErr = nil
+
+	return m, textinput.Blink
+}
+
+func (m *model) deleteColumn() (tea.Model, tea.Cmd) {
+	statuses := m.board.Statuses()
+	if len(statuses) == 0 || m.activeColumn >= len(statuses) {
+		return m, nil
+	}
+
+	status := statuses[m.activeColumn]
+	if err := m.board.DeleteColumn(status); err != nil {
+		m.lastErr = err
+		return m, nil
+	}
+
+	m.lastErr = nil
+	m.lastStatus = fmt.Sprintf("deleted %s", status.Title())
+	if m.activeColumn >= len(m.board.Columns) {
+		m.activeColumn = len(m.board.Columns) - 1
+	}
+	if m.activeColumn < 0 {
+		m.activeColumn = 0
+	}
+
+	m.ensureColumnState()
+	m.recalculateVisible()
+	m.syncAllScroll()
+
+	return m, saveBoardCmd(m.store, m.board.Clone())
+}
+
 func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "enter", "q":
@@ -527,7 +698,6 @@ func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
-
 
 func (m *model) shiftSelected(delta int) (tea.Model, tea.Cmd) {
 	task := m.selectedTask()
@@ -550,7 +720,11 @@ func (m *model) reorderSelected(delta int) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	status := domain.StatusOrder[m.activeColumn]
+	statuses := m.board.Statuses()
+	if len(statuses) == 0 || m.activeColumn >= len(statuses) {
+		return m, nil
+	}
+	status := statuses[m.activeColumn]
 	index := m.selected[status]
 	target := index + delta
 	if !m.board.MoveWithin(status, index, target) {
@@ -581,7 +755,13 @@ func (m *model) deleteSelected() (tea.Model, tea.Cmd) {
 }
 
 func (m *model) moveSelection(delta int) {
-	status := domain.StatusOrder[m.activeColumn]
+	statuses := m.board.Statuses()
+	if len(statuses) == 0 || m.activeColumn >= len(statuses) {
+		m.activeColumn = 0
+		return
+	}
+
+	status := statuses[m.activeColumn]
 	visible := m.visible[status]
 	if len(visible) == 0 {
 		m.selected[status] = 0
@@ -602,7 +782,8 @@ func (m *model) moveSelection(delta int) {
 
 func (m *model) recalculateVisible() {
 	query := strings.ToLower(strings.TrimSpace(m.filter))
-	for _, status := range domain.StatusOrder {
+	statusList := m.board.Statuses()
+	for _, status := range statusList {
 		tasks := m.board.Order[status]
 		visible := make([]string, 0, len(tasks))
 		for _, id := range tasks {
@@ -628,8 +809,51 @@ func (m *model) recalculateVisible() {
 }
 
 func (m *model) syncAllScroll() {
-	for _, status := range domain.StatusOrder {
+	m.ensureColumnState()
+	for _, status := range m.board.Statuses() {
 		m.syncScroll(status)
+	}
+}
+
+func (m *model) ensureColumnState() {
+	if m.selected == nil {
+		m.selected = make(map[domain.Status]int)
+	}
+	if m.scroll == nil {
+		m.scroll = make(map[domain.Status]int)
+	}
+	if m.visible == nil {
+		m.visible = make(map[domain.Status][]string)
+	}
+
+	has := map[domain.Status]struct{}{}
+	for _, status := range m.board.Statuses() {
+		has[status] = struct{}{}
+		if _, ok := m.selected[status]; !ok {
+			m.selected[status] = 0
+		}
+		if _, ok := m.scroll[status]; !ok {
+			m.scroll[status] = 0
+		}
+		if _, ok := m.visible[status]; !ok {
+			m.visible[status] = []string{}
+		}
+	}
+
+	for status := range m.selected {
+		if _, ok := has[status]; !ok {
+			delete(m.selected, status)
+		}
+	}
+	for status := range m.scroll {
+		if _, ok := has[status]; !ok {
+			delete(m.scroll, status)
+		}
+	}
+	for status := range m.visible {
+		if _, ok := has[status]; !ok {
+			delete(m.visible, status)
+		}
 	}
 }
 
@@ -659,7 +883,7 @@ func (m *model) syncScroll(status domain.Status) {
 }
 
 func (m *model) selectTask(id string) {
-	for columnIndex, status := range domain.StatusOrder {
+	for columnIndex, status := range m.board.Statuses() {
 		for i, candidate := range m.visible[status] {
 			if candidate != id {
 				continue
@@ -673,7 +897,14 @@ func (m *model) selectTask(id string) {
 }
 
 func (m *model) selectedTask() *domain.Task {
-	status := domain.StatusOrder[m.activeColumn]
+	if len(m.board.Statuses()) == 0 {
+		return nil
+	}
+	if m.activeColumn < 0 || m.activeColumn >= len(m.board.Statuses()) {
+		m.activeColumn = 0
+	}
+
+	status := m.board.Statuses()[m.activeColumn]
 	visible := m.visible[status]
 	if len(visible) == 0 {
 		return nil
@@ -773,11 +1004,22 @@ func (m *model) renderHeader() string {
 
 func (m *model) renderBoard() string {
 	gap := 2
-	columnWidth := max(24, (m.width-6-(gap*(len(domain.StatusOrder)-1)))/len(domain.StatusOrder))
-	columns := make([]string, 0, len(domain.StatusOrder))
+	statuses := m.board.Statuses()
+	if len(statuses) == 0 {
+		return ""
+	}
+	availableWidth := max(0, m.width-4-(gap*(len(statuses)-1)))
+	columnWidth := max(24, availableWidth/len(statuses))
+	extraWidth := max(0, availableWidth-(columnWidth*len(statuses)))
+	columns := make([]string, 0, len(statuses))
 
-	for i, status := range domain.StatusOrder {
-		columns = append(columns, m.renderColumn(status, i == m.activeColumn, columnWidth))
+	for i, status := range statuses {
+		width := columnWidth
+		if extraWidth > 0 {
+			width++
+			extraWidth--
+		}
+		columns = append(columns, m.renderColumn(status, i == m.activeColumn, width))
 	}
 
 	return lipgloss.NewStyle().
@@ -788,10 +1030,11 @@ func (m *model) renderBoard() string {
 func (m *model) renderColumn(status domain.Status, active bool, width int) string {
 	ids := m.visible[status]
 	accent := statusAccent(status)
+	innerWidth := max(1, width-4)
 
 	colHeight := max(12, m.height-10)
 	columnStyle := lipgloss.NewStyle().
-		Width(width).
+		Width(innerWidth).
 		Height(colHeight).
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
@@ -813,8 +1056,8 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 		Render(fmt.Sprintf("%d", len(ids)))
 	header := lipgloss.JoinHorizontal(lipgloss.Center, label, " ", countBadge)
 
-	// Accent separator - uses column color when active
-	separatorWidth := width - 4
+	// Accent separator tracks the header width so it stays tidy on narrow columns.
+	separatorWidth := min(innerWidth, lipgloss.Width(header))
 	if separatorWidth < 1 {
 		separatorWidth = 1
 	}
@@ -838,7 +1081,7 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 
 	if scroll > 0 {
 		body = append(body,
-			lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(width-4).Render("\u25b2 more"),
+			lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(innerWidth).Render("\u25b2 more"),
 		)
 	}
 
@@ -849,7 +1092,7 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 				Foreground(theme.Surface2).
 				Italic(true).
 				Align(lipgloss.Center).
-				Width(width-4).
+				Width(innerWidth).
 				PaddingTop(2).
 				Render(emptyMsg),
 		)
@@ -860,15 +1103,12 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 		if task == nil {
 			continue
 		}
-		if i > scroll {
-			body = append(body, "") // visual gap between cards
-		}
-		body = append(body, m.renderTaskCard(task, width-4, active && i == m.selected[status], accent))
+		body = append(body, m.renderTaskCard(task, innerWidth, active && i == m.selected[status], accent))
 	}
 
 	if hidden := len(ids) - end; hidden > 0 {
 		body = append(body,
-			lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(width-4).Render(fmt.Sprintf("\u25bc %d more", hidden)),
+			lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(innerWidth).Render(fmt.Sprintf("\u25bc %d more", hidden)),
 		)
 	}
 
@@ -878,22 +1118,17 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 
 func (m *model) renderTaskCard(task *domain.Task, width int, selected bool, accent lipgloss.Color) string {
 	cardWidth := width
-	innerWidth := cardWidth - 3 // left border (1) + padding (2)
+	if cardWidth < 6 {
+		cardWidth = 6
+	}
+	innerWidth := cardWidth - 4
 
 	title := truncate(task.Title, innerWidth)
 	desc := truncate(singleLine(task.Description), innerWidth)
 
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Text)
-	descStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	metaStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
-
-	// Apply background to each line individually so inner ANSI resets
-	// don't cancel the outer background color.
-	if selected {
-		titleStyle = titleStyle.Background(theme.Surface0).Width(innerWidth)
-		descStyle = descStyle.Background(theme.Surface0).Width(innerWidth)
-		metaStyle = metaStyle.Background(theme.Surface0).Width(innerWidth)
-	}
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Width(innerWidth)
+	descStyle := lipgloss.NewStyle().Foreground(theme.Subtext0).Width(innerWidth)
+	metaStyle := lipgloss.NewStyle().Foreground(theme.Overlay0).Width(innerWidth)
 
 	var cardParts []string
 	cardParts = append(cardParts, titleStyle.Render(title))
@@ -912,14 +1147,10 @@ func (m *model) renderTaskCard(task *domain.Task, width int, selected bool, acce
 	}
 
 	style := lipgloss.NewStyle().
-		Width(cardWidth).
+		Width(innerWidth).
 		Padding(0, 1).
-		Border(leftAccentBorder, false, false, false, true).
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor)
-
-	if selected {
-		style = style.Background(theme.Surface0)
-	}
 
 	return style.Render(card)
 }
@@ -939,6 +1170,11 @@ func (m *model) renderFooter() string {
 
 		content = keyStyle.Render("h/l") + descStyle.Render(" navigate") + sep +
 			keyStyle.Render("j/k") + descStyle.Render(" select") + sep +
+			keyStyle.Render("H") + descStyle.Render(" move col") + sep +
+			keyStyle.Render("L") + descStyle.Render(" move col") + sep +
+			keyStyle.Render("c") + descStyle.Render(" column") + sep +
+			keyStyle.Render("r") + descStyle.Render(" rename") + sep +
+			keyStyle.Render("d") + descStyle.Render(" delete") + sep +
 			keyStyle.Render("n") + descStyle.Render(" new") + sep +
 			keyStyle.Render("/") + descStyle.Render(" search") + sep +
 			keyStyle.Render("\u23ce") + descStyle.Render(" details") + sep +
@@ -954,7 +1190,6 @@ func (m *model) renderFooter() string {
 }
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
-
 
 func (m *model) renderCreateDialog() string {
 	title := lipgloss.NewStyle().
@@ -1023,7 +1258,7 @@ func (m *model) renderSearchDialog() string {
 		Render(strings.Repeat("\u2501", 46))
 
 	totalVisible := 0
-	for _, status := range domain.StatusOrder {
+	for _, status := range m.board.Statuses() {
 		totalVisible += len(m.visible[status])
 	}
 	resultText := lipgloss.NewStyle().Foreground(theme.Subtext0).
@@ -1126,6 +1361,62 @@ func (m *model) renderDetailDialog() string {
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(accent).
+		Background(theme.Base).
+		Render(content)
+}
+
+func (m *model) renderAddColumnDialog() string {
+	isRename := m.mode == modeRenameColumn
+
+	titleText := "New Column"
+	saveHint := "save"
+	if isRename {
+		titleText = "Rename Column"
+		saveHint = "rename"
+	}
+
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(theme.Mauve).
+		Render("\u25c6  " + titleText)
+
+	label := lipgloss.NewStyle().
+		Foreground(theme.Overlay0).
+		Bold(true).
+		Render("NAME")
+
+	separator := lipgloss.NewStyle().
+		Foreground(theme.Mauve).
+		Render(strings.Repeat("\u2501", 42))
+
+	errView := ""
+	if m.lastErr != nil {
+		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
+	}
+
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hint := keyStyle.Render("enter") + hintStyle.Render(" "+saveHint+"  ") +
+		keyStyle.Render("esc") + hintStyle.Render(" cancel")
+
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		separator,
+		"",
+		label,
+		m.columnInput.View(),
+	)
+	if errView != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
+	}
+	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
+
+	return lipgloss.NewStyle().
+		Width(56).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Mauve).
 		Background(theme.Base).
 		Render(content)
 }
