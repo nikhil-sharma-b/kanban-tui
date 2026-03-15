@@ -18,23 +18,28 @@ That keeps state updates cheap and avoids repainting entire task sets when board
 go run ./cmd/kanban
 ```
 
-The default data file is:
+The default database file is:
 
 ```text
-$XDG_CONFIG_HOME/kanban-tui/board.json
+$XDG_CONFIG_HOME/kanban-tui/board.db
 ```
 
 On macOS that resolves to:
 
 ```text
-~/Library/Application Support/kanban-tui/board.json
+~/Library/Application Support/kanban-tui/board.db
 ```
 
 Override it with:
 
 ```bash
-KANBAN_TUI_DATA_FILE=/path/to/board.json go run ./cmd/kanban
+KANBAN_TUI_DATA_FILE=/path/to/board.db go run ./cmd/kanban
 ```
+
+Existing JSON data is migrated automatically on first run:
+
+- the default legacy file is `board.json` in the same app config directory
+- if `KANBAN_TUI_DATA_FILE` points to a legacy `.json` file, the app imports it into a sibling `.db` file with the same base name
 
 ## Keys
 

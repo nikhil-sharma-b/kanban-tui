@@ -11,13 +11,21 @@ import (
 )
 
 func main() {
-	dataPath, err := store.DefaultPath()
+	dataPath, legacyPath, err := store.ResolvePaths()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "resolve data path: %v\n", err)
+		fmt.Fprintf(os.Stderr, "resolve storage paths: %v\n", err)
 		os.Exit(1)
 	}
 
-	boardStore := store.New(dataPath)
+	boardStore, err := store.Open(dataPath, legacyPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "open store: %v\n", err)
+		os.Exit(1)
+	}
+	if closer, ok := boardStore.(interface{ Close() error }); ok {
+		defer closer.Close()
+	}
+
 	board, err := boardStore.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load board: %v\n", err)

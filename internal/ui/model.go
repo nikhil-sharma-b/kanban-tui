@@ -109,7 +109,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 type model struct {
 	board        *domain.Board
-	store        *store.Store
+	store        store.BoardStore
 	dataPath     string
 	width        int
 	height       int
@@ -130,7 +130,7 @@ type model struct {
 	lastErr      error
 }
 
-func New(board *domain.Board, boardStore *store.Store, dataPath string) tea.Model {
+func New(board *domain.Board, boardStore store.BoardStore, dataPath string) tea.Model {
 	titleInput := textinput.New()
 	titleInput.Placeholder = "Task title"
 	titleInput.CharLimit = 120
@@ -783,7 +783,7 @@ func (m *model) taskRows() int {
 	return rows
 }
 
-func saveBoardCmd(boardStore *store.Store, board *domain.Board) tea.Cmd {
+func saveBoardCmd(boardStore store.BoardStore, board *domain.Board) tea.Cmd {
 	return func() tea.Msg {
 		return saveFinishedMsg{err: boardStore.Save(board)}
 	}

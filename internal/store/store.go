@@ -1,93 +1,106 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
+	"strings"
 
 	"github.com/nikhilsharma/kanban-tui/internal/domain"
 )
 
-type Store struct {
-	path string
-	mu   sync.Mutex
+type BoardStore interface {
+	Load() (*domain.Board, error)
+	Save(*domain.Board) error
 }
 
-func New(path string) *Store {
-	return &Store{path: path}
-}
-
-func DefaultPath() (string, error) {
+func ResolvePaths() (dbPath, legacyPath string, err error) {
 	if file := os.Getenv("KANBAN_TUI_DATA_FILE"); file != "" {
-		return file, nil
+		dbPath, legacyPath := resolveEnvPaths(file)
+		return dbPath, legacyPath, nil
 	}
 
 	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return filepath.Join(configDir, "kanban-tui", "board.json"), nil
+	baseDir := filepath.Join(configDir, "kanban-tui")
+	return filepath.Join(baseDir, "board.db"), filepath.Join(baseDir, "board.json"), nil
 }
 
-func (s *Store) Load() (*domain.Board, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	data, err := os.ReadFile(s.path)
+func Open(dbPath, legacyPath string) (BoardStore, error) {
+	exists, err := fileExists(dbPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return domain.NewBoard(), nil
-		}
 		return nil, err
 	}
 
-	board := domain.NewBoard()
-	if err := json.Unmarshal(data, board); err != nil {
-		return nil, fmt.Errorf("decode board: %w", err)
-	}
-	if err := board.Normalize(); err != nil {
-		return nil, fmt.Errorf("normalize board: %w", err)
+	sqliteStore, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		return nil, err
 	}
 
-	return board, nil
+	if exists {
+		return sqliteStore, nil
+	}
+
+	if err := importLegacyBoard(sqliteStore, legacyPath); err != nil {
+		return nil, err
+	}
+
+	return sqliteStore, nil
 }
 
-func (s *Store) Save(board *domain.Board) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		return err
+func resolveEnvPaths(file string) (dbPath, legacyPath string) {
+	if strings.EqualFold(filepath.Ext(file), ".json") {
+		base := strings.TrimSuffix(file, filepath.Ext(file))
+		return base + ".db", file
 	}
 
-	data, err := json.MarshalIndent(board, "", "  ")
+	ext := filepath.Ext(file)
+	if ext == "" {
+		return file, file + ".json"
+	}
+
+	base := strings.TrimSuffix(file, ext)
+	return file, base + ".json"
+}
+
+func importLegacyBoard(store BoardStore, legacyPath string) error {
+	if legacyPath == "" {
+		return nil
+	}
+
+	exists, err := fileExists(legacyPath)
 	if err != nil {
-		return fmt.Errorf("encode board: %w", err)
+		return err
+	}
+	if !exists {
+		return nil
 	}
 
-	tempFile, err := os.CreateTemp(filepath.Dir(s.path), "board-*.json")
+	board, err := NewJSONStore(legacyPath).Load()
 	if err != nil {
-		return err
+		return fmt.Errorf("load legacy board: %w", err)
 	}
-	tempPath := tempFile.Name()
-
-	if _, err := tempFile.Write(data); err != nil {
-		tempFile.Close()
-		_ = os.Remove(tempPath)
-		return err
-	}
-	if err := tempFile.Close(); err != nil {
-		_ = os.Remove(tempPath)
-		return err
+	if len(board.Tasks) == 0 {
+		return nil
 	}
 
-	if err := os.Rename(tempPath, s.path); err != nil {
-		_ = os.Remove(tempPath)
-		return err
+	if err := store.Save(board); err != nil {
+		return fmt.Errorf("import legacy board: %w", err)
 	}
 
 	return nil
+}
+
+func fileExists(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err == nil {
+		return !info.IsDir(), nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
 }
