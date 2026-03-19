@@ -206,14 +206,15 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	titleInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	descInput := textarea.New()
+	descInput.Prompt = ""
 	descInput.Placeholder = "Add details (optional)"
 	descInput.SetWidth(maxCreateInputWidth)
 	descInput.SetHeight(maxDescriptionHeight)
 	descInput.ShowLineNumbers = false
-	descInput.FocusedStyle.Base = lipgloss.NewStyle().Foreground(theme.Text).BorderForeground(theme.Mauve)
+	descInput.FocusedStyle.Base = lipgloss.NewStyle().Foreground(theme.Text)
 	descInput.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(theme.Overlay0)
 	descInput.FocusedStyle.CursorLine = lipgloss.NewStyle()
-	descInput.BlurredStyle.Base = lipgloss.NewStyle().Foreground(theme.Subtext1).BorderForeground(theme.Surface1)
+	descInput.BlurredStyle.Base = lipgloss.NewStyle().Foreground(theme.Subtext1)
 	descInput.BlurredStyle.Placeholder = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	searchInput := textinput.New()
