@@ -102,6 +102,7 @@ const (
 	modeRenameColumn
 	modeProjects
 	modeProjectEdit
+	modeConfirm
 )
 
 type saveFinishedMsg struct {
@@ -176,9 +177,12 @@ type model struct {
 	help          help.Model
 	keys          keyMap
 	editingTaskID string
-	showHelp      bool
-	lastStatus    string
-	lastErr       error
+	showHelp       bool
+	lastStatus     string
+	lastErr        error
+	confirmMsg     string
+	confirmPrev    mode
+	confirmAction  func() (tea.Model, tea.Cmd)
 }
 
 // ansiStripRe matches ANSI escape sequences for the dim/blur effect.
@@ -330,6 +334,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateProjects(msg)
 		case modeProjectEdit:
 			return m.updateProjectEdit(msg)
+		case modeConfirm:
+			return m.updateConfirm(msg)
 		default:
 			return m.updateBoard(msg)
 		}
@@ -363,6 +369,8 @@ func (m *model) View() string {
 		return m.placeOverlayCenter(view, m.renderProjectsDialog())
 	case modeProjectEdit:
 		return m.placeOverlayCenter(view, m.renderProjectEditDialog())
+	case modeConfirm:
+		return m.placeOverlayCenter(view, m.renderConfirmDialog())
 	default:
 		return view
 	}
@@ -429,7 +437,16 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.RenameCol):
 		return m.beginRenameColumn()
 	case key.Matches(msg, m.keys.DeleteCol):
-		return m.deleteColumn()
+		statuses := m.board.Statuses()
+		if len(statuses) > 0 && m.activeColumn < len(statuses) {
+			col := statuses[m.activeColumn]
+			taskCount := len(m.board.Order[col])
+			msg := fmt.Sprintf("Delete column %q?", col.Title())
+			if taskCount > 0 {
+				msg = fmt.Sprintf("Delete column %q? Its %d task(s) will move to an adjacent column.", col.Title(), taskCount)
+			}
+			return m.askConfirm(msg, modeBoard, func() (tea.Model, tea.Cmd) { return m.deleteColumn() })
+		}
 	case key.Matches(msg, m.keys.Search):
 		m.mode = modeSearch
 		m.filterDraft = m.filter
@@ -442,7 +459,18 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeDetail
 		}
 	case key.Matches(msg, m.keys.Delete):
-		return m.deleteSelected()
+		task := m.selectedTask()
+		if task != nil {
+			title := task.Title
+			if len(title) > 20 {
+				title = title[:20] + "…"
+			}
+			return m.askConfirm(
+				fmt.Sprintf("Delete task %q?", title),
+				modeBoard,
+				func() (tea.Model, tea.Cmd) { return m.deleteSelected() },
+			)
+		}
 	case key.Matches(msg, m.keys.Help):
 		m.showHelp = !m.showHelp
 	}
@@ -777,17 +805,25 @@ func (m *model) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, textinput.Blink
 	case "x":
 		project := projects[m.projectCursor]
-		if err := m.workspace.DeleteProject(project.ID); err != nil {
-			m.lastErr = err
-			return m, nil
-		}
-		m.activateProject(m.workspace.ActiveProjectID)
-		if m.projectCursor >= len(m.workspace.Projects) {
-			m.projectCursor = len(m.workspace.Projects) - 1
-		}
-		m.lastErr = nil
-		m.lastStatus = fmt.Sprintf("deleted project %s", project.Name)
-		return m, m.saveWorkspaceCmd()
+		return m.askConfirm(
+			fmt.Sprintf("Delete project %q and all its tasks?", project.Name),
+			modeProjects,
+			func() (tea.Model, tea.Cmd) {
+				if err := m.workspace.DeleteProject(project.ID); err != nil {
+					m.lastErr = err
+					m.mode = modeProjects
+					return m, nil
+				}
+				m.activateProject(m.workspace.ActiveProjectID)
+				if m.projectCursor >= len(m.workspace.Projects) {
+					m.projectCursor = len(m.workspace.Projects) - 1
+				}
+				m.lastErr = nil
+				m.lastStatus = fmt.Sprintf("deleted project %s", project.Name)
+				m.mode = modeProjects
+				return m, m.saveWorkspaceCmd()
+			},
+		)
 	}
 
 	return m, nil
@@ -915,6 +951,7 @@ func (m *model) deleteColumn() (tea.Model, tea.Cmd) {
 		m.activeColumn = 0
 	}
 
+	m.mode = modeBoard
 	m.ensureColumnState()
 	m.recalculateVisible()
 	m.syncAllScroll()
@@ -982,10 +1019,70 @@ func (m *model) deleteSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	m.mode = modeBoard
 	m.lastStatus = fmt.Sprintf("deleted %s", shortID(task.ID))
 	m.lastErr = nil
 	m.recalculateVisible()
 	return m, m.saveWorkspaceCmd()
+}
+
+func (m *model) askConfirm(msg string, prev mode, action func() (tea.Model, tea.Cmd)) (tea.Model, tea.Cmd) {
+	m.confirmMsg = msg
+	m.confirmPrev = prev
+	m.confirmAction = action
+	m.mode = modeConfirm
+	return m, nil
+}
+
+func (m *model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y", "enter":
+		return m.confirmAction()
+	case "n", "N", "esc":
+		m.mode = m.confirmPrev
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m *model) renderConfirmDialog() string {
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(theme.Red).
+		Render("⚠  Confirm Delete")
+	dialogWidth := m.dialogWidth(40)
+	contentWidth := m.dialogContentWidth(dialogWidth, 2)
+
+	separator := lipgloss.NewStyle().
+		Foreground(theme.Red).
+		Render(strings.Repeat("━", contentWidth))
+
+	message := lipgloss.NewStyle().
+		Foreground(theme.Text).
+		Width(contentWidth).
+		Render(m.confirmMsg)
+
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	hint := keyStyle.Render("y/enter") + hintStyle.Render(" confirm  ") +
+		keyStyle.Render("n/esc") + hintStyle.Render(" cancel")
+
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		separator,
+		"",
+		message,
+		"",
+		hint,
+	)
+
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Red).
+		Padding(1, 2).
+		Width(dialogWidth).
+		Render(content)
 }
 
 func (m *model) moveSelection(delta int) {
