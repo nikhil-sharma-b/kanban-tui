@@ -177,12 +177,14 @@ type model struct {
 	help          help.Model
 	keys          keyMap
 	editingTaskID string
-	showHelp       bool
-	lastStatus     string
-	lastErr        error
-	confirmMsg     string
-	confirmPrev    mode
-	confirmAction  func() (tea.Model, tea.Cmd)
+	vimNormal     bool
+	vimPending    rune // pending operator (e.g. 'd' waiting for motion)
+	showHelp      bool
+	lastStatus    string
+	lastErr       error
+	confirmMsg    string
+	confirmPrev   mode
+	confirmAction func() (tea.Model, tea.Cmd)
 }
 
 // ansiStripRe matches ANSI escape sequences for the dim/blur effect.
@@ -414,6 +416,7 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.NewTask):
 		m.editingTaskID = ""
 		m.mode = modeCreate
+		m.vimNormal = false
 		m.titleInput.SetValue("")
 		m.descInput.SetValue("")
 		m.titleInput.Focus()
@@ -612,8 +615,98 @@ func parseEditorContent(content string) (title, description string) {
 }
 
 func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Always handle ctrl+s, ctrl+e regardless of vim mode.
+	switch msg.String() {
+	case "ctrl+s":
+		return m.saveTask()
+	case "ctrl+e":
+		m.mode = modeBoard
+		m.titleInput.Blur()
+		m.descInput.Blur()
+		return m.openEditorWithDraft()
+	}
+
+	if m.vimNormal {
+		return m.updateCreateVimNormal(msg)
+	}
+
+	// Insert mode: esc enters vim normal mode.
 	switch msg.String() {
 	case "esc":
+		m.vimNormal = true
+		return m, nil
+	case "tab", "shift+tab":
+		if m.titleInput.Focused() {
+			m.titleInput.Blur()
+			m.descInput.Focus()
+		} else {
+			m.descInput.Blur()
+			m.titleInput.Focus()
+		}
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	if m.titleInput.Focused() {
+		m.titleInput, cmd = m.titleInput.Update(msg)
+		return m, cmd
+	}
+
+	m.descInput, cmd = m.descInput.Update(msg)
+	return m, cmd
+}
+
+func vimSpecialKey(t tea.KeyType) tea.KeyMsg {
+	return tea.KeyMsg(tea.Key{Type: t})
+}
+
+func (m *model) updateCreateVimNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle pending 'd' operator waiting for a motion.
+	if m.vimPending == 'd' {
+		m.vimPending = 0
+		switch msg.String() {
+		case "d": // dd – delete entire line
+			if m.titleInput.Focused() {
+				m.titleInput.SetValue("")
+			} else {
+				m.descInput.CursorStart()
+				m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyCtrlK))
+				// Delete the newline to join with next line (or remove empty line).
+				m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyDelete))
+			}
+		case "w": // dw – delete word forward
+			altD := tea.KeyMsg(tea.Key{Type: tea.KeyRunes, Runes: []rune{'d'}, Alt: true})
+			if m.titleInput.Focused() {
+				m.titleInput, _ = m.titleInput.Update(altD)
+			} else {
+				m.descInput, _ = m.descInput.Update(altD)
+			}
+		case "b": // db – delete word backward
+			altBksp := tea.KeyMsg(tea.Key{Type: tea.KeyBackspace, Alt: true})
+			if m.titleInput.Focused() {
+				m.titleInput, _ = m.titleInput.Update(altBksp)
+			} else {
+				m.descInput, _ = m.descInput.Update(altBksp)
+			}
+		case "$": // d$ – delete to end of line
+			if m.titleInput.Focused() {
+				m.titleInput, _ = m.titleInput.Update(tea.KeyMsg(tea.Key{Type: tea.KeyCtrlK}))
+			} else {
+				m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyCtrlK))
+			}
+		case "0": // d0 – delete to start of line
+			if m.titleInput.Focused() {
+				m.titleInput, _ = m.titleInput.Update(tea.KeyMsg(tea.Key{Type: tea.KeyCtrlU}))
+			} else {
+				m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyCtrlU))
+			}
+		}
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "esc":
+		m.vimNormal = false
 		m.mode = modeBoard
 		m.titleInput.Blur()
 		m.descInput.Blur()
@@ -628,23 +721,152 @@ func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.titleInput.Focus()
 		}
 		return m, nil
-	case "ctrl+s":
-		return m.saveTask()
-	case "ctrl+e":
-		m.mode = modeBoard
-		m.titleInput.Blur()
-		m.descInput.Blur()
-		return m.openEditorWithDraft()
+
+	// Enter insert mode variants.
+	case "i":
+		m.vimNormal = false
+		return m, nil
+	case "a":
+		m.vimNormal = false
+		if m.titleInput.Focused() {
+			m.titleInput.SetCursor(m.titleInput.Position() + 1)
+		} else {
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyRight))
+		}
+		return m, nil
+	case "A":
+		m.vimNormal = false
+		if m.titleInput.Focused() {
+			m.titleInput.CursorEnd()
+		} else {
+			m.descInput.CursorEnd()
+		}
+		return m, nil
+	case "I":
+		m.vimNormal = false
+		if m.titleInput.Focused() {
+			m.titleInput.CursorStart()
+		} else {
+			m.descInput.CursorStart()
+		}
+		return m, nil
+	case "o":
+		if !m.titleInput.Focused() {
+			m.vimNormal = false
+			m.descInput.CursorEnd()
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyEnter))
+		}
+		return m, nil
+	case "O":
+		if !m.titleInput.Focused() {
+			m.vimNormal = false
+			m.descInput.CursorStart()
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyEnter))
+			m.descInput.CursorUp()
+		}
+		return m, nil
+	case "s": // s – delete char and enter insert mode
+		m.vimNormal = false
+		if m.titleInput.Focused() {
+			m.titleInput, _ = m.titleInput.Update(vimSpecialKey(tea.KeyDelete))
+		} else {
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyDelete))
+		}
+		return m, nil
+	case "C": // C – delete to end of line and enter insert mode
+		m.vimNormal = false
+		if m.titleInput.Focused() {
+			m.titleInput, _ = m.titleInput.Update(tea.KeyMsg(tea.Key{Type: tea.KeyCtrlK}))
+		} else {
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyCtrlK))
+		}
+		return m, nil
+
+	// Movement.
+	case "h":
+		if m.titleInput.Focused() {
+			pos := m.titleInput.Position()
+			if pos > 0 {
+				m.titleInput.SetCursor(pos - 1)
+			}
+		} else {
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyLeft))
+		}
+		return m, nil
+	case "l":
+		if m.titleInput.Focused() {
+			m.titleInput.SetCursor(m.titleInput.Position() + 1)
+		} else {
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyRight))
+		}
+		return m, nil
+	case "j":
+		if !m.titleInput.Focused() {
+			m.descInput.CursorDown()
+		}
+		return m, nil
+	case "k":
+		if !m.titleInput.Focused() {
+			m.descInput.CursorUp()
+		}
+		return m, nil
+	case "w":
+		if m.titleInput.Focused() {
+			m.titleInput, _ = m.titleInput.Update(tea.KeyMsg(tea.Key{Type: tea.KeyCtrlRight}))
+		} else {
+			m.descInput, _ = m.descInput.Update(tea.KeyMsg(tea.Key{Type: tea.KeyRunes, Runes: []rune{'f'}, Alt: true}))
+		}
+		return m, nil
+	case "b":
+		if m.titleInput.Focused() {
+			m.titleInput, _ = m.titleInput.Update(tea.KeyMsg(tea.Key{Type: tea.KeyCtrlLeft}))
+		} else {
+			m.descInput, _ = m.descInput.Update(tea.KeyMsg(tea.Key{Type: tea.KeyRunes, Runes: []rune{'b'}, Alt: true}))
+		}
+		return m, nil
+	case "0":
+		if m.titleInput.Focused() {
+			m.titleInput.CursorStart()
+		} else {
+			m.descInput.CursorStart()
+		}
+		return m, nil
+	case "$":
+		if m.titleInput.Focused() {
+			m.titleInput.CursorEnd()
+		} else {
+			m.descInput.CursorEnd()
+		}
+		return m, nil
+
+	// Deletion.
+	case "x":
+		if m.titleInput.Focused() {
+			m.titleInput, _ = m.titleInput.Update(vimSpecialKey(tea.KeyDelete))
+		} else {
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyDelete))
+		}
+		return m, nil
+	case "X": // X – delete char before cursor (backspace)
+		if m.titleInput.Focused() {
+			m.titleInput, _ = m.titleInput.Update(vimSpecialKey(tea.KeyBackspace))
+		} else {
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyBackspace))
+		}
+		return m, nil
+	case "D": // D – delete to end of line (same as d$)
+		if m.titleInput.Focused() {
+			m.titleInput, _ = m.titleInput.Update(tea.KeyMsg(tea.Key{Type: tea.KeyCtrlK}))
+		} else {
+			m.descInput, _ = m.descInput.Update(vimSpecialKey(tea.KeyCtrlK))
+		}
+		return m, nil
+	case "d": // Start pending 'd' operator.
+		m.vimPending = 'd'
+		return m, nil
 	}
 
-	var cmd tea.Cmd
-	if m.titleInput.Focused() {
-		m.titleInput, cmd = m.titleInput.Update(msg)
-		return m, cmd
-	}
-
-	m.descInput, cmd = m.descInput.Update(msg)
-	return m, cmd
+	return m, nil
 }
 
 func (m *model) saveTask() (tea.Model, tea.Cmd) {
@@ -901,6 +1123,7 @@ func (m *model) beginEditSelected() (tea.Model, tea.Cmd) {
 
 	m.editingTaskID = task.ID
 	m.mode = modeCreate
+	m.vimNormal = false
 	m.titleInput.SetValue(task.Title)
 	m.descInput.SetValue(task.Description)
 	m.titleInput.Focus()
@@ -1607,10 +1830,22 @@ func (m *model) renderCreateDialog() string {
 
 	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
 	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hint := keyStyle.Render("tab") + hintStyle.Render(" switch  ") +
+	var modeHint string
+	if m.vimNormal {
+		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Green).Render("NORMAL") + "  "
+	} else {
+		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Blue).Render("INSERT") + "  "
+	}
+	hint := modeHint +
+		keyStyle.Render("tab") + hintStyle.Render(" switch  ") +
 		keyStyle.Render("ctrl+s") + hintStyle.Render(" "+saveHint+"  ") +
 		keyStyle.Render("ctrl+e") + hintStyle.Render(" editor  ") +
-		keyStyle.Render("esc") + hintStyle.Render(" cancel")
+		keyStyle.Render("esc") + hintStyle.Render(func() string {
+		if m.vimNormal {
+			return " close"
+		}
+		return " normal"
+	}())
 
 	errView := ""
 	if m.lastErr != nil {
