@@ -31,6 +31,9 @@ func TestSQLiteStoreRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("add second task: %v", err)
 	}
+	if _, err := project.Board.AddWhiteboard(first.ID, "Sketches", "/tmp/sketches.rnote"); err != nil {
+		t.Fatalf("add whiteboard: %v", err)
+	}
 	if !project.Board.ShiftTask(second.ID, 1) {
 		t.Fatalf("expected second task to shift")
 	}
@@ -60,6 +63,12 @@ func TestSQLiteStoreRoundTrip(t *testing.T) {
 	}
 	if got := loadedProject.Board.Order[domain.StatusInProgress]; len(got) != 1 || got[0] != second.ID {
 		t.Fatalf("unexpected in-progress order: %v", got)
+	}
+	if got := len(loadedProject.Board.Tasks[first.ID].Whiteboards); got != 1 {
+		t.Fatalf("unexpected whiteboard count: got %d want 1", got)
+	}
+	if got := loadedProject.Board.Tasks[first.ID].Whiteboards[0].Path; got != "/tmp/sketches.rnote" {
+		t.Fatalf("unexpected whiteboard path: %q", got)
 	}
 }
 

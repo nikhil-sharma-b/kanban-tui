@@ -129,12 +129,14 @@ func responsiveTestModel(width, height int, cols int) *model {
 	}
 
 	return &model{
-		board:       board,
-		width:       width,
-		height:      height,
-		titleInput:  textinput.New(),
-		descInput:   textarea.New(),
-		searchInput: textinput.New(),
-		columnInput: textinput.New(),
+		board:           board,
+		width:           width,
+		height:          height,
+		titleInput:      textinput.New(),
+		descInput:       textarea.New(),
+		searchInput:     textinput.New(),
+		columnInput:     textinput.New(),
+		projectInput:    textinput.New(),
+		whiteboardInput: textinput.New(),
 	}
 }

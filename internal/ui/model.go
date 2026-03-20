@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -102,6 +103,8 @@ const (
 	modeRenameColumn
 	modeProjects
 	modeProjectEdit
+	modeWhiteboards
+	modeWhiteboardRename
 	modeConfirm
 )
 
@@ -130,6 +133,7 @@ type keyMap struct {
 	NewTask      key.Binding
 	NewColumn    key.Binding
 	Projects     key.Binding
+	Whiteboards  key.Binding
 	Search       key.Binding
 	Edit         key.Binding
 	Open         key.Binding
@@ -139,7 +143,7 @@ type keyMap struct {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.Projects, k.Search, k.Open, k.Edit, k.Quit}
+	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.Projects, k.Open, k.Edit, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
@@ -152,39 +156,42 @@ func (k keyMap) FullHelp() [][]key.Binding {
 }
 
 type model struct {
-	workspace     *domain.Workspace
-	project       *domain.Project
-	board         *domain.Board
-	store         store.WorkspaceStore
-	dataPath      string
-	width         int
-	height        int
-	activeColumn  int
-	selected      map[domain.Status]int
-	scroll        map[domain.Status]int
-	visible       map[domain.Status][]string
-	filter        string
-	filterDraft   string
-	columnInput   textinput.Model
-	projectInput  textinput.Model
-	mode          mode
-	columnRename  domain.Status
-	projectDraft  string
-	projectCursor int
-	titleInput    textinput.Model
-	descInput     textarea.Model
-	searchInput   textinput.Model
-	help          help.Model
-	keys          keyMap
-	editingTaskID string
-	vimNormal     bool
-	vimPending    rune // pending operator (e.g. 'd' waiting for motion)
-	showHelp      bool
-	lastStatus    string
-	lastErr       error
-	confirmMsg    string
-	confirmPrev   mode
-	confirmAction func() (tea.Model, tea.Cmd)
+	workspace          *domain.Workspace
+	project            *domain.Project
+	board              *domain.Board
+	store              store.WorkspaceStore
+	dataPath           string
+	width              int
+	height             int
+	activeColumn       int
+	selected           map[domain.Status]int
+	scroll             map[domain.Status]int
+	visible            map[domain.Status][]string
+	filter             string
+	filterDraft        string
+	columnInput        textinput.Model
+	projectInput       textinput.Model
+	mode               mode
+	columnRename       domain.Status
+	projectDraft       string
+	projectCursor      int
+	whiteboardInput    textinput.Model
+	whiteboardCursor   int
+	whiteboardRenameID string
+	titleInput         textinput.Model
+	descInput          textarea.Model
+	searchInput        textinput.Model
+	help               help.Model
+	keys               keyMap
+	editingTaskID      string
+	vimNormal          bool
+	vimPending         rune // pending operator (e.g. 'd' waiting for motion)
+	showHelp           bool
+	lastStatus         string
+	lastErr            error
+	confirmMsg         string
+	confirmPrev        mode
+	confirmAction      func() (tea.Model, tea.Cmd)
 }
 
 // ansiStripRe matches ANSI escape sequences for the dim/blur effect.
@@ -242,6 +249,12 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	projectInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
 	projectInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
+	whiteboardInput := textinput.New()
+	whiteboardInput.Placeholder = "Whiteboard name"
+	whiteboardInput.Width = maxModalInputWidth
+	whiteboardInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
+	whiteboardInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
+
 	columns := board.Statuses()
 	selected := make(map[domain.Status]int, len(columns))
 	scroll := make(map[domain.Status]int, len(columns))
@@ -253,21 +266,22 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	}
 
 	m := &model{
-		workspace:    workspace,
-		project:      project,
-		board:        board,
-		store:        boardStore,
-		dataPath:     dataPath,
-		selected:     selected,
-		scroll:       scroll,
-		visible:      visible,
-		titleInput:   titleInput,
-		descInput:    descInput,
-		searchInput:  searchInput,
-		columnInput:  columnInput,
-		projectInput: projectInput,
-		help:         help.New(),
-		showHelp:     true,
+		workspace:       workspace,
+		project:         project,
+		board:           board,
+		store:           boardStore,
+		dataPath:        dataPath,
+		selected:        selected,
+		scroll:          scroll,
+		visible:         visible,
+		titleInput:      titleInput,
+		descInput:       descInput,
+		searchInput:     searchInput,
+		columnInput:     columnInput,
+		projectInput:    projectInput,
+		whiteboardInput: whiteboardInput,
+		help:            help.New(),
+		showHelp:        true,
 		keys: keyMap{
 			Left:         key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("h/\u2190", "column left")),
 			Right:        key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("l/\u2192", "column right")),
@@ -280,6 +294,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 			NewTask:      key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new task")),
 			NewColumn:    key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "new column")),
 			Projects:     key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "projects")),
+			Whiteboards:  key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "whiteboards")),
 			MoveColLeft:  key.NewBinding(key.WithKeys("H"), key.WithHelp("H", "move column left")),
 			MoveColRight: key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "move column right")),
 			RenameCol:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rename column")),
@@ -336,6 +351,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateProjects(msg)
 		case modeProjectEdit:
 			return m.updateProjectEdit(msg)
+		case modeWhiteboards:
+			return m.updateWhiteboards(msg)
+		case modeWhiteboardRename:
+			return m.updateWhiteboardRename(msg)
 		case modeConfirm:
 			return m.updateConfirm(msg)
 		default:
@@ -371,6 +390,10 @@ func (m *model) View() string {
 		return m.placeOverlayCenter(view, m.renderProjectsDialog())
 	case modeProjectEdit:
 		return m.placeOverlayCenter(view, m.renderProjectEditDialog())
+	case modeWhiteboards:
+		return m.placeOverlayCenter(view, m.renderWhiteboardsDialog())
+	case modeWhiteboardRename:
+		return m.placeOverlayCenter(view, m.renderWhiteboardRenameDialog())
 	case modeConfirm:
 		return m.placeOverlayCenter(view, m.renderConfirmDialog())
 	default:
@@ -1188,9 +1211,206 @@ func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeBoard
 	case "e":
 		return m.beginEditSelected()
+	case "w":
+		return m.openWhiteboards()
 	}
 
 	return m, nil
+}
+
+func (m *model) updateWhiteboards(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
+	if task == nil {
+		m.mode = modeBoard
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "esc", "q":
+		m.mode = modeDetail
+		m.lastErr = nil
+		return m, nil
+	case "up", "k":
+		if m.whiteboardCursor > 0 {
+			m.whiteboardCursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.whiteboardCursor < len(task.Whiteboards)-1 {
+			m.whiteboardCursor++
+		}
+		return m, nil
+	case "n":
+		return m.createWhiteboard()
+	case "enter", "o":
+		return m.openSelectedWhiteboard()
+	case "r":
+		return m.beginRenameWhiteboard()
+	case "x":
+		return m.confirmDeleteWhiteboard()
+	}
+
+	return m, nil
+}
+
+func (m *model) updateWhiteboardRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.mode = modeWhiteboards
+		m.whiteboardInput.Blur()
+		m.whiteboardRenameID = ""
+		m.lastErr = nil
+		return m, nil
+	case "enter":
+		return m.renameSelectedWhiteboard()
+	}
+
+	var cmd tea.Cmd
+	m.whiteboardInput, cmd = m.whiteboardInput.Update(msg)
+	return m, cmd
+}
+
+func (m *model) openWhiteboards() (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
+	if task == nil {
+		return m, nil
+	}
+	if len(task.Whiteboards) == 0 {
+		m.whiteboardCursor = 0
+	} else if m.whiteboardCursor >= len(task.Whiteboards) {
+		m.whiteboardCursor = len(task.Whiteboards) - 1
+	}
+	m.mode = modeWhiteboards
+	m.lastErr = nil
+	return m, nil
+}
+
+func (m *model) createWhiteboard() (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
+	if task == nil {
+		return m, nil
+	}
+
+	name := m.board.NextWhiteboardName(task.ID)
+	root := resolveWhiteboardRoot(m.dataPath)
+	path := buildWhiteboardPath(root, m.project.Name, task.ID, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		m.lastErr = fmt.Errorf("create whiteboard dir: %w", err)
+		return m, nil
+	}
+	if err := createWhiteboardFile(path); err != nil {
+		m.lastErr = fmt.Errorf("create whiteboard file: %w", err)
+		return m, nil
+	}
+
+	whiteboard, err := m.board.AddWhiteboard(task.ID, name, path)
+	if err != nil {
+		_ = removeWhiteboardFile(path)
+		m.lastErr = err
+		return m, nil
+	}
+	m.whiteboardCursor = len(task.Whiteboards) - 1
+	m.lastErr = nil
+	m.lastStatus = fmt.Sprintf("created %s", whiteboard.Name)
+
+	saveCmd := m.saveWorkspaceCmd()
+	launchErr := launchWhiteboard(whiteboard.Path)
+	if launchErr != nil {
+		m.lastErr = fmt.Errorf("launch whiteboard: %w", launchErr)
+		m.lastStatus = fmt.Sprintf("created %s", whiteboard.Name)
+	}
+	return m, saveCmd
+}
+
+func (m *model) openSelectedWhiteboard() (tea.Model, tea.Cmd) {
+	whiteboard := m.selectedWhiteboard()
+	if whiteboard == nil {
+		m.lastErr = fmt.Errorf("no whiteboard selected")
+		return m, nil
+	}
+	if err := launchWhiteboard(whiteboard.Path); err != nil {
+		m.lastErr = fmt.Errorf("launch whiteboard: %w", err)
+		return m, nil
+	}
+	m.lastErr = nil
+	m.lastStatus = fmt.Sprintf("opened %s", whiteboard.Name)
+	return m, nil
+}
+
+func (m *model) beginRenameWhiteboard() (tea.Model, tea.Cmd) {
+	whiteboard := m.selectedWhiteboard()
+	if whiteboard == nil {
+		return m, nil
+	}
+	m.mode = modeWhiteboardRename
+	m.whiteboardRenameID = whiteboard.ID
+	m.whiteboardInput.SetValue(whiteboard.Name)
+	m.whiteboardInput.Focus()
+	m.lastErr = nil
+	return m, textinput.Blink
+}
+
+func (m *model) renameSelectedWhiteboard() (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
+	if task == nil {
+		return m, nil
+	}
+	whiteboard, err := m.board.RenameWhiteboard(task.ID, m.whiteboardRenameID, m.whiteboardInput.Value())
+	if err != nil {
+		m.lastErr = err
+		return m, nil
+	}
+	m.mode = modeWhiteboards
+	m.whiteboardRenameID = ""
+	m.whiteboardInput.Blur()
+	m.lastErr = nil
+	m.lastStatus = fmt.Sprintf("renamed %s", whiteboard.Name)
+	return m, m.saveWorkspaceCmd()
+}
+
+func (m *model) confirmDeleteWhiteboard() (tea.Model, tea.Cmd) {
+	whiteboard := m.selectedWhiteboard()
+	if whiteboard == nil {
+		return m, nil
+	}
+	return m.askConfirm(
+		fmt.Sprintf("Delete whiteboard %q and its file?", whiteboard.Name),
+		modeWhiteboards,
+		func() (tea.Model, tea.Cmd) { return m.deleteSelectedWhiteboard() },
+	)
+}
+
+func (m *model) deleteSelectedWhiteboard() (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
+	whiteboard := m.selectedWhiteboard()
+	if task == nil || whiteboard == nil {
+		m.mode = modeWhiteboards
+		return m, nil
+	}
+
+	if err := removeWhiteboardFile(whiteboard.Path); err != nil && !os.IsNotExist(err) {
+		m.mode = modeWhiteboards
+		m.lastErr = fmt.Errorf("delete whiteboard file: %w", err)
+		return m, nil
+	}
+
+	removed, err := m.board.DeleteWhiteboard(task.ID, whiteboard.ID)
+	if err != nil {
+		m.mode = modeWhiteboards
+		m.lastErr = err
+		return m, nil
+	}
+
+	if m.whiteboardCursor >= len(task.Whiteboards) && len(task.Whiteboards) > 0 {
+		m.whiteboardCursor = len(task.Whiteboards) - 1
+	}
+	if len(task.Whiteboards) == 0 {
+		m.whiteboardCursor = 0
+	}
+	m.mode = modeWhiteboards
+	m.lastErr = nil
+	m.lastStatus = fmt.Sprintf("deleted %s", removed.Name)
+	return m, m.saveWorkspaceCmd()
 }
 
 func (m *model) shiftSelected(delta int) (tea.Model, tea.Cmd) {
@@ -1470,6 +1690,20 @@ func (m *model) selectedTask() *domain.Task {
 	}
 
 	return m.board.Tasks[visible[index]]
+}
+
+func (m *model) selectedWhiteboard() *domain.Whiteboard {
+	task := m.selectedTask()
+	if task == nil || len(task.Whiteboards) == 0 {
+		return nil
+	}
+	if m.whiteboardCursor < 0 {
+		m.whiteboardCursor = 0
+	}
+	if m.whiteboardCursor >= len(task.Whiteboards) {
+		m.whiteboardCursor = len(task.Whiteboards) - 1
+	}
+	return &task.Whiteboards[m.whiteboardCursor]
 }
 
 // ─── Header ──────────────────────────────────────────────────────────────────
@@ -1962,6 +2196,7 @@ func (m *model) renderDetailDialog() string {
 	metaRows := []string{
 		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("ID"), valueStyle.Render(task.ID)),
 		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Status"), statusBadge),
+		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Whiteboards"), valueStyle.Render(fmt.Sprintf("%d", len(task.Whiteboards)))),
 		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Created"), valueStyle.Render(task.CreatedAt.Local().Format("02 Jan 2006 15:04"))),
 		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Updated"), valueStyle.Render(task.UpdatedAt.Local().Format("02 Jan 2006 15:04"))),
 	}
@@ -1985,6 +2220,7 @@ func (m *model) renderDetailDialog() string {
 	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
 	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
 	hint := keyStyle.Render("e") + hintStyle.Render(" edit  ") +
+		keyStyle.Render("w") + hintStyle.Render(" whiteboards  ") +
 		keyStyle.Render("esc") + hintStyle.Render(" close")
 
 	content := lipgloss.JoinVertical(
@@ -2003,6 +2239,92 @@ func (m *model) renderDetailDialog() string {
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(accent).
+		Background(theme.Base).
+		Render(content)
+}
+
+func (m *model) renderWhiteboardsDialog() string {
+	task := m.selectedTask()
+	if task == nil {
+		return ""
+	}
+
+	dialogWidth := m.dialogWidth(projectDialogMaxWidth + 8)
+	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
+	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Blue).Render("Whiteboards")
+	subtitle := lipgloss.NewStyle().Foreground(theme.Subtext0).Render(truncate(task.Title, max(1, contentWidth)))
+	separator := lipgloss.NewStyle().Foreground(theme.Blue).Render(strings.Repeat("\u2501", contentWidth))
+
+	rows := make([]string, 0, len(task.Whiteboards))
+	for i, whiteboard := range task.Whiteboards {
+		prefix := "  "
+		if i == m.whiteboardCursor {
+			prefix = lipgloss.NewStyle().Foreground(theme.Mauve).Render("\u25b8 ")
+		}
+		name := lipgloss.NewStyle().Foreground(theme.Text).Render(truncate(whiteboard.Name, max(1, contentWidth/2)))
+		path := lipgloss.NewStyle().Foreground(theme.Subtext0).Render(truncate(whiteboard.Path, max(1, contentWidth-lipgloss.Width(prefix)-6)))
+		meta := lipgloss.NewStyle().Foreground(theme.Overlay0).Render(relativeTime(whiteboard.UpdatedAt))
+		row := lipgloss.JoinVertical(lipgloss.Left, lipgloss.JoinHorizontal(lipgloss.Center, prefix, name, spacer(max(1, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(name)-lipgloss.Width(meta))), meta), spacer(0)+path)
+		rows = append(rows, row)
+	}
+	if len(rows) == 0 {
+		rows = append(rows, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render("No whiteboards yet"))
+	}
+
+	errView := ""
+	if m.lastErr != nil {
+		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
+	}
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	hint := keyStyle.Render("enter/o") + hintStyle.Render(" open  ") +
+		keyStyle.Render("n") + hintStyle.Render(" new  ") +
+		keyStyle.Render("r") + hintStyle.Render(" rename  ") +
+		keyStyle.Render("x") + hintStyle.Render(" delete  ") +
+		keyStyle.Render("esc") + hintStyle.Render(" close")
+
+	content := lipgloss.JoinVertical(lipgloss.Left, title, subtitle, separator, "", strings.Join(rows, "\n\n"))
+	if errView != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
+	}
+	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
+
+	return lipgloss.NewStyle().
+		Width(dialogWidth).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Blue).
+		Background(theme.Base).
+		Render(content)
+}
+
+func (m *model) renderWhiteboardRenameDialog() string {
+	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Mauve).Render("Rename Whiteboard")
+	dialogWidth := m.dialogWidth(projectDialogMaxWidth)
+	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
+	separator := lipgloss.NewStyle().Foreground(theme.Mauve).Render(strings.Repeat("\u2501", contentWidth))
+	label := lipgloss.NewStyle().Foreground(theme.Overlay0).Bold(true).Render("NAME")
+
+	errView := ""
+	if m.lastErr != nil {
+		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
+	}
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	hint := keyStyle.Render("enter") + hintStyle.Render(" rename  ") +
+		keyStyle.Render("esc") + hintStyle.Render(" cancel")
+
+	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", label, m.whiteboardInput.View())
+	if errView != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
+	}
+	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
+
+	return lipgloss.NewStyle().
+		Width(dialogWidth).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Mauve).
 		Background(theme.Base).
 		Render(content)
 }
@@ -2166,6 +2488,7 @@ func (m *model) syncResponsiveLayout() {
 	m.searchInput.Width = min(max(1, searchContentWidth), maxModalInputWidth)
 	m.columnInput.Width = min(max(1, searchContentWidth), maxModalInputWidth)
 	m.projectInput.Width = min(max(1, searchContentWidth), maxModalInputWidth)
+	m.whiteboardInput.Width = min(max(1, searchContentWidth), maxModalInputWidth)
 
 	if createContentWidth > 0 {
 		height := m.height - 16
