@@ -38,6 +38,19 @@ Override it with:
 KANBAN_TUI_DATA_FILE=/path/to/board.db go run ./cmd/kanban
 ```
 
+Whiteboards are stored under `whiteboards/` next to the active database by default:
+
+```text
+$XDG_CONFIG_HOME/kanban-tui/whiteboards/<project>/<task-id>/
+```
+
+Override the whiteboard root or launcher with:
+
+```bash
+KANBAN_TUI_WHITEBOARD_DIR=/path/to/whiteboards
+KANBAN_TUI_WHITEBOARD_CMD=rnote
+```
+
 Existing JSON data is migrated automatically on first run:
 
 - the default legacy file is `board.json` in the same app config directory
@@ -62,6 +75,21 @@ Existing JSON data is migrated automatically on first run:
 - `?`: toggle help
 - `q`: quit
 
+Inside task details:
+
+- `w`: open the whiteboard manager for the selected task
+- `e`: edit task
+- `esc`: close
+
+Inside the whiteboard manager:
+
+- `j` / `k`: move between whiteboards
+- `n`: create a new whiteboard and open it immediately
+- `enter` / `o`: open the selected whiteboard
+- `r`: rename the selected whiteboard
+- `x`: delete the selected whiteboard and its `.rnote` file
+- `esc`: close
+
 Inside the create dialog:
 
 - `tab`: switch fields
@@ -76,3 +104,17 @@ Inside the project manager:
 - `e`: rename selected project
 - `x`: delete selected project
 - `esc`: close
+
+## Whiteboards
+
+Each task can own multiple named whiteboards. New whiteboards are created with automatic names like `Whiteboard 1`, `Whiteboard 2`, and so on, but you can rename them later from the whiteboard manager.
+
+Creating a whiteboard requires `rnote-cli` to be available on `PATH`, because the app uses it to generate a valid `.rnote` file before opening it in Rnote.
+
+Whiteboard files use stable paths:
+
+```text
+whiteboards/<project-slug>/<task-id>/<whiteboard-slug>.rnote
+```
+
+Renaming a whiteboard updates the display name in the TUI only. Deleting a whiteboard removes both the task link and the underlying `.rnote` file.

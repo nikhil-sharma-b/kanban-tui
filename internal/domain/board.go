@@ -2,7 +2,9 @@ package domain
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Board struct {
@@ -46,6 +48,9 @@ func (b *Board) Clone() *Board {
 
 	for id, task := range b.Tasks {
 		copied := *task
+		if task.Whiteboards != nil {
+			copied.Whiteboards = append([]Whiteboard(nil), task.Whiteboards...)
+		}
 		clone.Tasks[id] = &copied
 	}
 
@@ -102,6 +107,9 @@ func (b *Board) Normalize() error {
 			if strings.TrimSpace(task.Title) == "" {
 				return fmt.Errorf("task %s has empty title", id)
 			}
+			if err := normalizeWhiteboards(task); err != nil {
+				return fmt.Errorf("task %s whiteboards: %w", id, err)
+			}
 			if !task.Status.Valid() {
 				task.Status = defaultStatus
 			}
@@ -145,6 +153,9 @@ func (b *Board) Normalize() error {
 		}
 		if strings.TrimSpace(task.Title) == "" {
 			return fmt.Errorf("task %s has empty title", id)
+		}
+		if err := normalizeWhiteboards(task); err != nil {
+			return fmt.Errorf("task %s whiteboards: %w", id, err)
 		}
 		if !task.Status.Valid() {
 			task.Status = defaultStatus
@@ -211,6 +222,124 @@ func (b *Board) UpdateTask(id, title, description string) (*Task, error) {
 	task.Touch()
 
 	return task, nil
+}
+
+func (b *Board) Whiteboard(taskID, whiteboardID string) (*Whiteboard, error) {
+	task, ok := b.Tasks[taskID]
+	if !ok || task == nil {
+		return nil, fmt.Errorf("task %s not found", taskID)
+	}
+
+	for i := range task.Whiteboards {
+		if task.Whiteboards[i].ID == whiteboardID {
+			return &task.Whiteboards[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("whiteboard %s not found", whiteboardID)
+}
+
+func (b *Board) AddWhiteboard(taskID, name, path string) (*Whiteboard, error) {
+	task, ok := b.Tasks[taskID]
+	if !ok || task == nil {
+		return nil, fmt.Errorf("task %s not found", taskID)
+	}
+
+	name = strings.TrimSpace(name)
+	path = strings.TrimSpace(path)
+	if name == "" {
+		return nil, fmt.Errorf("whiteboard name cannot be empty")
+	}
+	if path == "" {
+		return nil, fmt.Errorf("whiteboard path cannot be empty")
+	}
+	if hasWhiteboardName(task.Whiteboards, name, "") {
+		return nil, fmt.Errorf("whiteboard %s already exists", name)
+	}
+
+	now := timeNowUTC()
+	whiteboard := Whiteboard{
+		ID:        newTaskID(),
+		Name:      name,
+		Path:      path,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	task.Whiteboards = append(task.Whiteboards, whiteboard)
+	task.Touch()
+	return &task.Whiteboards[len(task.Whiteboards)-1], nil
+}
+
+func (b *Board) RenameWhiteboard(taskID, whiteboardID, name string) (*Whiteboard, error) {
+	task, ok := b.Tasks[taskID]
+	if !ok || task == nil {
+		return nil, fmt.Errorf("task %s not found", taskID)
+	}
+
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("whiteboard name cannot be empty")
+	}
+	if hasWhiteboardName(task.Whiteboards, name, whiteboardID) {
+		return nil, fmt.Errorf("whiteboard %s already exists", name)
+	}
+
+	for i := range task.Whiteboards {
+		if task.Whiteboards[i].ID != whiteboardID {
+			continue
+		}
+		task.Whiteboards[i].Name = name
+		task.Whiteboards[i].UpdatedAt = timeNowUTC()
+		task.Touch()
+		return &task.Whiteboards[i], nil
+	}
+
+	return nil, fmt.Errorf("whiteboard %s not found", whiteboardID)
+}
+
+func (b *Board) DeleteWhiteboard(taskID, whiteboardID string) (*Whiteboard, error) {
+	task, ok := b.Tasks[taskID]
+	if !ok || task == nil {
+		return nil, fmt.Errorf("task %s not found", taskID)
+	}
+
+	for i := range task.Whiteboards {
+		if task.Whiteboards[i].ID != whiteboardID {
+			continue
+		}
+		removed := task.Whiteboards[i]
+		task.Whiteboards = append(task.Whiteboards[:i], task.Whiteboards[i+1:]...)
+		task.Touch()
+		return &removed, nil
+	}
+
+	return nil, fmt.Errorf("whiteboard %s not found", whiteboardID)
+}
+
+func (b *Board) NextWhiteboardName(taskID string) string {
+	task, ok := b.Tasks[taskID]
+	if !ok || task == nil {
+		return "Whiteboard 1"
+	}
+
+	used := make(map[int]struct{}, len(task.Whiteboards))
+	for _, whiteboard := range task.Whiteboards {
+		trimmed := strings.TrimSpace(whiteboard.Name)
+		if !strings.HasPrefix(trimmed, "Whiteboard ") {
+			continue
+		}
+		number, err := strconv.Atoi(strings.TrimPrefix(trimmed, "Whiteboard "))
+		if err != nil || number < 1 {
+			continue
+		}
+		used[number] = struct{}{}
+	}
+
+	for i := 1; ; i++ {
+		if _, exists := used[i]; !exists {
+			return fmt.Sprintf("Whiteboard %d", i)
+		}
+	}
 }
 
 func (b *Board) DeleteTask(id string) bool {
@@ -516,6 +645,69 @@ func fallbackColumn(columns []Status, deletedIndex int) Status {
 	}
 
 	return columns[1]
+}
+
+func hasWhiteboardName(whiteboards []Whiteboard, name, excludeID string) bool {
+	nameKey := strings.ToLower(strings.TrimSpace(name))
+	for _, whiteboard := range whiteboards {
+		if whiteboard.ID == excludeID {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(whiteboard.Name)) == nameKey {
+			return true
+		}
+	}
+	return false
+}
+
+func timeNowUTC() time.Time {
+	return time.Now().UTC()
+}
+
+func normalizeWhiteboards(task *Task) error {
+	if task == nil || len(task.Whiteboards) == 0 {
+		return nil
+	}
+
+	seenIDs := make(map[string]struct{}, len(task.Whiteboards))
+	seenNames := make(map[string]struct{}, len(task.Whiteboards))
+	normalized := make([]Whiteboard, 0, len(task.Whiteboards))
+	for _, whiteboard := range task.Whiteboards {
+		whiteboard.Name = strings.TrimSpace(whiteboard.Name)
+		whiteboard.Path = strings.TrimSpace(whiteboard.Path)
+		if whiteboard.Name == "" {
+			return fmt.Errorf("whiteboard name cannot be empty")
+		}
+		if whiteboard.Path == "" {
+			return fmt.Errorf("whiteboard path cannot be empty")
+		}
+		if whiteboard.ID == "" {
+			whiteboard.ID = newTaskID()
+		}
+		if _, exists := seenIDs[whiteboard.ID]; exists {
+			return fmt.Errorf("duplicate whiteboard id %s", whiteboard.ID)
+		}
+		nameKey := strings.ToLower(whiteboard.Name)
+		if _, exists := seenNames[nameKey]; exists {
+			return fmt.Errorf("duplicate whiteboard name %s", whiteboard.Name)
+		}
+		if whiteboard.CreatedAt.IsZero() {
+			whiteboard.CreatedAt = task.CreatedAt
+		}
+		if whiteboard.CreatedAt.IsZero() {
+			whiteboard.CreatedAt = timeNowUTC()
+		}
+		if whiteboard.UpdatedAt.IsZero() {
+			whiteboard.UpdatedAt = whiteboard.CreatedAt
+		}
+
+		seenIDs[whiteboard.ID] = struct{}{}
+		seenNames[nameKey] = struct{}{}
+		normalized = append(normalized, whiteboard)
+	}
+
+	task.Whiteboards = normalized
+	return nil
 }
 
 func insertAt(ids []string, index int, id string) []string {

@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestMoveWithinReordersTasks(t *testing.T) {
 	board := NewBoard()
@@ -182,6 +185,119 @@ func TestUpdateTaskRejectsEmptyTitle(t *testing.T) {
 
 	if _, err := board.UpdateTask(task.ID, "   ", "desc"); err == nil {
 		t.Fatal("expected update with empty title to fail")
+	}
+}
+
+func TestAddWhiteboardsToTask(t *testing.T) {
+	board := NewBoard()
+	task, _ := board.AddTask("title", "")
+
+	first, err := board.AddWhiteboard(task.ID, "Whiteboard 1", "/tmp/wb-1.rnote")
+	if err != nil {
+		t.Fatalf("add first whiteboard: %v", err)
+	}
+	second, err := board.AddWhiteboard(task.ID, "Whiteboard 2", "/tmp/wb-2.rnote")
+	if err != nil {
+		t.Fatalf("add second whiteboard: %v", err)
+	}
+
+	if len(task.Whiteboards) != 2 {
+		t.Fatalf("unexpected whiteboard count: got %d want 2", len(task.Whiteboards))
+	}
+	if task.Whiteboards[0].ID != first.ID || task.Whiteboards[1].ID != second.ID {
+		t.Fatalf("unexpected whiteboard ids: %+v", task.Whiteboards)
+	}
+}
+
+func TestAddWhiteboardRejectsDuplicateNames(t *testing.T) {
+	board := NewBoard()
+	task, _ := board.AddTask("title", "")
+
+	if _, err := board.AddWhiteboard(task.ID, "Notes", "/tmp/notes-1.rnote"); err != nil {
+		t.Fatalf("add whiteboard: %v", err)
+	}
+	if _, err := board.AddWhiteboard(task.ID, " notes ", "/tmp/notes-2.rnote"); err == nil {
+		t.Fatal("expected duplicate whiteboard name to fail")
+	}
+}
+
+func TestRenameWhiteboardUpdatesNameOnly(t *testing.T) {
+	board := NewBoard()
+	task, _ := board.AddTask("title", "")
+
+	whiteboard, err := board.AddWhiteboard(task.ID, "Sketches", "/tmp/sketches.rnote")
+	if err != nil {
+		t.Fatalf("add whiteboard: %v", err)
+	}
+
+	originalCreated := whiteboard.CreatedAt
+	originalPath := whiteboard.Path
+	time.Sleep(time.Millisecond)
+
+	renamed, err := board.RenameWhiteboard(task.ID, whiteboard.ID, "Wireframes")
+	if err != nil {
+		t.Fatalf("rename whiteboard: %v", err)
+	}
+	if renamed.Name != "Wireframes" {
+		t.Fatalf("unexpected whiteboard name: got %q want %q", renamed.Name, "Wireframes")
+	}
+	if renamed.Path != originalPath {
+		t.Fatalf("rename should preserve path: got %q want %q", renamed.Path, originalPath)
+	}
+	if !renamed.UpdatedAt.After(originalCreated) {
+		t.Fatalf("expected updated timestamp after created timestamp")
+	}
+}
+
+func TestDeleteWhiteboardRemovesOnlyTarget(t *testing.T) {
+	board := NewBoard()
+	task, _ := board.AddTask("title", "")
+
+	first, _ := board.AddWhiteboard(task.ID, "First", "/tmp/first.rnote")
+	second, _ := board.AddWhiteboard(task.ID, "Second", "/tmp/second.rnote")
+
+	removed, err := board.DeleteWhiteboard(task.ID, first.ID)
+	if err != nil {
+		t.Fatalf("delete whiteboard: %v", err)
+	}
+	if removed.ID != first.ID {
+		t.Fatalf("unexpected removed whiteboard: got %s want %s", removed.ID, first.ID)
+	}
+	if len(task.Whiteboards) != 1 || task.Whiteboards[0].ID != second.ID {
+		t.Fatalf("unexpected remaining whiteboards: %+v", task.Whiteboards)
+	}
+}
+
+func TestNextWhiteboardNameFindsNextFreeSlot(t *testing.T) {
+	board := NewBoard()
+	task, _ := board.AddTask("title", "")
+
+	if _, err := board.AddWhiteboard(task.ID, "Whiteboard 1", "/tmp/one.rnote"); err != nil {
+		t.Fatalf("add whiteboard 1: %v", err)
+	}
+	if _, err := board.AddWhiteboard(task.ID, "Custom", "/tmp/custom.rnote"); err != nil {
+		t.Fatalf("add custom whiteboard: %v", err)
+	}
+	if _, err := board.AddWhiteboard(task.ID, "Whiteboard 3", "/tmp/three.rnote"); err != nil {
+		t.Fatalf("add whiteboard 3: %v", err)
+	}
+
+	if got, want := board.NextWhiteboardName(task.ID), "Whiteboard 2"; got != want {
+		t.Fatalf("NextWhiteboardName() = %q, want %q", got, want)
+	}
+}
+
+func TestUpdateTaskPreservesWhiteboards(t *testing.T) {
+	board := NewBoard()
+	task, _ := board.AddTask("title", "")
+	whiteboard, _ := board.AddWhiteboard(task.ID, "Sketch", "/tmp/sketch.rnote")
+
+	updated, err := board.UpdateTask(task.ID, "new title", "new description")
+	if err != nil {
+		t.Fatalf("update task: %v", err)
+	}
+	if len(updated.Whiteboards) != 1 || updated.Whiteboards[0].ID != whiteboard.ID {
+		t.Fatalf("whiteboards not preserved: %+v", updated.Whiteboards)
 	}
 }
 
