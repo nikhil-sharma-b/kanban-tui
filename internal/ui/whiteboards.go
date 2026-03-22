@@ -88,10 +88,16 @@ func whiteboardLaunchCommand(path string) (string, []string, error) {
 	case "darwin":
 		return "open", []string{"-a", "Rnote", "--args", path}, nil
 	case "linux":
+		if command, err := exec.LookPath("xdg-open"); err == nil {
+			return command, []string{path}, nil
+		}
 		if command, err := exec.LookPath("flatpak"); err == nil {
 			return command, []string{"run", "com.github.flxzt.rnote", path}, nil
 		}
-		return "xdg-open", []string{path}, nil
+		if command, err := exec.LookPath("rnote"); err == nil {
+			return command, []string{path}, nil
+		}
+		return "", nil, fmt.Errorf("no Linux whiteboard launcher found; tried xdg-open, flatpak, and rnote")
 	case "windows":
 		return "cmd", []string{"/c", "start", "", path}, nil
 	default:

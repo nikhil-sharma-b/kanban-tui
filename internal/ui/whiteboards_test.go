@@ -306,6 +306,10 @@ func TestWhiteboardLaunchCommandFallbacks(t *testing.T) {
 		if got, want := strings.Join(args, " "), "-a Rnote --args /tmp/board.rnote"; got != want {
 			t.Fatalf("args = %q, want %q", got, want)
 		}
+	case "linux":
+		if command != "xdg-open" && command != "flatpak" && command != "rnote" {
+			t.Fatalf("unexpected linux command %q", command)
+		}
 	case "windows":
 		if command != "cmd" {
 			t.Fatalf("command = %q, want cmd", command)
