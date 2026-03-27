@@ -80,12 +80,15 @@ func TestRenameWhiteboardFlow(t *testing.T) {
 	m := newWhiteboardTestModel(t)
 	origLaunch := launchWhiteboard
 	origCreate := createWhiteboardFile
+	origMove := moveWhiteboardFile
 	launchWhiteboard = func(path string) error { return nil }
 	createWhiteboardFile = func(path string) error { return os.WriteFile(path, []byte("stub"), 0o644) }
 	defer func() {
 		launchWhiteboard = origLaunch
 		createWhiteboardFile = origCreate
+		moveWhiteboardFile = origMove
 	}()
+	moveWhiteboardFile = os.Rename
 
 	m.createWhiteboard()
 	m.mode = modeWhiteboards
@@ -105,6 +108,39 @@ func TestRenameWhiteboardFlow(t *testing.T) {
 	if got.selectedTask().Whiteboards[0].Name != "Sketches" {
 		t.Fatalf("unexpected whiteboard name: %q", got.selectedTask().Whiteboards[0].Name)
 	}
+	if got.selectedTask().Whiteboards[0].Path != resolveWhiteboardPath(got.dataPath, got.project.Name, got.selectedTask().ID, "Sketches") {
+		t.Fatalf("unexpected whiteboard path: %q", got.selectedTask().Whiteboards[0].Path)
+	}
+}
+
+func TestRelocateProjectWhiteboardFilesMovesExistingFiles(t *testing.T) {
+	m := newWhiteboardTestModel(t)
+	task := m.selectedTask()
+	oldPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, "Whiteboard 1")
+	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+		t.Fatalf("create original whiteboard dir: %v", err)
+	}
+	if err := os.WriteFile(oldPath, []byte("stub"), 0o644); err != nil {
+		t.Fatalf("write original whiteboard: %v", err)
+	}
+	task.Whiteboards = []domain.Whiteboard{{ID: "wb1", Name: "Whiteboard 1"}}
+
+	previous := snapshotProjectWhiteboardPaths(m.project, m.dataPath)
+	m.project.Name = "Renamed Project"
+	if err := relocateProjectWhiteboardFiles(m.project, m.dataPath, previous); err != nil {
+		t.Fatalf("relocate project whiteboards: %v", err)
+	}
+
+	newPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, "Whiteboard 1")
+	if task.Whiteboards[0].Path != newPath {
+		t.Fatalf("whiteboard path = %q, want %q", task.Whiteboards[0].Path, newPath)
+	}
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Fatalf("expected old whiteboard path removed, stat err = %v", err)
+	}
+	if _, err := os.Stat(newPath); err != nil {
+		t.Fatalf("expected new whiteboard path to exist, stat err = %v", err)
+	}
 }
 
 func TestOpenSelectedWhiteboardLaunchesPath(t *testing.T) {
@@ -115,7 +151,6 @@ func TestOpenSelectedWhiteboardLaunchesPath(t *testing.T) {
 	m.selectedTask().Whiteboards = append(m.selectedTask().Whiteboards, domain.Whiteboard{
 		ID:   "wb1",
 		Name: "Sketches",
-		Path: "/tmp/sketches.rnote",
 	})
 
 	var launched string
@@ -127,8 +162,9 @@ func TestOpenSelectedWhiteboardLaunchesPath(t *testing.T) {
 	if _, cmd := m.openSelectedWhiteboard(); cmd != nil {
 		t.Fatalf("open should not save workspace")
 	}
-	if launched != "/tmp/sketches.rnote" {
-		t.Fatalf("launched path = %q, want %q", launched, "/tmp/sketches.rnote")
+	want := resolveWhiteboardPath(m.dataPath, m.project.Name, m.selectedTask().ID, "Sketches")
+	if launched != want {
+		t.Fatalf("launched path = %q, want %q", launched, want)
 	}
 }
 
@@ -201,7 +237,10 @@ func TestCreateWhiteboardFileFailurePreventsLinking(t *testing.T) {
 
 func TestDeleteWhiteboardRemovesFileAndEntry(t *testing.T) {
 	m := newWhiteboardTestModel(t)
-	filePath := filepath.Join(t.TempDir(), "board.rnote")
+	filePath := resolveWhiteboardPath(m.dataPath, m.project.Name, m.selectedTask().ID, "Board")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("create temp whiteboard dir: %v", err)
+	}
 	if err := os.WriteFile(filePath, []byte("stub"), 0o644); err != nil {
 		t.Fatalf("write temp whiteboard: %v", err)
 	}
@@ -226,7 +265,8 @@ func TestDeleteWhiteboardRemovesFileAndEntry(t *testing.T) {
 
 func TestDeleteWhiteboardMissingFileStillUnlinks(t *testing.T) {
 	m := newWhiteboardTestModel(t)
-	m.selectedTask().Whiteboards = []domain.Whiteboard{{ID: "wb1", Name: "Board", Path: filepath.Join(t.TempDir(), "missing.rnote")}}
+	missingPath := resolveWhiteboardPath(m.dataPath, m.project.Name, m.selectedTask().ID, "Board")
+	m.selectedTask().Whiteboards = []domain.Whiteboard{{ID: "wb1", Name: "Board", Path: missingPath}}
 	m.mode = modeWhiteboards
 
 	origRemove := removeWhiteboardFile
@@ -244,7 +284,7 @@ func TestDeleteWhiteboardMissingFileStillUnlinks(t *testing.T) {
 
 func TestDeleteWhiteboardFileFailurePreventsUnlink(t *testing.T) {
 	m := newWhiteboardTestModel(t)
-	m.selectedTask().Whiteboards = []domain.Whiteboard{{ID: "wb1", Name: "Board", Path: "/tmp/board.rnote"}}
+	m.selectedTask().Whiteboards = []domain.Whiteboard{{ID: "wb1", Name: "Board"}}
 	m.mode = modeWhiteboards
 
 	origRemove := removeWhiteboardFile

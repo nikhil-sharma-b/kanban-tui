@@ -3,6 +3,7 @@ package domain
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -59,6 +60,44 @@ type Whiteboard struct {
 	Path      string    `json:"path"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (w Whiteboard) MarshalJSON() ([]byte, error) {
+	type whiteboardJSON struct {
+		ID        string    `json:"id"`
+		Name      string    `json:"name"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
+
+	return json.Marshal(whiteboardJSON{
+		ID:        w.ID,
+		Name:      w.Name,
+		CreatedAt: w.CreatedAt,
+		UpdatedAt: w.UpdatedAt,
+	})
+}
+
+func (w *Whiteboard) UnmarshalJSON(data []byte) error {
+	type whiteboardJSON struct {
+		ID        string    `json:"id"`
+		Name      string    `json:"name"`
+		Path      string    `json:"path"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
+
+	var decoded whiteboardJSON
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	w.ID = decoded.ID
+	w.Name = decoded.Name
+	w.Path = decoded.Path
+	w.CreatedAt = decoded.CreatedAt
+	w.UpdatedAt = decoded.UpdatedAt
+	return nil
 }
 
 func NewTask(title, description string) (*Task, error) {

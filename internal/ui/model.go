@@ -204,6 +204,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	if err := workspace.Normalize(); err != nil {
 		workspace = domain.NewWorkspace()
 	}
+	assignWorkspaceWhiteboardPaths(workspace, dataPath)
 	project := workspace.ActiveProject()
 	if project == nil {
 		project, _ = workspace.CreateProject(domain.DefaultProjectName)
@@ -1098,9 +1099,14 @@ func (m *model) updateProjectEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.saveWorkspaceCmd()
 		}
 
+		previousPaths := snapshotProjectWhiteboardPaths(m.workspace.ProjectByID(m.projectDraft), m.dataPath)
 		project, err := m.workspace.RenameProject(m.projectDraft, name)
 		if err != nil {
 			m.lastErr = err
+			return m, nil
+		}
+		if err := relocateProjectWhiteboardFiles(project, m.dataPath, previousPaths); err != nil {
+			m.lastErr = fmt.Errorf("rename project whiteboards: %w", err)
 			return m, nil
 		}
 		m.mode = modeProjects
@@ -1292,8 +1298,7 @@ func (m *model) createWhiteboard() (tea.Model, tea.Cmd) {
 	}
 
 	name := m.board.NextWhiteboardName(task.ID)
-	root := resolveWhiteboardRoot(m.dataPath)
-	path := buildWhiteboardPath(root, m.project.Name, task.ID, name)
+	path := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, name)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		m.lastErr = fmt.Errorf("create whiteboard dir: %w", err)
 		return m, nil
@@ -1323,12 +1328,15 @@ func (m *model) createWhiteboard() (tea.Model, tea.Cmd) {
 }
 
 func (m *model) openSelectedWhiteboard() (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
 	whiteboard := m.selectedWhiteboard()
-	if whiteboard == nil {
+	if task == nil || whiteboard == nil {
 		m.lastErr = fmt.Errorf("no whiteboard selected")
 		return m, nil
 	}
-	if err := launchWhiteboard(whiteboard.Path); err != nil {
+	path := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, whiteboard.Name)
+	whiteboard.Path = path
+	if err := launchWhiteboard(path); err != nil {
 		m.lastErr = fmt.Errorf("launch whiteboard: %w", err)
 		return m, nil
 	}
@@ -1355,11 +1363,29 @@ func (m *model) renameSelectedWhiteboard() (tea.Model, tea.Cmd) {
 	if task == nil {
 		return m, nil
 	}
+	current, err := m.board.Whiteboard(task.ID, m.whiteboardRenameID)
+	if err != nil {
+		m.lastErr = err
+		return m, nil
+	}
+	oldPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, current.Name)
 	whiteboard, err := m.board.RenameWhiteboard(task.ID, m.whiteboardRenameID, m.whiteboardInput.Value())
 	if err != nil {
 		m.lastErr = err
 		return m, nil
 	}
+	newPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, whiteboard.Name)
+	if oldPath != newPath {
+		if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
+			m.lastErr = fmt.Errorf("prepare whiteboard dir: %w", err)
+			return m, nil
+		}
+		if err := moveWhiteboardFile(oldPath, newPath); err != nil && !os.IsNotExist(err) {
+			m.lastErr = fmt.Errorf("rename whiteboard file: %w", err)
+			return m, nil
+		}
+	}
+	whiteboard.Path = newPath
 	m.mode = modeWhiteboards
 	m.whiteboardRenameID = ""
 	m.whiteboardInput.Blur()
@@ -1387,8 +1413,10 @@ func (m *model) deleteSelectedWhiteboard() (tea.Model, tea.Cmd) {
 		m.mode = modeWhiteboards
 		return m, nil
 	}
+	path := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, whiteboard.Name)
+	whiteboard.Path = path
 
-	if err := removeWhiteboardFile(whiteboard.Path); err != nil && !os.IsNotExist(err) {
+	if err := removeWhiteboardFile(path); err != nil && !os.IsNotExist(err) {
 		m.mode = modeWhiteboards
 		m.lastErr = fmt.Errorf("delete whiteboard file: %w", err)
 		return m, nil

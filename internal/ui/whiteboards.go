@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/nikhilsharma/kanban-tui/internal/domain"
 )
 
 var whiteboardSlugRe = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -38,6 +40,7 @@ var createWhiteboardFile = func(path string) error {
 }
 
 var removeWhiteboardFile = os.Remove
+var moveWhiteboardFile = os.Rename
 
 func resolveWhiteboardRoot(dataPath string) string {
 	if root := strings.TrimSpace(os.Getenv("KANBAN_TUI_WHITEBOARD_DIR")); root != "" {
@@ -48,6 +51,74 @@ func resolveWhiteboardRoot(dataPath string) string {
 
 func buildWhiteboardPath(root, projectName, taskID, whiteboardName string) string {
 	return filepath.Join(root, slugifyProjectName(projectName), taskID, slugifyWhiteboardName(whiteboardName)+".rnote")
+}
+
+func resolveWhiteboardPath(dataPath, projectName, taskID, whiteboardName string) string {
+	return buildWhiteboardPath(resolveWhiteboardRoot(dataPath), projectName, taskID, whiteboardName)
+}
+
+func assignWorkspaceWhiteboardPaths(workspace *domain.Workspace, dataPath string) {
+	if workspace == nil {
+		return
+	}
+	for _, project := range workspace.Projects {
+		assignProjectWhiteboardPaths(project, dataPath)
+	}
+}
+
+func assignProjectWhiteboardPaths(project *domain.Project, dataPath string) {
+	if project == nil || project.Board == nil {
+		return
+	}
+	for taskID, task := range project.Board.Tasks {
+		if task == nil {
+			continue
+		}
+		for i := range task.Whiteboards {
+			task.Whiteboards[i].Path = resolveWhiteboardPath(dataPath, project.Name, taskID, task.Whiteboards[i].Name)
+		}
+	}
+}
+
+func snapshotProjectWhiteboardPaths(project *domain.Project, dataPath string) map[string]string {
+	paths := map[string]string{}
+	if project == nil || project.Board == nil {
+		return paths
+	}
+	for taskID, task := range project.Board.Tasks {
+		if task == nil {
+			continue
+		}
+		for _, whiteboard := range task.Whiteboards {
+			paths[whiteboard.ID] = resolveWhiteboardPath(dataPath, project.Name, taskID, whiteboard.Name)
+		}
+	}
+	return paths
+}
+
+func relocateProjectWhiteboardFiles(project *domain.Project, dataPath string, previous map[string]string) error {
+	if project == nil || project.Board == nil {
+		return nil
+	}
+	for taskID, task := range project.Board.Tasks {
+		if task == nil {
+			continue
+		}
+		for i := range task.Whiteboards {
+			newPath := resolveWhiteboardPath(dataPath, project.Name, taskID, task.Whiteboards[i].Name)
+			oldPath := previous[task.Whiteboards[i].ID]
+			if oldPath != "" && oldPath != newPath {
+				if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
+					return err
+				}
+				if err := moveWhiteboardFile(oldPath, newPath); err != nil && !os.IsNotExist(err) {
+					return err
+				}
+			}
+			task.Whiteboards[i].Path = newPath
+		}
+	}
+	return nil
 }
 
 func slugifyProjectName(name string) string {

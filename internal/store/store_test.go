@@ -67,8 +67,8 @@ func TestSQLiteStoreRoundTrip(t *testing.T) {
 	if got := len(loadedProject.Board.Tasks[first.ID].Whiteboards); got != 1 {
 		t.Fatalf("unexpected whiteboard count: got %d want 1", got)
 	}
-	if got := loadedProject.Board.Tasks[first.ID].Whiteboards[0].Path; got != "/tmp/sketches.rnote" {
-		t.Fatalf("unexpected whiteboard path: %q", got)
+	if got := loadedProject.Board.Tasks[first.ID].Whiteboards[0].Path; got != "" {
+		t.Fatalf("expected persisted whiteboard path to be empty, got %q", got)
 	}
 }
 

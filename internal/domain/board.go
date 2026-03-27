@@ -678,9 +678,6 @@ func normalizeWhiteboards(task *Task) error {
 		if whiteboard.Name == "" {
 			return fmt.Errorf("whiteboard name cannot be empty")
 		}
-		if whiteboard.Path == "" {
-			return fmt.Errorf("whiteboard path cannot be empty")
-		}
 		if whiteboard.ID == "" {
 			whiteboard.ID = newTaskID()
 		}
