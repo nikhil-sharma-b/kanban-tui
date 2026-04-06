@@ -58,14 +58,30 @@ type Whiteboard struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Path      string    `json:"path"`
+	Format    string    `json:"format,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Extension returns the file extension for this whiteboard.
+// Legacy whiteboards (format empty or "rnote") use ".rnote";
+// new whiteboards use ".xopp".
+func (w Whiteboard) Extension() string {
+	switch w.Format {
+	case "xopp":
+		return ".xopp"
+	case "rnote", "":
+		return ".rnote"
+	default:
+		return "." + w.Format
+	}
 }
 
 func (w Whiteboard) MarshalJSON() ([]byte, error) {
 	type whiteboardJSON struct {
 		ID        string    `json:"id"`
 		Name      string    `json:"name"`
+		Format    string    `json:"format,omitempty"`
 		CreatedAt time.Time `json:"created_at"`
 		UpdatedAt time.Time `json:"updated_at"`
 	}
@@ -73,6 +89,7 @@ func (w Whiteboard) MarshalJSON() ([]byte, error) {
 	return json.Marshal(whiteboardJSON{
 		ID:        w.ID,
 		Name:      w.Name,
+		Format:    w.Format,
 		CreatedAt: w.CreatedAt,
 		UpdatedAt: w.UpdatedAt,
 	})
@@ -83,6 +100,7 @@ func (w *Whiteboard) UnmarshalJSON(data []byte) error {
 		ID        string    `json:"id"`
 		Name      string    `json:"name"`
 		Path      string    `json:"path"`
+		Format    string    `json:"format,omitempty"`
 		CreatedAt time.Time `json:"created_at"`
 		UpdatedAt time.Time `json:"updated_at"`
 	}
@@ -95,6 +113,7 @@ func (w *Whiteboard) UnmarshalJSON(data []byte) error {
 	w.ID = decoded.ID
 	w.Name = decoded.Name
 	w.Path = decoded.Path
+	w.Format = decoded.Format
 	w.CreatedAt = decoded.CreatedAt
 	w.UpdatedAt = decoded.UpdatedAt
 	return nil

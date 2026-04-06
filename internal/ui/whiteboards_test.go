@@ -108,7 +108,7 @@ func TestRenameWhiteboardFlow(t *testing.T) {
 	if got.selectedTask().Whiteboards[0].Name != "Sketches" {
 		t.Fatalf("unexpected whiteboard name: %q", got.selectedTask().Whiteboards[0].Name)
 	}
-	if got.selectedTask().Whiteboards[0].Path != resolveWhiteboardPath(got.dataPath, got.project.Name, got.selectedTask().ID, "Sketches") {
+	if got.selectedTask().Whiteboards[0].Path != resolveWhiteboardPath(got.dataPath, got.project.Name, got.selectedTask().ID, "Sketches", ".xopp") {
 		t.Fatalf("unexpected whiteboard path: %q", got.selectedTask().Whiteboards[0].Path)
 	}
 }
@@ -116,7 +116,7 @@ func TestRenameWhiteboardFlow(t *testing.T) {
 func TestRelocateProjectWhiteboardFilesMovesExistingFiles(t *testing.T) {
 	m := newWhiteboardTestModel(t)
 	task := m.selectedTask()
-	oldPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, "Whiteboard 1")
+	oldPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, "Whiteboard 1", ".rnote")
 	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
 		t.Fatalf("create original whiteboard dir: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestRelocateProjectWhiteboardFilesMovesExistingFiles(t *testing.T) {
 		t.Fatalf("relocate project whiteboards: %v", err)
 	}
 
-	newPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, "Whiteboard 1")
+	newPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, "Whiteboard 1", ".rnote")
 	if task.Whiteboards[0].Path != newPath {
 		t.Fatalf("whiteboard path = %q, want %q", task.Whiteboards[0].Path, newPath)
 	}
@@ -162,7 +162,7 @@ func TestOpenSelectedWhiteboardLaunchesPath(t *testing.T) {
 	if _, cmd := m.openSelectedWhiteboard(); cmd != nil {
 		t.Fatalf("open should not save workspace")
 	}
-	want := resolveWhiteboardPath(m.dataPath, m.project.Name, m.selectedTask().ID, "Sketches")
+	want := resolveWhiteboardPath(m.dataPath, m.project.Name, m.selectedTask().ID, "Sketches", ".rnote")
 	if launched != want {
 		t.Fatalf("launched path = %q, want %q", launched, want)
 	}
@@ -217,7 +217,7 @@ func TestCreateWhiteboardFileFailurePreventsLinking(t *testing.T) {
 	origLaunch := launchWhiteboard
 	origCreate := createWhiteboardFile
 	launchWhiteboard = func(path string) error { return nil }
-	createWhiteboardFile = func(path string) error { return errors.New("missing rnote-cli") }
+	createWhiteboardFile = func(path string) error { return errors.New("write failed") }
 	defer func() {
 		launchWhiteboard = origLaunch
 		createWhiteboardFile = origCreate
@@ -237,7 +237,7 @@ func TestCreateWhiteboardFileFailurePreventsLinking(t *testing.T) {
 
 func TestDeleteWhiteboardRemovesFileAndEntry(t *testing.T) {
 	m := newWhiteboardTestModel(t)
-	filePath := resolveWhiteboardPath(m.dataPath, m.project.Name, m.selectedTask().ID, "Board")
+	filePath := resolveWhiteboardPath(m.dataPath, m.project.Name, m.selectedTask().ID, "Board", ".rnote")
 	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
 		t.Fatalf("create temp whiteboard dir: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestDeleteWhiteboardRemovesFileAndEntry(t *testing.T) {
 
 func TestDeleteWhiteboardMissingFileStillUnlinks(t *testing.T) {
 	m := newWhiteboardTestModel(t)
-	missingPath := resolveWhiteboardPath(m.dataPath, m.project.Name, m.selectedTask().ID, "Board")
+	missingPath := resolveWhiteboardPath(m.dataPath, m.project.Name, m.selectedTask().ID, "Board", ".rnote")
 	m.selectedTask().Whiteboards = []domain.Whiteboard{{ID: "wb1", Name: "Board", Path: missingPath}}
 	m.mode = modeWhiteboards
 
@@ -330,7 +330,7 @@ func TestWhiteboardLaunchCommandUsesCustomCommandWithArgs(t *testing.T) {
 	}
 }
 
-func TestWhiteboardLaunchCommandFallbacks(t *testing.T) {
+func TestWhiteboardLaunchCommandFallbacksRnote(t *testing.T) {
 	t.Setenv("KANBAN_TUI_WHITEBOARD_CMD", "")
 
 	command, args, err := whiteboardLaunchCommand("/tmp/board.rnote")
@@ -347,7 +347,38 @@ func TestWhiteboardLaunchCommandFallbacks(t *testing.T) {
 			t.Fatalf("args = %q, want %q", got, want)
 		}
 	case "linux":
-		if command != "xdg-open" && command != "flatpak" && command != "rnote" {
+		base := filepath.Base(command)
+		if base != "xdg-open" && base != "flatpak" && base != "rnote" {
+			t.Fatalf("unexpected linux command %q", command)
+		}
+	case "windows":
+		if command != "cmd" {
+			t.Fatalf("command = %q, want cmd", command)
+		}
+	default:
+		if command == "" || len(args) == 0 {
+			t.Fatalf("expected non-empty fallback command and args")
+		}
+	}
+}
+
+func TestWhiteboardLaunchCommandFallbacksXournalpp(t *testing.T) {
+	t.Setenv("KANBAN_TUI_WHITEBOARD_CMD", "")
+
+	command, args, err := whiteboardLaunchCommand("/tmp/board.xopp")
+	if err != nil {
+		t.Fatalf("whiteboardLaunchCommand() error = %v", err)
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		base := filepath.Base(command)
+		if base != "open" && base != "xournalpp" {
+			t.Fatalf("command = %q, want open or xournalpp", command)
+		}
+	case "linux":
+		base := filepath.Base(command)
+		if base != "xournalpp" && base != "xdg-open" && base != "flatpak" {
 			t.Fatalf("unexpected linux command %q", command)
 		}
 	case "windows":

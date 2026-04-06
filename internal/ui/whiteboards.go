@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"os"
 	"os/exec"
@@ -24,19 +26,23 @@ var launchWhiteboard = func(path string) error {
 }
 
 var createWhiteboardFile = func(path string) error {
-	command, err := exec.LookPath("rnote-cli")
-	if err != nil {
-		return fmt.Errorf("rnote-cli not found in PATH")
+	const emptyXopp = `<?xml version="1.0" standalone="no"?>
+<xournal creator="Xournal++ 1.2.3" fileversion="4">
+<page width="612.00" height="792.00">
+<background type="solid" color="#ffffffff" style="lined" />
+<layer/>
+</page>
+</xournal>
+`
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	if _, err := gz.Write([]byte(emptyXopp)); err != nil {
+		return fmt.Errorf("compress xopp: %w", err)
 	}
-	output, runErr := exec.Command(command, "create", path).CombinedOutput()
-	if runErr != nil {
-		message := strings.TrimSpace(string(output))
-		if message == "" {
-			return fmt.Errorf("rnote-cli create failed: %w", runErr)
-		}
-		return fmt.Errorf("rnote-cli create failed: %s", message)
+	if err := gz.Close(); err != nil {
+		return fmt.Errorf("compress xopp: %w", err)
 	}
-	return nil
+	return os.WriteFile(path, buf.Bytes(), 0o644)
 }
 
 var removeWhiteboardFile = os.Remove
@@ -49,12 +55,12 @@ func resolveWhiteboardRoot(dataPath string) string {
 	return filepath.Join(filepath.Dir(dataPath), "whiteboards")
 }
 
-func buildWhiteboardPath(root, projectName, taskID, whiteboardName string) string {
-	return filepath.Join(root, slugifyProjectName(projectName), taskID, slugifyWhiteboardName(whiteboardName)+".rnote")
+func buildWhiteboardPath(root, projectName, taskID, whiteboardName, ext string) string {
+	return filepath.Join(root, slugifyProjectName(projectName), taskID, slugifyWhiteboardName(whiteboardName)+ext)
 }
 
-func resolveWhiteboardPath(dataPath, projectName, taskID, whiteboardName string) string {
-	return buildWhiteboardPath(resolveWhiteboardRoot(dataPath), projectName, taskID, whiteboardName)
+func resolveWhiteboardPath(dataPath, projectName, taskID, whiteboardName, ext string) string {
+	return buildWhiteboardPath(resolveWhiteboardRoot(dataPath), projectName, taskID, whiteboardName, ext)
 }
 
 func assignWorkspaceWhiteboardPaths(workspace *domain.Workspace, dataPath string) {
@@ -75,7 +81,7 @@ func assignProjectWhiteboardPaths(project *domain.Project, dataPath string) {
 			continue
 		}
 		for i := range task.Whiteboards {
-			task.Whiteboards[i].Path = resolveWhiteboardPath(dataPath, project.Name, taskID, task.Whiteboards[i].Name)
+			task.Whiteboards[i].Path = resolveWhiteboardPath(dataPath, project.Name, taskID, task.Whiteboards[i].Name, task.Whiteboards[i].Extension())
 		}
 	}
 }
@@ -90,7 +96,7 @@ func snapshotProjectWhiteboardPaths(project *domain.Project, dataPath string) ma
 			continue
 		}
 		for _, whiteboard := range task.Whiteboards {
-			paths[whiteboard.ID] = resolveWhiteboardPath(dataPath, project.Name, taskID, whiteboard.Name)
+			paths[whiteboard.ID] = resolveWhiteboardPath(dataPath, project.Name, taskID, whiteboard.Name, whiteboard.Extension())
 		}
 	}
 	return paths
@@ -105,7 +111,7 @@ func relocateProjectWhiteboardFiles(project *domain.Project, dataPath string, pr
 			continue
 		}
 		for i := range task.Whiteboards {
-			newPath := resolveWhiteboardPath(dataPath, project.Name, taskID, task.Whiteboards[i].Name)
+			newPath := resolveWhiteboardPath(dataPath, project.Name, taskID, task.Whiteboards[i].Name, task.Whiteboards[i].Extension())
 			oldPath := previous[task.Whiteboards[i].ID]
 			if oldPath != "" && oldPath != newPath {
 				if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
@@ -143,6 +149,10 @@ func slugify(value, fallback string) string {
 	return value
 }
 
+func isRnoteFile(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".rnote")
+}
+
 func whiteboardLaunchCommand(path string) (string, []string, error) {
 	if custom := strings.TrimSpace(os.Getenv("KANBAN_TUI_WHITEBOARD_CMD")); custom != "" {
 		parts := strings.Fields(custom)
@@ -151,6 +161,39 @@ func whiteboardLaunchCommand(path string) (string, []string, error) {
 		}
 		return parts[0], append(parts[1:], path), nil
 	}
+
+	// Legacy .rnote files should still open with rnote.
+	if isRnoteFile(path) {
+		return whiteboardLaunchRnote(path)
+	}
+
+	return whiteboardLaunchXournalpp(path)
+}
+
+func whiteboardLaunchXournalpp(path string) (string, []string, error) {
+	if command, err := exec.LookPath("xournalpp"); err == nil {
+		return command, []string{path}, nil
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		return "open", []string{"-a", "Xournal++", "--args", path}, nil
+	case "linux":
+		if command, err := exec.LookPath("xdg-open"); err == nil {
+			return command, []string{path}, nil
+		}
+		if command, err := exec.LookPath("flatpak"); err == nil {
+			return command, []string{"run", "com.github.xournalpp.xournalpp", path}, nil
+		}
+		return "", nil, fmt.Errorf("no Linux whiteboard launcher found; tried xournalpp, xdg-open, and flatpak")
+	case "windows":
+		return "cmd", []string{"/c", "start", "", path}, nil
+	default:
+		return "", nil, fmt.Errorf("no whiteboard launcher configured for %s", runtime.GOOS)
+	}
+}
+
+func whiteboardLaunchRnote(path string) (string, []string, error) {
 	if command, err := exec.LookPath("rnote"); err == nil {
 		return command, []string{path}, nil
 	}
@@ -165,10 +208,7 @@ func whiteboardLaunchCommand(path string) (string, []string, error) {
 		if command, err := exec.LookPath("flatpak"); err == nil {
 			return command, []string{"run", "com.github.flxzt.rnote", path}, nil
 		}
-		if command, err := exec.LookPath("rnote"); err == nil {
-			return command, []string{path}, nil
-		}
-		return "", nil, fmt.Errorf("no Linux whiteboard launcher found; tried xdg-open, flatpak, and rnote")
+		return "", nil, fmt.Errorf("no Linux rnote launcher found; tried rnote, xdg-open, and flatpak")
 	case "windows":
 		return "cmd", []string{"/c", "start", "", path}, nil
 	default:
