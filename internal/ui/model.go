@@ -1664,25 +1664,83 @@ func (m *model) ensureColumnState() {
 	}
 }
 
-func (m *model) syncScroll(status domain.Status) {
-	rows := m.taskRows()
-	if rows <= 0 {
-		rows = 1
+// cardColumnWidth returns the width parameter passed to renderColumn for the
+// given column index. It mirrors the width calculation in renderBoard.
+func (m *model) cardColumnWidth(colIndex int) int {
+	statuses := m.board.Statuses()
+	if len(statuses) == 0 {
+		return max(1, m.width-4)
 	}
+	if m.useCompactBoardLayout() {
+		return max(1, m.width-4)
+	}
+	availableWidth := max(0, m.width-4-(boardGap*(len(statuses)-1)))
+	if availableWidth <= 0 {
+		return max(1, m.width-4)
+	}
+	columnWidth := max(1, availableWidth/len(statuses))
+	extraWidth := max(0, availableWidth-(columnWidth*len(statuses)))
+	if colIndex < extraWidth {
+		columnWidth++
+	}
+	return columnWidth
+}
 
+// visibleTaskCount returns how many task cards fit in the column body starting
+// from the given scroll offset, by measuring actual rendered card heights.
+func (m *model) visibleTaskCount(status domain.Status, scroll int) int {
+	bodyHeight := max(1, m.columnHeight()-5)
+	ids := m.visible[status]
+	if len(ids) == 0 {
+		return 1
+	}
+	available := bodyHeight
+	if scroll > 0 {
+		available-- // "▲ more" indicator
+	}
+	innerWidth := max(1, m.cardColumnWidth(m.activeColumn)-4)
+	count := 0
+	for i := scroll; i < len(ids); i++ {
+		task := m.board.Tasks[ids[i]]
+		if task == nil {
+			continue
+		}
+		card := m.renderTaskCard(task, innerWidth, false, theme.Mauve)
+		h := lipgloss.Height(card)
+		// Reserve 1 line for "▼ N more" if there are more tasks after this.
+		reserve := 0
+		if i+1 < len(ids) {
+			reserve = 1
+		}
+		if available-h-reserve < 0 && count > 0 {
+			break
+		}
+		available -= h
+		count++
+	}
+	return max(1, count)
+}
+
+func (m *model) syncScroll(status domain.Status) {
 	selected := m.selected[status]
 	scroll := m.scroll[status]
 	if selected < scroll {
 		scroll = selected
 	}
-	if selected >= scroll+rows {
-		scroll = selected - rows + 1
+
+	// Advance scroll until the selected task is visible.
+	for scroll <= selected {
+		rows := m.visibleTaskCount(status, scroll)
+		if selected < scroll+rows {
+			break
+		}
+		scroll++
 	}
+
 	if scroll < 0 {
 		scroll = 0
 	}
-
-	maxScroll := max(0, len(m.visible[status])-rows)
+	maxScroll := max(0, len(m.visible[status])-1)
 	if scroll > maxScroll {
 		scroll = maxScroll
 	}
@@ -1921,15 +1979,14 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 	// Task body
 	bodyHeight := colHeight - 5
 	scroll := m.scroll[status]
-	rows := m.taskRows()
-	end := min(len(ids), scroll+rows)
 
-	body := make([]string, 0, rows)
+	body := make([]string, 0)
+	usedHeight := 0
 
 	if scroll > 0 {
-		body = append(body,
-			lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(innerWidth).Render("\u25b2 more"),
-		)
+		indicator := lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(innerWidth).Render("\u25b2 more")
+		body = append(body, indicator)
+		usedHeight += lipgloss.Height(indicator)
 	}
 
 	if len(ids) == 0 {
@@ -1945,12 +2002,26 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 		)
 	}
 
-	for i := scroll; i < end; i++ {
+	end := scroll
+	for i := scroll; i < len(ids); i++ {
 		task := m.board.Tasks[ids[i]]
 		if task == nil {
+			end = i + 1
 			continue
 		}
-		body = append(body, m.renderTaskCard(task, innerWidth, active && i == m.selected[status], accent))
+		card := m.renderTaskCard(task, innerWidth, active && i == m.selected[status], accent)
+		cardH := lipgloss.Height(card)
+		// Reserve 1 line for "▼ N more" if there are more tasks after this one.
+		reserve := 0
+		if i+1 < len(ids) {
+			reserve = 1
+		}
+		if usedHeight+cardH+reserve > bodyHeight && end > scroll {
+			break
+		}
+		body = append(body, card)
+		usedHeight += cardH
+		end = i + 1
 	}
 
 	if hidden := len(ids) - end; hidden > 0 {
@@ -1959,7 +2030,7 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 		)
 	}
 
-	bodyView := lipgloss.NewStyle().Height(bodyHeight).Render(strings.Join(body, "\n"))
+	bodyView := lipgloss.NewStyle().MaxHeight(bodyHeight).Render(strings.Join(body, "\n"))
 	return columnStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, separator, bodyView))
 }
 
@@ -2594,8 +2665,7 @@ func (m *model) compactColumnIndicator() string {
 
 func (m *model) taskRows() int {
 	bodyHeight := max(1, m.columnHeight()-5)
-	height := bodyHeight
-	rows := height / cardSlotHeight
+	rows := bodyHeight / cardSlotHeight
 	if rows < 1 {
 		return 1
 	}
