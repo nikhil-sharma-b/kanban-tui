@@ -175,6 +175,8 @@ type model struct {
 	columnRename       domain.Status
 	projectDraft       string
 	projectCursor      int
+	projectFilterInput textinput.Model
+	projectFiltering   bool
 	whiteboardInput    textinput.Model
 	whiteboardCursor   int
 	whiteboardRenameID string
@@ -250,6 +252,13 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	projectInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
 	projectInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
+	projectFilterInput := textinput.New()
+	projectFilterInput.Prompt = "/ "
+	projectFilterInput.Placeholder = "Fuzzy filter projects..."
+	projectFilterInput.Width = maxModalInputWidth
+	projectFilterInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
+	projectFilterInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
+
 	whiteboardInput := textinput.New()
 	whiteboardInput.Placeholder = "Whiteboard name"
 	whiteboardInput.Width = maxModalInputWidth
@@ -267,22 +276,23 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	}
 
 	m := &model{
-		workspace:       workspace,
-		project:         project,
-		board:           board,
-		store:           boardStore,
-		dataPath:        dataPath,
-		selected:        selected,
-		scroll:          scroll,
-		visible:         visible,
-		titleInput:      titleInput,
-		descInput:       descInput,
-		searchInput:     searchInput,
-		columnInput:     columnInput,
-		projectInput:    projectInput,
-		whiteboardInput: whiteboardInput,
-		help:            help.New(),
-		showHelp:        true,
+		workspace:          workspace,
+		project:            project,
+		board:              board,
+		store:              boardStore,
+		dataPath:           dataPath,
+		selected:           selected,
+		scroll:             scroll,
+		visible:            visible,
+		titleInput:         titleInput,
+		descInput:          descInput,
+		searchInput:        searchInput,
+		columnInput:        columnInput,
+		projectInput:       projectInput,
+		projectFilterInput: projectFilterInput,
+		whiteboardInput:    whiteboardInput,
+		help:               help.New(),
+		showHelp:           true,
 		keys: keyMap{
 			Left:         key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("h/\u2190", "column left")),
 			Right:        key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("l/\u2192", "column right")),
@@ -459,8 +469,11 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeProjects
 		m.projectCursor = m.activeProjectIndex()
 		m.projectInput.Blur()
+		m.projectFiltering = true
+		m.projectFilterInput.SetValue("")
+		m.projectFilterInput.Focus()
 		m.lastErr = nil
-		return m, nil
+		return m, textinput.Blink
 	case key.Matches(msg, m.keys.RenameCol):
 		return m.beginRenameColumn()
 	case key.Matches(msg, m.keys.DeleteCol):
@@ -1012,17 +1025,100 @@ func (m *model) updateColumnDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// fuzzyMatch reports whether every rune of query appears in target in order
+// (case-insensitive subsequence match).
+func fuzzyMatch(query, target string) bool {
+	query = strings.ToLower(query)
+	target = strings.ToLower(target)
+	runes := []rune(target)
+	i := 0
+	for _, q := range query {
+		found := false
+		for ; i < len(runes); i++ {
+			if runes[i] == q {
+				found = true
+				i++
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *model) filteredProjects() []*domain.Project {
+	query := strings.TrimSpace(m.projectFilterInput.Value())
+	if query == "" {
+		return m.workspace.Projects
+	}
+	matches := make([]*domain.Project, 0, len(m.workspace.Projects))
+	for _, project := range m.workspace.Projects {
+		if fuzzyMatch(query, project.Name) {
+			matches = append(matches, project)
+		}
+	}
+	return matches
+}
+
 func (m *model) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	projects := m.workspace.Projects
+	if m.projectFiltering {
+		switch msg.String() {
+		case "esc":
+			m.projectFiltering = false
+			m.projectFilterInput.SetValue("")
+			m.projectFilterInput.Blur()
+			m.projectCursor = 0
+			return m, nil
+		case "enter":
+			m.projectFiltering = false
+			m.projectFilterInput.Blur()
+			if projects := m.filteredProjects(); len(projects) > 0 {
+				if m.projectCursor >= len(projects) {
+					m.projectCursor = len(projects) - 1
+				}
+				return m.switchProject(projects[m.projectCursor].ID)
+			}
+			return m, nil
+		case "up", "down":
+			// fall through to list navigation below
+		default:
+			var cmd tea.Cmd
+			m.projectFilterInput, cmd = m.projectFilterInput.Update(msg)
+			m.projectCursor = 0
+			return m, cmd
+		}
+	}
+
+	projects := m.filteredProjects()
+	if m.projectCursor >= len(projects) {
+		m.projectCursor = max(0, len(projects)-1)
+	}
+
+	switch msg.String() {
+	case "esc":
+		if strings.TrimSpace(m.projectFilterInput.Value()) != "" {
+			m.projectFilterInput.SetValue("")
+			m.projectCursor = 0
+			return m, nil
+		}
+		m.mode = modeBoard
+		m.lastErr = nil
+		return m, nil
+	case "/":
+		m.projectFiltering = true
+		m.projectFilterInput.CursorEnd()
+		m.projectFilterInput.Focus()
+		m.lastErr = nil
+		return m, textinput.Blink
+	}
+
 	if len(projects) == 0 {
 		return m, nil
 	}
 
 	switch msg.String() {
-	case "esc":
-		m.mode = modeBoard
-		m.lastErr = nil
-		return m, nil
 	case "up", "k":
 		if m.projectCursor > 0 {
 			m.projectCursor--
@@ -2497,10 +2593,13 @@ func (m *model) renderProjectsDialog() string {
 	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
 	separator := lipgloss.NewStyle().Foreground(theme.Blue).Render(strings.Repeat("\u2501", contentWidth))
 
-	rows := make([]string, 0, len(m.workspace.Projects))
-	for i, project := range m.workspace.Projects {
+	projects := m.filteredProjects()
+	cursor := min(m.projectCursor, max(0, len(projects)-1))
+
+	rows := make([]string, 0, len(projects))
+	for i, project := range projects {
 		prefix := "  "
-		if i == m.projectCursor {
+		if i == cursor {
 			prefix = lipgloss.NewStyle().Foreground(theme.Mauve).Render("\u25b8 ")
 		}
 
@@ -2513,8 +2612,14 @@ func (m *model) renderProjectsDialog() string {
 	}
 
 	if len(rows) == 0 {
-		rows = append(rows, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render("No projects"))
+		emptyText := "No projects"
+		if strings.TrimSpace(m.projectFilterInput.Value()) != "" {
+			emptyText = "No matching projects"
+		}
+		rows = append(rows, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render(emptyText))
 	}
+
+	filterView := m.projectFilterInput.View()
 
 	errView := ""
 	if m.lastErr != nil {
@@ -2527,9 +2632,15 @@ func (m *model) renderProjectsDialog() string {
 		keyStyle.Render("n") + hintStyle.Render(" new  ") +
 		keyStyle.Render("e") + hintStyle.Render(" rename  ") +
 		keyStyle.Render("x") + hintStyle.Render(" delete  ") +
+		keyStyle.Render("/") + hintStyle.Render(" filter  ") +
 		keyStyle.Render("esc") + hintStyle.Render(" close")
+	if m.projectFiltering {
+		hint = keyStyle.Render("enter") + hintStyle.Render(" open  ") +
+			keyStyle.Render("↑↓") + hintStyle.Render(" move  ") +
+			keyStyle.Render("esc") + hintStyle.Render(" clear")
+	}
 
-	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", strings.Join(rows, "\n"))
+	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", filterView, "", strings.Join(rows, "\n"))
 	if errView != "" {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
 	}
