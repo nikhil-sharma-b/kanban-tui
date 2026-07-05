@@ -72,6 +72,9 @@ Existing JSON data is migrated automatically on first run:
 - `J` / `K`: reorder inside a column
 - `enter`: open task details
 - `x`: delete selected task
+- `A`: archive selected task (with confirm)
+- `ctrl+a`: archive Done tasks not updated in more than 30 days (with confirm)
+- `z`: open archive view
 - `?`: toggle help
 - `q`: quit
 
@@ -95,6 +98,14 @@ Inside the create dialog:
 - `tab`: switch fields
 - `ctrl+s`: save
 - `esc`: cancel
+
+Inside the archive view:
+
+- `j` / `k`: move between archived tasks
+- `/`: filter archived tasks (title + description)
+- `enter`: open read-only task details
+- `r`: restore selected task to its original column (or the first column if it was deleted)
+- `esc`: close
 
 Inside the project manager:
 

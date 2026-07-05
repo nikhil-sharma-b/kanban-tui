@@ -52,6 +52,15 @@ type Task struct {
 	Whiteboards []Whiteboard `json:"whiteboards,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
+	// ArchivedAt marks the task as archived: it stays in Board.Tasks but is
+	// removed from every active Board.Order slice. ArchivedFrom keeps the
+	// column the task lived in so restore can put it back.
+	ArchivedAt   *time.Time `json:"archived_at,omitempty"`
+	ArchivedFrom Status     `json:"archived_from,omitempty"`
+}
+
+func (t *Task) Archived() bool {
+	return t.ArchivedAt != nil
 }
 
 type Whiteboard struct {

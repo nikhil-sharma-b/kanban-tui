@@ -107,7 +107,12 @@ const (
 	modeWhiteboards
 	modeWhiteboardRename
 	modeConfirm
+	modeArchive
+	modeArchiveDetail
 )
+
+// bulkArchiveAge is the fixed v1 threshold for archiving old Done tasks.
+const bulkArchiveAge = 30 * 24 * time.Hour
 
 type saveFinishedMsg struct {
 	err error
@@ -139,12 +144,15 @@ type keyMap struct {
 	Edit         key.Binding
 	Open         key.Binding
 	Delete       key.Binding
+	Archive      key.Binding
+	ArchiveOld   key.Binding
+	ArchiveView  key.Binding
 	Help         key.Binding
 	Quit         key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.Projects, k.Open, k.Edit, k.Quit}
+	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.Projects, k.Open, k.Edit, k.Archive, k.ArchiveView, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
@@ -152,6 +160,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Left, k.Right, k.Up, k.Down},
 		{k.MoveColLeft, k.MoveColRight, k.MoveLeft, k.MoveRight},
 		{k.ReorderUp, k.ReorderDown, k.NewTask, k.NewColumn, k.Projects, k.RenameCol, k.DeleteCol, k.Search, k.Open, k.Edit, k.Delete},
+		{k.Archive, k.ArchiveOld, k.ArchiveView},
 		{k.Help, k.Quit},
 	}
 }
@@ -181,6 +190,9 @@ type model struct {
 	whiteboardInput    textinput.Model
 	whiteboardCursor   int
 	whiteboardRenameID string
+	archiveCursor      int
+	archiveFilterInput textinput.Model
+	archiveFiltering   bool
 	titleInput         textinput.Model
 	descInput          textarea.Model
 	searchInput        textinput.Model
@@ -268,6 +280,13 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	whiteboardInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
 	whiteboardInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
+	archiveFilterInput := textinput.New()
+	archiveFilterInput.Prompt = "/ "
+	archiveFilterInput.Placeholder = "Filter archived tasks..."
+	archiveFilterInput.Width = maxModalInputWidth
+	archiveFilterInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
+	archiveFilterInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
+
 	columns := board.Statuses()
 	selected := make(map[domain.Status]int, len(columns))
 	scroll := make(map[domain.Status]int, len(columns))
@@ -294,6 +313,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		projectInput:       projectInput,
 		projectFilterInput: projectFilterInput,
 		whiteboardInput:    whiteboardInput,
+		archiveFilterInput: archiveFilterInput,
 		help:               help.New(),
 		showHelp:           true,
 		keys: keyMap{
@@ -317,6 +337,9 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 			Edit:         key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit selected")),
 			Open:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("\u23ce", "details")),
 			Delete:       key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
+			Archive:      key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "archive task")),
+			ArchiveOld:   key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "archive old done")),
+			ArchiveView:  key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "archive view")),
 			Help:         key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
 			Quit:         key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		},
@@ -371,6 +394,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateWhiteboardRename(msg)
 		case modeConfirm:
 			return m.updateConfirm(msg)
+		case modeArchive:
+			return m.updateArchive(msg)
+		case modeArchiveDetail:
+			return m.updateArchiveDetail(msg)
 		default:
 			return m.updateBoard(msg)
 		}
@@ -410,6 +437,10 @@ func (m *model) View() string {
 		return m.placeOverlayCenter(view, m.renderWhiteboardRenameDialog())
 	case modeConfirm:
 		return m.placeOverlayCenter(view, m.renderConfirmDialog())
+	case modeArchive:
+		return m.placeOverlayCenter(view, m.renderArchiveDialog())
+	case modeArchiveDetail:
+		return m.placeOverlayCenter(view, m.renderTaskDetail(m.selectedArchivedTask(), true))
 	default:
 		return view
 	}
@@ -516,6 +547,32 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				func() (tea.Model, tea.Cmd) { return m.deleteSelected() },
 			)
 		}
+	case key.Matches(msg, m.keys.Archive):
+		task := m.selectedTask()
+		if task != nil {
+			title := task.Title
+			if len(title) > 20 {
+				title = title[:20] + "…"
+			}
+			return m.askConfirm(
+				fmt.Sprintf("Archive task %q?", title),
+				modeBoard,
+				func() (tea.Model, tea.Cmd) { return m.archiveSelected() },
+			)
+		}
+	case key.Matches(msg, m.keys.ArchiveOld):
+		return m.askConfirm(
+			"Archive Done tasks not updated in more than 30 days?",
+			modeBoard,
+			func() (tea.Model, tea.Cmd) { return m.archiveOldDone() },
+		)
+	case key.Matches(msg, m.keys.ArchiveView):
+		m.mode = modeArchive
+		m.archiveCursor = 0
+		m.archiveFiltering = false
+		m.archiveFilterInput.SetValue("")
+		m.archiveFilterInput.Blur()
+		m.lastErr = nil
 	case key.Matches(msg, m.keys.Help):
 		m.showHelp = !m.showHelp
 	}
@@ -1527,6 +1584,175 @@ func (m *model) deleteSelected() (tea.Model, tea.Cmd) {
 	return m, m.saveWorkspaceCmd()
 }
 
+func (m *model) archiveSelected() (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
+	if task == nil {
+		m.mode = modeBoard
+		return m, nil
+	}
+
+	if _, err := m.board.ArchiveTask(task.ID); err != nil {
+		m.mode = modeBoard
+		m.lastErr = err
+		return m, nil
+	}
+
+	m.mode = modeBoard
+	m.lastStatus = "archived task"
+	m.lastErr = nil
+	m.recalculateVisible()
+	return m, m.saveWorkspaceCmd()
+}
+
+func (m *model) archiveOldDone() (tea.Model, tea.Cmd) {
+	count, err := m.board.ArchiveDoneOlderThan(bulkArchiveAge)
+	m.mode = modeBoard
+	if err != nil {
+		m.lastErr = err
+		return m, nil
+	}
+
+	m.lastErr = nil
+	m.lastStatus = fmt.Sprintf("archived %d done tasks", count)
+	if count == 0 {
+		m.lastStatus = "no done tasks old enough to archive"
+		return m, nil
+	}
+	m.recalculateVisible()
+	return m, m.saveWorkspaceCmd()
+}
+
+// filteredArchivedTasks returns archived tasks (newest first) matching the
+// archive filter against title + description.
+func (m *model) filteredArchivedTasks() []*domain.Task {
+	archived := m.board.ArchivedTasks()
+	query := strings.ToLower(strings.TrimSpace(m.archiveFilterInput.Value()))
+	if query == "" {
+		return archived
+	}
+	matches := make([]*domain.Task, 0, len(archived))
+	for _, task := range archived {
+		if strings.Contains(task.SearchText(), query) {
+			matches = append(matches, task)
+		}
+	}
+	return matches
+}
+
+func (m *model) selectedArchivedTask() *domain.Task {
+	archived := m.filteredArchivedTasks()
+	if len(archived) == 0 {
+		return nil
+	}
+	if m.archiveCursor < 0 {
+		m.archiveCursor = 0
+	}
+	if m.archiveCursor >= len(archived) {
+		m.archiveCursor = len(archived) - 1
+	}
+	return archived[m.archiveCursor]
+}
+
+func (m *model) updateArchive(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.archiveFiltering {
+		switch msg.String() {
+		case "esc":
+			m.archiveFiltering = false
+			m.archiveFilterInput.SetValue("")
+			m.archiveFilterInput.Blur()
+			m.archiveCursor = 0
+			return m, nil
+		case "enter":
+			m.archiveFiltering = false
+			m.archiveFilterInput.Blur()
+			return m, nil
+		case "up", "down":
+			// fall through to list navigation below
+		default:
+			var cmd tea.Cmd
+			m.archiveFilterInput, cmd = m.archiveFilterInput.Update(msg)
+			m.archiveCursor = 0
+			return m, cmd
+		}
+	}
+
+	archived := m.filteredArchivedTasks()
+	if m.archiveCursor >= len(archived) {
+		m.archiveCursor = max(0, len(archived)-1)
+	}
+
+	switch msg.String() {
+	case "esc", "q":
+		if !m.archiveFiltering && strings.TrimSpace(m.archiveFilterInput.Value()) != "" {
+			m.archiveFilterInput.SetValue("")
+			m.archiveCursor = 0
+			return m, nil
+		}
+		m.mode = modeBoard
+		m.lastErr = nil
+		return m, nil
+	case "/":
+		m.archiveFiltering = true
+		m.archiveFilterInput.CursorEnd()
+		m.archiveFilterInput.Focus()
+		return m, textinput.Blink
+	case "up", "k":
+		if m.archiveCursor > 0 {
+			m.archiveCursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.archiveCursor < len(archived)-1 {
+			m.archiveCursor++
+		}
+		return m, nil
+	case "enter":
+		if m.selectedArchivedTask() != nil {
+			m.mode = modeArchiveDetail
+		}
+		return m, nil
+	case "r":
+		return m.restoreSelectedArchived()
+	}
+
+	return m, nil
+}
+
+func (m *model) restoreSelectedArchived() (tea.Model, tea.Cmd) {
+	task := m.selectedArchivedTask()
+	if task == nil {
+		return m, nil
+	}
+
+	restored, err := m.board.RestoreTask(task.ID)
+	if err != nil {
+		m.lastErr = err
+		return m, nil
+	}
+
+	m.lastErr = nil
+	m.lastStatus = "restored task"
+	m.ensureColumnState()
+	m.recalculateVisible()
+	m.syncScroll(restored.Status)
+	if m.archiveCursor >= len(m.filteredArchivedTasks()) {
+		m.archiveCursor = max(0, len(m.filteredArchivedTasks())-1)
+	}
+	return m, m.saveWorkspaceCmd()
+}
+
+func (m *model) updateArchiveDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "enter", "q":
+		m.mode = modeArchive
+	case "r":
+		model, cmd := m.restoreSelectedArchived()
+		m.mode = modeArchive
+		return model, cmd
+	}
+	return m, nil
+}
+
 func (m *model) askConfirm(msg string, prev mode, action func() (tea.Model, tea.Cmd)) (tea.Model, tea.Cmd) {
 	m.confirmMsg = msg
 	m.confirmPrev = prev
@@ -1550,7 +1776,7 @@ func (m *model) renderConfirmDialog() string {
 	title := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(theme.Red).
-		Render("⚠  Confirm Delete")
+		Render("⚠  Confirm")
 	dialogWidth := m.dialogWidth(40)
 	contentWidth := m.dialogContentWidth(dialogWidth, 2)
 
@@ -1833,7 +2059,7 @@ func (m *model) renderHeader() string {
 	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Render(titleText)
 	compact := m.useCompactBoardLayout()
 
-	total := len(m.board.Tasks)
+	total := m.board.ActiveTaskCount()
 	done := m.board.Count(domain.StatusDone)
 	inProgress := m.board.Count(domain.StatusInProgress)
 
@@ -2295,7 +2521,13 @@ func (m *model) renderSearchDialog() string {
 }
 
 func (m *model) renderDetailDialog() string {
-	task := m.selectedTask()
+	return m.renderTaskDetail(m.selectedTask(), false)
+}
+
+// renderTaskDetail renders the detail dialog for an explicit task so archived
+// tasks (which are never the active-board selection) can reuse it. archived
+// selects the read-only hint set.
+func (m *model) renderTaskDetail(task *domain.Task, archived bool) string {
 	if task == nil {
 		return ""
 	}
@@ -2338,6 +2570,11 @@ func (m *model) renderDetailDialog() string {
 		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Created"), valueStyle.Render(task.CreatedAt.Local().Format("02 Jan 2006 15:04"))),
 		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Updated"), valueStyle.Render(task.UpdatedAt.Local().Format("02 Jan 2006 15:04"))),
 	}
+	if task.Archived() {
+		metaRows = append(metaRows,
+			lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Archived"), valueStyle.Render(task.ArchivedAt.Local().Format("02 Jan 2006 15:04"))),
+		)
+	}
 
 	description := strings.TrimSpace(task.Description)
 	descView := ""
@@ -2360,6 +2597,10 @@ func (m *model) renderDetailDialog() string {
 	hint := keyStyle.Render("e") + hintStyle.Render(" edit  ") +
 		keyStyle.Render("w") + hintStyle.Render(" whiteboards  ") +
 		keyStyle.Render("esc") + hintStyle.Render(" close")
+	if archived {
+		hint = keyStyle.Render("r") + hintStyle.Render(" restore  ") +
+			keyStyle.Render("esc") + hintStyle.Render(" back")
+	}
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -2545,7 +2786,7 @@ func (m *model) renderProjectsDialog() string {
 		if project.ID == m.workspace.ActiveProjectID {
 			name += lipgloss.NewStyle().Foreground(theme.Green).Render("  active")
 		}
-		count := lipgloss.NewStyle().Foreground(theme.Subtext0).Render(fmt.Sprintf("%d tasks", len(project.Board.Tasks)))
+		count := lipgloss.NewStyle().Foreground(theme.Subtext0).Render(fmt.Sprintf("%d tasks", project.Board.ActiveTaskCount()))
 		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Center, prefix, truncate(name, max(1, contentWidth-12)), spacer(max(1, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(name)-lipgloss.Width(count))), count))
 	}
 
@@ -2585,6 +2826,68 @@ func (m *model) renderProjectsDialog() string {
 	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
 
 	return lipgloss.NewStyle().Width(dialogWidth).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.Blue).Background(theme.Base).Render(content)
+}
+
+func (m *model) renderArchiveDialog() string {
+	projectName := ""
+	if m.project != nil {
+		projectName = m.project.Name
+	}
+	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Lavender).Render("Archive - " + projectName)
+	dialogWidth := m.dialogWidth(projectDialogMaxWidth + 8)
+	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
+	separator := lipgloss.NewStyle().Foreground(theme.Lavender).Render(strings.Repeat("━", contentWidth))
+
+	archived := m.filteredArchivedTasks()
+	cursor := min(m.archiveCursor, max(0, len(archived)-1))
+
+	rows := make([]string, 0, len(archived))
+	for i, task := range archived {
+		prefix := "  "
+		if i == cursor {
+			prefix = lipgloss.NewStyle().Foreground(theme.Mauve).Render("▸ ")
+		}
+		name := lipgloss.NewStyle().Foreground(theme.Text).Render(truncate(task.Title, max(1, contentWidth-24)))
+		meta := lipgloss.NewStyle().Foreground(theme.Overlay0).Render(
+			task.ArchivedAt.Local().Format("02 Jan 2006") + " · " + task.ArchivedFrom.Title(),
+		)
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Center, prefix, name,
+			spacer(max(1, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(name)-lipgloss.Width(meta))), meta))
+	}
+	if len(rows) == 0 {
+		emptyText := "No archived tasks"
+		if strings.TrimSpace(m.archiveFilterInput.Value()) != "" {
+			emptyText = "No matching archived tasks"
+		}
+		rows = append(rows, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render(emptyText))
+	}
+
+	filterView := m.archiveFilterInput.View()
+
+	errView := ""
+	if m.lastErr != nil {
+		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("✗ " + m.lastErr.Error())
+	}
+
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	hint := keyStyle.Render("enter") + hintStyle.Render(" details  ") +
+		keyStyle.Render("r") + hintStyle.Render(" restore  ") +
+		keyStyle.Render("/") + hintStyle.Render(" filter  ") +
+		keyStyle.Render("esc") + hintStyle.Render(" close")
+	if m.archiveFiltering {
+		hint = keyStyle.Render("enter") + hintStyle.Render(" apply  ") +
+			keyStyle.Render("↑↓") + hintStyle.Render(" move  ") +
+			keyStyle.Render("esc") + hintStyle.Render(" clear")
+	}
+
+	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", filterView, "", strings.Join(rows, "\n"))
+	if errView != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
+	}
+	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
+
+	return lipgloss.NewStyle().Width(dialogWidth).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.Lavender).Background(theme.Base).Render(content)
 }
 
 func (m *model) renderProjectEditDialog() string {

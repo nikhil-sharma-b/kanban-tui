@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -50,6 +51,10 @@ func (b *Board) Clone() *Board {
 		copied := *task
 		if task.Whiteboards != nil {
 			copied.Whiteboards = append([]Whiteboard(nil), task.Whiteboards...)
+		}
+		if task.ArchivedAt != nil {
+			archivedAt := *task.ArchivedAt
+			copied.ArchivedAt = &archivedAt
 		}
 		clone.Tasks[id] = &copied
 	}
@@ -110,6 +115,12 @@ func (b *Board) Normalize() error {
 			if err := normalizeWhiteboards(task); err != nil {
 				return fmt.Errorf("task %s whiteboards: %w", id, err)
 			}
+			// Archived tasks stay in Tasks but never occupy active order and
+			// must not resurrect columns from their remembered status.
+			if task.Archived() {
+				seenTasks[id] = struct{}{}
+				continue
+			}
 			if !task.Status.Valid() {
 				task.Status = defaultStatus
 			}
@@ -156,6 +167,9 @@ func (b *Board) Normalize() error {
 		}
 		if err := normalizeWhiteboards(task); err != nil {
 			return fmt.Errorf("task %s whiteboards: %w", id, err)
+		}
+		if task.Archived() {
+			continue
 		}
 		if !task.Status.Valid() {
 			task.Status = defaultStatus
@@ -351,6 +365,116 @@ func (b *Board) DeleteTask(id string) bool {
 	b.Order[task.Status] = removeID(b.Order[task.Status], id)
 	delete(b.Tasks, id)
 	return true
+}
+
+// ArchiveTask removes the task from all active column orders while keeping it
+// in Tasks. Idempotent: archiving an already archived task is a no-op that
+// does not retouch UpdatedAt.
+func (b *Board) ArchiveTask(id string) (*Task, error) {
+	task, ok := b.Tasks[id]
+	if !ok || task == nil {
+		return nil, fmt.Errorf("task %s not found", id)
+	}
+	if task.Archived() {
+		return task, nil
+	}
+
+	task.ArchivedFrom = task.Status
+	now := timeNowUTC()
+	task.ArchivedAt = &now
+	task.UpdatedAt = now
+
+	for status, ids := range b.Order {
+		b.Order[status] = removeID(ids, id)
+	}
+	return task, nil
+}
+
+// RestoreTask puts an archived task back at the end of its original column,
+// or the first column if the original was deleted. Idempotent for active
+// tasks.
+func (b *Board) RestoreTask(id string) (*Task, error) {
+	task, ok := b.Tasks[id]
+	if !ok || task == nil {
+		return nil, fmt.Errorf("task %s not found", id)
+	}
+	if !task.Archived() {
+		return task, nil
+	}
+
+	target := normalizeStatus(task.ArchivedFrom)
+	if target == "" || b.StatusIndex(target) < 0 {
+		if len(b.Columns) == 0 {
+			b.Columns = append([]Status{}, StatusOrder...)
+		}
+		target = b.Columns[0]
+	}
+	if b.Order == nil {
+		b.Order = make(map[Status][]string)
+	}
+
+	// Guard against duplicate IDs in any order slice.
+	for status, ids := range b.Order {
+		b.Order[status] = removeID(ids, id)
+	}
+	b.Order[target] = append(b.Order[target], id)
+
+	task.Status = target
+	task.ArchivedAt = nil
+	task.ArchivedFrom = ""
+	task.Touch()
+	return task, nil
+}
+
+// ArchivedTasks returns archived tasks sorted newest first by ArchivedAt.
+func (b *Board) ArchivedTasks() []*Task {
+	archived := make([]*Task, 0)
+	for _, task := range b.Tasks {
+		if task != nil && task.Archived() {
+			archived = append(archived, task)
+		}
+	}
+	sort.Slice(archived, func(i, j int) bool {
+		if archived[i].ArchivedAt.Equal(*archived[j].ArchivedAt) {
+			return archived[i].ID < archived[j].ID
+		}
+		return archived[i].ArchivedAt.After(*archived[j].ArchivedAt)
+	})
+	return archived
+}
+
+// ArchiveDoneOlderThan archives active Done tasks whose UpdatedAt is older
+// than age, returning how many were archived.
+func (b *Board) ArchiveDoneOlderThan(age time.Duration) (int, error) {
+	cutoff := timeNowUTC().Add(-age)
+	ids := append([]string{}, b.Order[StatusDone]...)
+
+	count := 0
+	for _, id := range ids {
+		task, ok := b.Tasks[id]
+		if !ok || task == nil || task.Archived() {
+			continue
+		}
+		if !task.UpdatedAt.Before(cutoff) {
+			continue
+		}
+		if _, err := b.ArchiveTask(id); err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, nil
+}
+
+// ActiveTaskCount counts non-archived tasks.
+func (b *Board) ActiveTaskCount() int {
+	count := 0
+	for _, task := range b.Tasks {
+		if task != nil && !task.Archived() {
+			count++
+		}
+	}
+	return count
 }
 
 func (b *Board) MoveTask(id string, next Status, index int) bool {

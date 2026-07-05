@@ -196,3 +196,55 @@ func TestResolvePathsWithLegacyJSONEnv(t *testing.T) {
 		t.Fatalf("unexpected legacy path: %s", legacyPath)
 	}
 }
+
+func TestSQLiteStorePersistsArchivedTasks(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "board-archive.db")
+	sqliteStore, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("new sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+
+	workspace := domain.NewWorkspace()
+	project := workspace.ActiveProject()
+	task, err := project.Board.AddTask("archive me", "old work")
+	if err != nil {
+		t.Fatalf("add task: %v", err)
+	}
+	if _, err := project.Board.AddWhiteboard(task.ID, "Sketches", "/tmp/sketches.rnote"); err != nil {
+		t.Fatalf("add whiteboard: %v", err)
+	}
+	if !project.Board.MoveTask(task.ID, domain.StatusDone, 0) {
+		t.Fatal("move task to done")
+	}
+	if _, err := project.Board.ArchiveTask(task.ID); err != nil {
+		t.Fatalf("archive task: %v", err)
+	}
+
+	if err := sqliteStore.Save(workspace); err != nil {
+		t.Fatalf("save workspace: %v", err)
+	}
+	loaded, err := sqliteStore.Load()
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+
+	loadedTask := loaded.ActiveProject().Board.Tasks[task.ID]
+	if loadedTask == nil {
+		t.Fatal("expected archived task to persist")
+	}
+	if loadedTask.ArchivedAt == nil {
+		t.Fatal("expected ArchivedAt to persist")
+	}
+	if loadedTask.ArchivedFrom != domain.StatusDone {
+		t.Fatalf("unexpected ArchivedFrom: %q", loadedTask.ArchivedFrom)
+	}
+	if len(loadedTask.Whiteboards) != 1 {
+		t.Fatalf("expected archived task whiteboards to persist, got %d", len(loadedTask.Whiteboards))
+	}
+	if got := loaded.ActiveProject().Board.Order[domain.StatusDone]; len(got) != 0 {
+		t.Fatalf("expected archived task out of active order, got %v", got)
+	}
+}
