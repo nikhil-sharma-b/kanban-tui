@@ -48,49 +48,50 @@ var leftAccentBorder = lipgloss.Border{
 }
 
 var theme = struct {
-	Rosewater lipgloss.Color
-	Flamingo  lipgloss.Color
-	Pink      lipgloss.Color
-	Mauve     lipgloss.Color
-	Red       lipgloss.Color
-	Peach     lipgloss.Color
-	Yellow    lipgloss.Color
-	Green     lipgloss.Color
-	Teal      lipgloss.Color
-	Blue      lipgloss.Color
-	Lavender  lipgloss.Color
-	Text      lipgloss.Color
-	Subtext1  lipgloss.Color
-	Subtext0  lipgloss.Color
-	Overlay0  lipgloss.Color
-	Surface2  lipgloss.Color
-	Surface1  lipgloss.Color
-	Surface0  lipgloss.Color
-	Base      lipgloss.Color
-	Mantle    lipgloss.Color
-	Crust     lipgloss.Color
+	Rosewater lipgloss.TerminalColor
+	Flamingo  lipgloss.TerminalColor
+	Pink      lipgloss.TerminalColor
+	Mauve     lipgloss.TerminalColor
+	Red       lipgloss.TerminalColor
+	Peach     lipgloss.TerminalColor
+	Yellow    lipgloss.TerminalColor
+	Green     lipgloss.TerminalColor
+	Teal      lipgloss.TerminalColor
+	Blue      lipgloss.TerminalColor
+	Lavender  lipgloss.TerminalColor
+	Text      lipgloss.TerminalColor
+	Subtext1  lipgloss.TerminalColor
+	Subtext0  lipgloss.TerminalColor
+	Overlay0  lipgloss.TerminalColor
+	Surface2  lipgloss.TerminalColor
+	Surface1  lipgloss.TerminalColor
+	Surface0  lipgloss.TerminalColor
+	Base      lipgloss.TerminalColor
+	Mantle    lipgloss.TerminalColor
+	Crust     lipgloss.TerminalColor
 }{
-	Rosewater: lipgloss.Color("#F5E0DC"),
-	Flamingo:  lipgloss.Color("#F2CDCD"),
-	Pink:      lipgloss.Color("#F5C2E7"),
-	Mauve:     lipgloss.Color("#CBA6F7"),
-	Red:       lipgloss.Color("#F38BA8"),
-	Peach:     lipgloss.Color("#FAB387"),
-	Yellow:    lipgloss.Color("#F9E2AF"),
-	Green:     lipgloss.Color("#A6E3A1"),
-	Teal:      lipgloss.Color("#94E2D5"),
-	Blue:      lipgloss.Color("#89B4FA"),
-	Lavender:  lipgloss.Color("#B4BEFE"),
-	Text:      lipgloss.Color("#CDD6F4"),
-	Subtext1:  lipgloss.Color("#BAC2DE"),
-	Subtext0:  lipgloss.Color("#A6ADC8"),
-	Overlay0:  lipgloss.Color("#6C7086"),
-	Surface2:  lipgloss.Color("#585B70"),
-	Surface1:  lipgloss.Color("#45475A"),
-	Surface0:  lipgloss.Color("#313244"),
-	Base:      lipgloss.Color("#1E1E2E"),
-	Mantle:    lipgloss.Color("#181825"),
-	Crust:     lipgloss.Color("#11111B"),
+	// ANSI colors inherit their RGB values from the user's terminal theme.
+	Rosewater: lipgloss.Color("7"),
+	Flamingo:  lipgloss.Color("1"),
+	Pink:      lipgloss.Color("5"),
+	Mauve:     lipgloss.Color("5"),
+	Red:       lipgloss.Color("1"),
+	Peach:     lipgloss.Color("3"),
+	Yellow:    lipgloss.Color("3"),
+	Green:     lipgloss.Color("2"),
+	Teal:      lipgloss.Color("6"),
+	Blue:      lipgloss.Color("4"),
+	Lavender:  lipgloss.Color("6"),
+	Text:      lipgloss.NoColor{},
+	Subtext1:  lipgloss.NoColor{},
+	Subtext0:  lipgloss.Color("8"),
+	Overlay0:  lipgloss.Color("8"),
+	Surface2:  lipgloss.Color("8"),
+	Surface1:  lipgloss.Color("8"),
+	Surface0:  lipgloss.Color("8"),
+	Base:      lipgloss.NoColor{},
+	Mantle:    lipgloss.NoColor{},
+	Crust:     lipgloss.NoColor{},
 }
 
 type mode int
@@ -888,7 +889,6 @@ func (m *model) syncVimCursor() tea.Cmd {
 		m.descInput.Cursor.SetMode(mode),
 	)
 }
-
 
 func (m *model) saveTask() (tea.Model, tea.Cmd) {
 	title := m.titleInput.Value()
@@ -2205,7 +2205,7 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 	label := lipgloss.NewStyle().Bold(true).Foreground(accent).Render(icon + " " + status.Title())
 
 	countBadge := lipgloss.NewStyle().
-		Foreground(theme.Subtext0).
+		Foreground(theme.Text).
 		Background(theme.Surface0).
 		PaddingLeft(1).
 		PaddingRight(1).
@@ -2285,7 +2285,7 @@ func (m *model) renderColumn(status domain.Status, active bool, width int) strin
 	return columnStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, separator, bodyView))
 }
 
-func (m *model) renderTaskCard(task *domain.Task, width int, selected bool, accent lipgloss.Color) string {
+func (m *model) renderTaskCard(task *domain.Task, width int, selected bool, accent lipgloss.TerminalColor) string {
 	cardWidth := width
 	if cardWidth < 1 {
 		cardWidth = 1
@@ -3168,7 +3168,7 @@ func joinHorizontal(parts []string, gap int) string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, withGaps...)
 }
 
-func statusAccent(status domain.Status) lipgloss.Color {
+func statusAccent(status domain.Status) lipgloss.TerminalColor {
 	switch status {
 	case domain.StatusBacklog:
 		return theme.Blue
