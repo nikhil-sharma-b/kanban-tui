@@ -33,6 +33,21 @@ type vimResult struct {
 	enterInsert bool
 }
 
+type vimSelection struct {
+	anchor int
+	cursor int
+}
+
+func (s vimSelection) rangeBounds(textLen int) (int, int) {
+	start, end := s.anchor, s.cursor
+	if start > end {
+		start, end = end, start
+	}
+	start = clampInt(start, 0, textLen)
+	end = clampInt(end+1, start, textLen)
+	return start, end
+}
+
 func (v *vimEngine) reset() {
 	v.op, v.prefix, v.count = 0, 0, 0
 }

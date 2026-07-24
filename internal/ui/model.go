@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/help"
@@ -201,6 +202,7 @@ type model struct {
 	keys               keyMap
 	editingTaskID      string
 	vimNormal          bool
+	vimVisual          *vimSelection
 	vim                vimEngine
 	vimReplace         bool   // R – replace mode (overtype)
 	vimStatus          string // transient feedback shown in dialog (e.g. yanked "foo")
@@ -487,6 +489,7 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.editingTaskID = ""
 		m.mode = modeCreate
 		m.vimNormal = false
+		m.vimVisual = nil
 		m.vimReplace = false
 		m.vim.reset()
 		m.titleInput.SetValue("")
@@ -730,10 +733,15 @@ func (m *model) updateCreateInner(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openEditorWithDraft()
 	}
 
+	key := msg.String()
+	if len(msg.Runes) == 1 {
+		key = string(msg.Runes)
+	}
+
 	m.vimStatus = "" // any keypress clears transient yank/paste feedback
 
 	if m.vimNormal {
-		return m.updateCreateVimNormal(msg)
+		return m.updateCreateVimNormal(msg, key)
 	}
 
 	if m.vimReplace {
@@ -766,12 +774,17 @@ func (m *model) updateCreateInner(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m *model) updateCreateVimNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *model) updateCreateVimNormal(msg tea.KeyMsg, key string) (tea.Model, tea.Cmd) {
+	if key == "" && len(msg.Runes) == 1 {
+		key = string(msg.Runes)
+	}
 	if m.vimCommand != "" {
 		return m.updateCreateVimCommand(msg)
 	}
 
-	key := msg.String()
+	if m.vimVisual != nil {
+		return m.updateCreateVimVisual(key)
+	}
 	switch key {
 	case ":":
 		m.vim.reset()
@@ -788,6 +801,11 @@ func (m *model) updateCreateVimNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.titleInput.Blur()
 		m.descInput.Blur()
 		m.editingTaskID = ""
+		return m, nil
+	case "v":
+		m.vim.reset()
+		pos := m.focusedVimBuffer().Cursor()
+		m.vimVisual = &vimSelection{anchor: pos, cursor: pos}
 		return m, nil
 	case "tab", "shift+tab":
 		m.vim.reset()
@@ -826,6 +844,52 @@ func (m *model) updateCreateVimNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	m.vimStatus = m.vim.status
 	return m, nil
+}
+
+func (m *model) updateCreateVimVisual(key string) (tea.Model, tea.Cmd) {
+	buf := m.focusedVimBuffer()
+	selection := m.vimVisual
+	switch key {
+	case "esc", "v":
+		m.vimVisual = nil
+		return m, nil
+	case "d", "x", "c", "y":
+		text := []rune(buf.Text())
+		start, end := selection.rangeBounds(len(text))
+		op := []rune(key)[0]
+		if op == 'x' {
+			op = 'd'
+		}
+		res := m.vim.opRange(buf, text, start, end, false, op)
+		m.vimStatus = m.vim.status
+		m.vimVisual = nil
+		if res.enterInsert {
+			m.vimNormal = false
+		}
+		return m, nil
+	}
+
+	text := []rune(buf.Text())
+	pos := clampInt(selection.cursor, 0, len(text))
+	if len(text) > 0 && pos == len(text) {
+		pos--
+	}
+	if mr, ok := visualMotionTarget(key, text, pos); ok {
+		selection.cursor = clampInt(mr.pos, 0, max(len(text)-1, 0))
+		buf.SetCursor(selection.cursor)
+	}
+	return m, nil
+}
+
+func visualMotionTarget(key string, text []rune, pos int) (motionResult, bool) {
+	if key == "G" {
+		return motionResult{pos: max(len(text)-1, 0)}, true
+	}
+	runes := []rune(key)
+	if len(runes) != 1 {
+		return motionResult{}, false
+	}
+	return motionTarget(runes[0], text, pos, 1)
 }
 
 func (m *model) updateCreateVimCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -984,6 +1048,7 @@ func (m *model) closeCreatePanel() {
 	m.mode = modeBoard
 	m.editingTaskID = ""
 	m.vimNormal = false
+	m.vimVisual = nil
 	m.vimReplace = false
 	m.vimCommand = ""
 	m.titleInput.Blur()
@@ -1293,6 +1358,7 @@ func (m *model) beginEditSelected() (tea.Model, tea.Cmd) {
 	m.editingTaskID = task.ID
 	m.mode = modeCreate
 	m.vimNormal = false
+	m.vimVisual = nil
 	m.vimReplace = false
 	m.vim.reset()
 	m.titleInput.SetValue(task.Title)
@@ -2483,6 +2549,8 @@ func (m *model) renderCreateDialog() string {
 	switch {
 	case m.vimReplace:
 		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Red).Render("REPLACE") + "  "
+	case m.vimVisual != nil:
+		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Pink).Render("VISUAL") + "  "
 	case m.vimNormal && m.vim.pending():
 		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Yellow).Render("NORMAL·") + "  "
 	case m.vimNormal:
@@ -2521,10 +2589,10 @@ func (m *model) renderCreateDialog() string {
 		separator,
 		"",
 		titleLabel,
-		m.titleInput.View(),
+		m.renderCreateInput(m.titleInput.View(), m.titleInput.Value(), m.titleInput.Focused()),
 		"",
 		descLabel,
-		m.descInput.View(),
+		m.renderCreateInput(m.descInput.View(), m.descInput.Value(), m.descInput.Focused()),
 	)
 	if errView != "" {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
@@ -2538,6 +2606,52 @@ func (m *model) renderCreateDialog() string {
 		BorderForeground(theme.Mauve).
 		Background(theme.Base).
 		Render(content)
+}
+
+func (m *model) renderCreateInput(view, value string, focused bool) string {
+	if m.vimVisual == nil || !focused {
+		return view
+	}
+	start, end := m.vimVisual.rangeBounds(len([]rune(value)))
+	selected := string([]rune(value)[start:end])
+	if selected == "" {
+		return view
+	}
+	return highlightVisibleText(view, selected)
+}
+
+func highlightVisibleText(view, selected string) string {
+	visible := ansiStripRe.ReplaceAllString(view, "")
+	start := strings.Index(visible, selected)
+	if start < 0 {
+		return view
+	}
+	end := start + len(selected)
+	var out strings.Builder
+	visibleByte := 0
+	for i := 0; i < len(view); {
+		if view[i] == '\x1b' {
+			if match := ansiStripRe.FindString(view[i:]); strings.HasPrefix(view[i:], match) {
+				out.WriteString(match)
+				i += len(match)
+				continue
+			}
+		}
+		if visibleByte == start {
+			out.WriteString("\x1b[7m")
+		}
+		if visibleByte == end {
+			out.WriteString("\x1b[27m")
+		}
+		_, size := utf8.DecodeRuneInString(view[i:])
+		out.WriteString(view[i : i+size])
+		i += size
+		visibleByte += size
+	}
+	if visibleByte == end {
+		out.WriteString("\x1b[27m")
+	}
+	return out.String()
 }
 
 func (m *model) renderSearchDialog() string {

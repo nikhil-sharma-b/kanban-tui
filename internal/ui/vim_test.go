@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -235,6 +236,51 @@ func TestCreateVimWriteCommands(t *testing.T) {
 	if m.mode != modeBoard || len(m.board.Tasks) != 1 {
 		t.Fatalf("new task :wq mode = %v, task count = %d", m.mode, len(m.board.Tasks))
 	}
+}
+
+func TestCreateVimVisualMode(t *testing.T) {
+	m := New(domain.NewWorkspace(), nil, "").(*model)
+	m.mode = modeCreate
+	m.vimNormal = true
+	m.titleInput.SetValue("foo bar")
+	m.titleInput.Focus()
+	m.titleInput.SetCursor(0)
+
+	for _, key := range []string{"v", "e", "y"} {
+		m.updateCreateVimNormal(keyMsg(key), key)
+	}
+	if m.vimVisual != nil {
+		t.Fatal("visual selection remained after yank")
+	}
+	if got := m.vim.register; got != "foo" {
+		t.Fatalf("visual yank register = %q, want %q", got, "foo")
+	}
+	if got := m.titleInput.Value(); got != "foo bar" {
+		t.Fatalf("visual yank changed text to %q", got)
+	}
+
+	m.titleInput.SetCursor(4)
+	for _, key := range []string{"v", "e", "d"} {
+		m.updateCreateVimNormal(keyMsg(key), key)
+	}
+	if got := m.titleInput.Value(); got != "foo " {
+		t.Fatalf("visual delete text = %q, want %q", got, "foo ")
+	}
+}
+
+func TestHighlightVisibleTextAcrossANSIStyles(t *testing.T) {
+	view := "\x1b[32mfo\x1b[0mo bar"
+	got := highlightVisibleText(view, "foo")
+	if !strings.Contains(got, "\x1b[7m") || !strings.Contains(got, "\x1b[27m") {
+		t.Fatalf("highlight missing from %q", got)
+	}
+	if plain := ansiStripRe.ReplaceAllString(got, ""); plain != "foo bar" {
+		t.Fatalf("highlight changed visible text to %q", plain)
+	}
+}
+
+func keyMsg(key string) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
 }
 
 func enterVimCommand(m *model, command string) {
