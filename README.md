@@ -96,7 +96,8 @@ Inside the whiteboard manager:
 Inside the create dialog:
 
 - `tab`: switch fields
-- `ctrl+s`: save
+- `:w`: save
+- `:wq`: save and close
 - `esc`: cancel
 
 Inside the archive view:

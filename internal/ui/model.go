@@ -204,6 +204,7 @@ type model struct {
 	vim                vimEngine
 	vimReplace         bool   // R – replace mode (overtype)
 	vimStatus          string // transient feedback shown in dialog (e.g. yanked "foo")
+	vimCommand         string // command-line input in normal mode, including leading ':'
 	showHelp           bool
 	lastStatus         string
 	lastErr            error
@@ -720,10 +721,8 @@ func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) updateCreateInner(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Always handle ctrl+s, ctrl+e regardless of vim mode.
+	// Always handle ctrl+e regardless of vim mode.
 	switch msg.String() {
-	case "ctrl+s":
-		return m.saveTask()
 	case "ctrl+e":
 		m.mode = modeBoard
 		m.titleInput.Blur()
@@ -768,8 +767,17 @@ func (m *model) updateCreateInner(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) updateCreateVimNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.vimCommand != "" {
+		return m.updateCreateVimCommand(msg)
+	}
+
 	key := msg.String()
 	switch key {
+	case ":":
+		m.vim.reset()
+		m.vimCommand = ":"
+		m.vimStatus = m.vimCommand
+		return m, nil
 	case "esc":
 		if m.vim.pending() {
 			m.vim.reset()
@@ -817,6 +825,44 @@ func (m *model) updateCreateVimNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.vimNormal = false
 	}
 	m.vimStatus = m.vim.status
+	return m, nil
+}
+
+func (m *model) updateCreateVimCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.vimCommand = ""
+		m.vimStatus = ""
+		return m, nil
+	case "backspace":
+		runes := []rune(m.vimCommand)
+		if len(runes) <= 1 {
+			m.vimCommand = ""
+			m.vimStatus = ""
+		} else {
+			m.vimCommand = string(runes[:len(runes)-1])
+			m.vimStatus = m.vimCommand
+		}
+		return m, nil
+	case "enter":
+		command := m.vimCommand
+		m.vimCommand = ""
+		m.vimStatus = ""
+		switch command {
+		case ":w":
+			return m.saveTask(false)
+		case ":wq":
+			return m.saveTask(true)
+		default:
+			m.vimStatus = fmt.Sprintf("not an editor command: %s", command)
+			return m, nil
+		}
+	}
+
+	if msg.Type == tea.KeyRunes {
+		m.vimCommand += string(msg.Runes)
+		m.vimStatus = m.vimCommand
+	}
 	return m, nil
 }
 
@@ -890,7 +936,7 @@ func (m *model) syncVimCursor() tea.Cmd {
 	)
 }
 
-func (m *model) saveTask() (tea.Model, tea.Cmd) {
+func (m *model) saveTask(closePanel bool) (tea.Model, tea.Cmd) {
 	title := m.titleInput.Value()
 	description := m.descInput.Value()
 
@@ -901,12 +947,13 @@ func (m *model) saveTask() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		m.mode = modeBoard
 		m.lastStatus = fmt.Sprintf("updated %s", shortID(task.ID))
 		m.lastErr = nil
-		m.editingTaskID = ""
 		m.recalculateVisible()
 		m.selectTask(task.ID)
+		if closePanel {
+			m.closeCreatePanel()
+		}
 
 		return m, m.saveWorkspaceCmd()
 	}
@@ -917,17 +964,30 @@ func (m *model) saveTask() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.mode = modeBoard
 	m.lastStatus = fmt.Sprintf("created %s", shortID(task.ID))
 	m.lastErr = nil
+	m.editingTaskID = task.ID
 	m.filter = ""
 	m.searchInput.SetValue("")
 	m.activeColumn = 0
 	m.recalculateVisible()
 	m.selected[task.Status] = len(m.visible[task.Status]) - 1
 	m.syncScroll(task.Status)
+	if closePanel {
+		m.closeCreatePanel()
+	}
 
 	return m, m.saveWorkspaceCmd()
+}
+
+func (m *model) closeCreatePanel() {
+	m.mode = modeBoard
+	m.editingTaskID = ""
+	m.vimNormal = false
+	m.vimReplace = false
+	m.vimCommand = ""
+	m.titleInput.Blur()
+	m.descInput.Blur()
 }
 
 func (m *model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -2432,7 +2492,8 @@ func (m *model) renderCreateDialog() string {
 	}
 	hint := modeHint +
 		keyStyle.Render("tab") + hintStyle.Render(" switch  ") +
-		keyStyle.Render("ctrl+s") + hintStyle.Render(" "+saveHint+"  ") +
+		keyStyle.Render(":w") + hintStyle.Render(" "+saveHint+"  ") +
+		keyStyle.Render(":wq") + hintStyle.Render(" "+saveHint+" & close  ") +
 		keyStyle.Render("ctrl+e") + hintStyle.Render(" editor  ") +
 		keyStyle.Render("esc") + hintStyle.Render(func() string {
 		if m.vimNormal {

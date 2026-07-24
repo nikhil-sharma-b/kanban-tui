@@ -1,6 +1,11 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nikhilsharma/kanban-tui/internal/domain"
+)
 
 type fakeBuf struct {
 	text   []rune
@@ -185,4 +190,56 @@ func TestVimCountAndEsc(t *testing.T) {
 	if buf.pos != 4 {
 		t.Errorf("w should move cursor, pos = %d", buf.pos)
 	}
+}
+
+func TestCreateVimWriteCommands(t *testing.T) {
+	m := New(domain.NewWorkspace(), nil, "").(*model)
+	m.mode = modeCreate
+	m.vimNormal = true
+	m.titleInput.SetValue("First title")
+	m.descInput.SetValue("First description")
+
+	enterVimCommand(m, ":w")
+	if m.mode != modeCreate {
+		t.Fatalf(":w mode = %v, want modeCreate", m.mode)
+	}
+	if m.editingTaskID == "" {
+		t.Fatal(":w did not retain created task for later updates")
+	}
+	if got := len(m.board.Tasks); got != 1 {
+		t.Fatalf("task count after :w = %d, want 1", got)
+	}
+
+	m.descInput.SetValue("Updated description")
+	enterVimCommand(m, ":w")
+	if got := len(m.board.Tasks); got != 1 {
+		t.Fatalf("task count after second :w = %d, want 1", got)
+	}
+	if got := m.board.Tasks[m.editingTaskID].Description; got != "Updated description" {
+		t.Fatalf("description after second :w = %q", got)
+	}
+
+	enterVimCommand(m, ":wq")
+	if m.mode != modeBoard {
+		t.Fatalf(":wq mode = %v, want modeBoard", m.mode)
+	}
+	if m.editingTaskID != "" {
+		t.Fatalf(":wq editingTaskID = %q, want empty", m.editingTaskID)
+	}
+
+	m = New(domain.NewWorkspace(), nil, "").(*model)
+	m.mode = modeCreate
+	m.vimNormal = true
+	m.titleInput.SetValue("New task")
+	enterVimCommand(m, ":wq")
+	if m.mode != modeBoard || len(m.board.Tasks) != 1 {
+		t.Fatalf("new task :wq mode = %v, task count = %d", m.mode, len(m.board.Tasks))
+	}
+}
+
+func enterVimCommand(m *model, command string) {
+	for _, r := range command {
+		m.updateCreateInner(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	m.updateCreateInner(tea.KeyMsg{Type: tea.KeyEnter})
 }
