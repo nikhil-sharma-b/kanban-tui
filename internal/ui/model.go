@@ -2490,21 +2490,25 @@ func (m *model) renderCreateDialog() string {
 	default:
 		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Blue).Render("INSERT") + "  "
 	}
-	hint := modeHint +
-		keyStyle.Render("tab") + hintStyle.Render(" switch  ") +
-		keyStyle.Render(":w") + hintStyle.Render(" "+saveHint+"  ") +
-		keyStyle.Render(":wq") + hintStyle.Render(" "+saveHint+" & close  ") +
-		keyStyle.Render("ctrl+e") + hintStyle.Render(" editor  ") +
-		keyStyle.Render("esc") + hintStyle.Render(func() string {
-		if m.vimNormal {
-			return " close"
-		}
-		return " normal"
-	}())
-
+	var hint string
 	if m.vimStatus != "" {
-		hint += "  " + lipgloss.NewStyle().Foreground(theme.Yellow).Render(m.vimStatus)
+		// Transient feedback takes over the hint line (vim-style) so the
+		// dialog height never changes; hints return on next keypress.
+		hint = modeHint + lipgloss.NewStyle().Foreground(theme.Yellow).Render(m.vimStatus)
+	} else {
+		hint = modeHint +
+			keyStyle.Render("tab") + hintStyle.Render(" switch  ") +
+			keyStyle.Render(":w") + hintStyle.Render(" "+saveHint+"  ") +
+			keyStyle.Render(":wq") + hintStyle.Render(" "+saveHint+" & close  ") +
+			keyStyle.Render("ctrl+e") + hintStyle.Render(" editor  ") +
+			keyStyle.Render("esc") + hintStyle.Render(func() string {
+			if m.vimNormal {
+				return " close"
+			}
+			return " normal"
+		}())
 	}
+	hint = lipgloss.NewStyle().MaxWidth(contentWidth).Render(hint)
 
 	errView := ""
 	if m.lastErr != nil {
