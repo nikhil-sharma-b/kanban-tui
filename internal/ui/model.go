@@ -2718,12 +2718,13 @@ func (m *model) renderTaskDetail(task *domain.Task, archived bool) string {
 		Foreground(theme.Text).
 		Render(task.Title)
 
+	// Outline badge rather than a filled one: the palette is pure ANSI, so the
+	// RGB behind accent/Mantle comes from the user's terminal theme and a
+	// filled badge can land text on a near-matching background. An accent
+	// foreground on the dialog background is legible in every theme.
 	statusBadge := lipgloss.NewStyle().
-		Foreground(theme.Mantle).
-		Background(accent).
+		Foreground(accent).
 		Bold(true).
-		PaddingLeft(1).
-		PaddingRight(1).
 		Render(statusIcon(task.Status) + " " + task.Status.Title())
 	dialogWidth := m.dialogWidth(detailDialogMaxWidth)
 	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
