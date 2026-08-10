@@ -63,6 +63,7 @@ Existing JSON data is migrated automatically on first run:
 - `H` / `L`: move active column left/right
 - `c`: add custom column
 - `p`: open project manager
+- `D`: jump into the daily board (press again to jump back)
 - `r`: rename active column
 - `d`: delete active column (at least one column always kept; tasks are moved to the nearest adjacent column)
 - `n`: create task
@@ -116,6 +117,27 @@ Inside the project manager:
 - `e`: rename selected project
 - `x`: delete selected project
 - `esc`: close
+
+## Daily board
+
+The daily board is a single, always-present board for the small tasks that come up during the day. It sits next to your projects but never shows up in the project manager, and it cannot be renamed or deleted.
+
+It has three fixed columns:
+
+```text
+Waiting   Active   Next
+```
+
+Columns cannot be added, renamed, reordered, or deleted there.
+
+Keys inside the daily board:
+
+- `D`: leave the daily board and go back to the last project you were on
+- `n`: capture a new task in Waiting
+- `[` / `]`: move a task between Waiting, Active and Next
+- `space`: mark the selected task done - it disappears from the board and moves to the archive
+- `z`: view the tasks you already marked done (`r` restores one to the board)
+- `X`: clear the board, deleting every daily task including the done ones (with confirm)
 
 ## Whiteboards
 

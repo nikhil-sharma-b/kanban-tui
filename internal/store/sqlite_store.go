@@ -106,7 +106,10 @@ func (s *SQLiteStore) loadWorkspaceBlob() (*domain.Workspace, error) {
 		return nil, fmt.Errorf("load workspace: %w", err)
 	}
 
-	workspace := domain.NewWorkspace()
+	// Decode into a zero value: json.Unmarshal merges into pre-existing
+	// slice elements, so a pre-populated workspace would leak its own
+	// projects' fields (for example Daily) into the decoded ones.
+	workspace := &domain.Workspace{}
 	if err := json.Unmarshal([]byte(raw), workspace); err != nil {
 		return nil, fmt.Errorf("decode workspace: %w", err)
 	}

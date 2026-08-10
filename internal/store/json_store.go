@@ -31,7 +31,9 @@ func (s *JSONStore) Load() (*domain.Workspace, error) {
 		return nil, err
 	}
 
-	workspace := domain.NewWorkspace()
+	// Decode into a zero value so no field of a pre-populated workspace
+	// survives into the decoded projects; Normalize fills the gaps.
+	workspace := &domain.Workspace{}
 	if err := json.Unmarshal(data, workspace); err != nil {
 		legacyBoard := domain.NewBoard()
 		if legacyErr := json.Unmarshal(data, legacyBoard); legacyErr != nil {

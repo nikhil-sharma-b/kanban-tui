@@ -23,6 +23,30 @@ var StatusOrder = []Status{
 	StatusDone,
 }
 
+// Daily board columns. The daily board is a fixed three-column board for
+// tasks that come up during the day; it never uses StatusOrder.
+const (
+	StatusWaiting Status = "waiting"
+	StatusActive  Status = "active"
+	StatusNext    Status = "next"
+)
+
+var DailyStatusOrder = []Status{
+	StatusWaiting,
+	StatusActive,
+	StatusNext,
+}
+
+// IsDailyStatus reports whether status is one of the daily board columns.
+func IsDailyStatus(status Status) bool {
+	for _, candidate := range DailyStatusOrder {
+		if candidate == status {
+			return true
+		}
+	}
+	return false
+}
+
 func (s Status) Valid() bool {
 	return strings.TrimSpace(string(s)) != ""
 }
@@ -36,6 +60,12 @@ func (s Status) Title() string {
 		return "In Progress"
 	case StatusDone:
 		return "Done"
+	case StatusWaiting:
+		return "Waiting"
+	case StatusActive:
+		return "Active"
+	case StatusNext:
+		return "Next"
 	default:
 		if trimmed == "" {
 			return "Unknown"

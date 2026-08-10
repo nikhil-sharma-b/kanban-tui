@@ -149,12 +149,15 @@ type keyMap struct {
 	Archive      key.Binding
 	ArchiveOld   key.Binding
 	ArchiveView  key.Binding
+	Daily        key.Binding
+	DailyDone    key.Binding
+	DailyClear   key.Binding
 	Help         key.Binding
 	Quit         key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.Projects, k.Open, k.Edit, k.Archive, k.ArchiveView, k.Quit}
+	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.Projects, k.Daily, k.Open, k.Edit, k.Archive, k.ArchiveView, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
@@ -163,6 +166,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.MoveColLeft, k.MoveColRight, k.MoveLeft, k.MoveRight},
 		{k.ReorderUp, k.ReorderDown, k.NewTask, k.NewColumn, k.Projects, k.RenameCol, k.DeleteCol, k.Search, k.Open, k.Edit, k.Delete},
 		{k.Archive, k.ArchiveOld, k.ArchiveView},
+		{k.Daily, k.DailyDone, k.DailyClear},
 		{k.Help, k.Quit},
 	}
 }
@@ -213,6 +217,8 @@ type model struct {
 	confirmMsg         string
 	confirmPrev        mode
 	confirmAction      func() (tea.Model, tea.Cmd)
+	// prevProjectID is the project to return to when leaving the daily board.
+	prevProjectID string
 }
 
 // ansiStripRe matches ANSI escape sequences for the dim/blur effect.
@@ -344,9 +350,16 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 			Archive:      key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "archive task")),
 			ArchiveOld:   key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "archive old done")),
 			ArchiveView:  key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "archive view")),
+			Daily:        key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "daily board")),
+			DailyDone:    key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "daily: mark done")),
+			DailyClear:   key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "daily: clear board")),
 			Help:         key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
 			Quit:         key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		},
+	}
+
+	if !project.Daily {
+		m.prevProjectID = project.ID
 	}
 
 	m.recalculateVisible()
@@ -456,9 +469,37 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.onDailyBoard() {
+		switch {
+		case key.Matches(msg, m.keys.DailyDone):
+			return m.markDailyDone()
+		case key.Matches(msg, m.keys.DailyClear):
+			if len(m.board.Tasks) == 0 {
+				m.lastErr = nil
+				m.lastStatus = "daily board is already empty"
+				return m, nil
+			}
+			return m.askConfirm(
+				fmt.Sprintf("Clear the daily board? %d task(s) will be deleted.", len(m.board.Tasks)),
+				modeBoard,
+				func() (tea.Model, tea.Cmd) { return m.clearDailyBoard() },
+			)
+		case key.Matches(msg, m.keys.NewColumn),
+			key.Matches(msg, m.keys.RenameCol),
+			key.Matches(msg, m.keys.DeleteCol),
+			key.Matches(msg, m.keys.MoveColLeft),
+			key.Matches(msg, m.keys.MoveColRight):
+			m.lastErr = nil
+			m.lastStatus = "daily board columns are fixed"
+			return m, nil
+		}
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
+	case key.Matches(msg, m.keys.Daily):
+		return m.toggleDaily()
 	case key.Matches(msg, m.keys.Left):
 		if m.activeColumn > 0 {
 			m.activeColumn--
@@ -1158,12 +1199,13 @@ func fuzzyMatch(query, target string) bool {
 }
 
 func (m *model) filteredProjects() []*domain.Project {
+	projects := m.workspace.RegularProjects()
 	query := strings.TrimSpace(m.projectFilterInput.Value())
 	if query == "" {
-		return m.workspace.Projects
+		return projects
 	}
-	matches := make([]*domain.Project, 0, len(m.workspace.Projects))
-	for _, project := range m.workspace.Projects {
+	matches := make([]*domain.Project, 0, len(projects))
+	for _, project := range projects {
 		if fuzzyMatch(query, project.Name) {
 			matches = append(matches, project)
 		}
@@ -1266,8 +1308,8 @@ func (m *model) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				m.activateProject(m.workspace.ActiveProjectID)
-				if m.projectCursor >= len(m.workspace.Projects) {
-					m.projectCursor = len(m.workspace.Projects) - 1
+				if remaining := len(m.workspace.RegularProjects()); m.projectCursor >= remaining {
+					m.projectCursor = remaining - 1
 				}
 				m.lastErr = nil
 				m.lastStatus = fmt.Sprintf("deleted project %s", project.Name)
@@ -1317,7 +1359,7 @@ func (m *model) updateProjectEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeProjects
 		m.projectInput.Blur()
 		m.projectDraft = ""
-		m.projectCursor = m.workspace.ProjectIndex(project.ID)
+		m.projectCursor = m.regularProjectIndex(project.ID)
 		m.lastErr = nil
 		m.lastStatus = fmt.Sprintf("renamed project %s", project.Name)
 		return m, m.saveWorkspaceCmd()
@@ -2188,6 +2230,10 @@ func (m *model) renderHeader() string {
 	total := m.board.ActiveTaskCount()
 	done := m.board.Count(domain.StatusDone)
 	inProgress := m.board.Count(domain.StatusInProgress)
+	if m.onDailyBoard() {
+		inProgress = m.board.Count(domain.StatusActive)
+		done = 0
+	}
 
 	// Visual progress bar
 	barWidth := min(20, max(4, m.width/4))
@@ -2214,7 +2260,12 @@ func (m *model) renderHeader() string {
 
 	// Compact stats
 	var stats string
-	if total > 0 {
+	if m.onDailyBoard() && total > 0 {
+		dot := lipgloss.NewStyle().Foreground(theme.Surface2).Render(" · ")
+		stats = lipgloss.NewStyle().Foreground(theme.Blue).Render(fmt.Sprintf("%d waiting", m.board.Count(domain.StatusWaiting))) + dot +
+			lipgloss.NewStyle().Foreground(theme.Peach).Render(fmt.Sprintf("%d active", m.board.Count(domain.StatusActive))) + dot +
+			lipgloss.NewStyle().Foreground(theme.Mauve).Render(fmt.Sprintf("%d next", m.board.Count(domain.StatusNext)))
+	} else if total > 0 {
 		stats = lipgloss.NewStyle().Foreground(theme.Peach).Render(fmt.Sprintf("%d active", inProgress)) +
 			lipgloss.NewStyle().Foreground(theme.Surface2).Render(" \u00b7 ") +
 			lipgloss.NewStyle().Foreground(theme.Green).Render(fmt.Sprintf("%d done", done)) +
@@ -2459,6 +2510,31 @@ func (m *model) renderFooter() string {
 	var content string
 	compact := m.useCompactBoardLayout()
 
+	if m.onDailyBoard() {
+		keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext1).Bold(true)
+		descStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+		sep := lipgloss.NewStyle().Foreground(theme.Surface1).Render("  │  ")
+
+		content = keyStyle.Render("h/l") + descStyle.Render(" column") + sep +
+			keyStyle.Render("j/k") + descStyle.Render(" task") + sep +
+			keyStyle.Render("n") + descStyle.Render(" new") + sep +
+			keyStyle.Render("[/]") + descStyle.Render(" move") + sep +
+			keyStyle.Render("space") + descStyle.Render(" done") + sep +
+			keyStyle.Render("D") + descStyle.Render(" back")
+		if !compact {
+			content += sep +
+				keyStyle.Render("X") + descStyle.Render(" clear board") + sep +
+				keyStyle.Render("z") + descStyle.Render(" done items") + sep +
+				keyStyle.Render("q") + descStyle.Render(" quit")
+		}
+
+		return lipgloss.NewStyle().
+			Width(m.width).
+			Padding(0, 2, 1, 2).
+			Foreground(theme.Subtext0).
+			Render(content)
+	}
+
 	if compact {
 		keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext1).Bold(true)
 		descStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
@@ -2469,6 +2545,7 @@ func (m *model) renderFooter() string {
 			keyStyle.Render("j/k") + descStyle.Render(" task") + sep +
 			keyStyle.Render("n") + descStyle.Render(" new") + sep +
 			keyStyle.Render("p") + descStyle.Render(" projects") + sep +
+			keyStyle.Render("D") + descStyle.Render(" daily") + sep +
 			keyStyle.Render("/") + descStyle.Render(" search") + sep +
 			keyStyle.Render("\u23ce") + descStyle.Render(" open") + sep +
 			keyStyle.Render("?") + descStyle.Render(" help") + sep +
@@ -2496,6 +2573,7 @@ func (m *model) renderFooter() string {
 			keyStyle.Render("e") + descStyle.Render(" edit") + sep +
 			keyStyle.Render("c") + descStyle.Render(" column") + sep +
 			keyStyle.Render("p") + descStyle.Render(" projects") + sep +
+			keyStyle.Render("D") + descStyle.Render(" daily") + sep +
 			keyStyle.Render("r") + descStyle.Render(" rename") + sep +
 			keyStyle.Render("d") + descStyle.Render(" delete") + sep +
 			keyStyle.Render("n") + descStyle.Render(" new") + sep +
@@ -3246,11 +3324,18 @@ func (m *model) activeProjectIndex() int {
 	if m.workspace == nil {
 		return 0
 	}
-	index := m.workspace.ProjectIndex(m.workspace.ActiveProjectID)
-	if index < 0 {
-		return 0
+	return m.regularProjectIndex(m.workspace.ActiveProjectID)
+}
+
+// regularProjectIndex returns the position of id in the project list shown by
+// the project manager, which excludes the daily board.
+func (m *model) regularProjectIndex(id string) int {
+	for i, project := range m.workspace.RegularProjects() {
+		if project.ID == id {
+			return i
+		}
 	}
-	return index
+	return 0
 }
 
 func (m *model) activateProject(id string) {
@@ -3262,6 +3347,9 @@ func (m *model) activateProject(id string) {
 	if m.project == nil {
 		return
 	}
+	if !m.project.Daily {
+		m.prevProjectID = m.project.ID
+	}
 	m.board = m.project.Board
 	m.activeColumn = 0
 	m.filter = ""
@@ -3270,6 +3358,81 @@ func (m *model) activateProject(id string) {
 	m.ensureColumnState()
 	m.recalculateVisible()
 	m.syncAllScroll()
+}
+
+// onDailyBoard reports whether the daily board is the active project.
+func (m *model) onDailyBoard() bool {
+	return m.project != nil && m.project.Daily
+}
+
+// toggleDaily jumps into the daily board, or back to the last regular project
+// when it is already open.
+func (m *model) toggleDaily() (tea.Model, tea.Cmd) {
+	if m.workspace == nil {
+		return m, nil
+	}
+
+	if m.onDailyBoard() {
+		target := m.prevProjectID
+		if project := m.workspace.ProjectByID(target); project == nil || project.Daily {
+			target = ""
+			if regular := m.workspace.RegularProjects(); len(regular) > 0 {
+				target = regular[0].ID
+			}
+		}
+		if target == "" {
+			return m, nil
+		}
+		m.activateProject(target)
+		m.lastErr = nil
+		m.lastStatus = fmt.Sprintf("opened project %s", m.project.Name)
+		return m, nil
+	}
+
+	daily := m.workspace.DailyProject()
+	if daily == nil {
+		m.lastErr = fmt.Errorf("daily board not found")
+		return m, nil
+	}
+
+	m.activateProject(daily.ID)
+	m.lastErr = nil
+	m.lastStatus = "daily board"
+	return m, nil
+}
+
+// markDailyDone archives the selected daily task so it stops showing on the
+// board but stays available in the archive view.
+func (m *model) markDailyDone() (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
+	if task == nil {
+		return m, nil
+	}
+
+	if _, err := m.board.ArchiveTask(task.ID); err != nil {
+		m.lastErr = err
+		return m, nil
+	}
+
+	m.lastErr = nil
+	m.lastStatus = fmt.Sprintf("done: %s", singleLine(truncate(task.Title, 30)))
+	m.recalculateVisible()
+	return m, m.saveWorkspaceCmd()
+}
+
+// clearDailyBoard deletes every task on the daily board, archived ones
+// included.
+func (m *model) clearDailyBoard() (tea.Model, tea.Cmd) {
+	m.mode = modeBoard
+	if !m.onDailyBoard() {
+		return m, nil
+	}
+
+	count := m.board.Clear()
+	m.lastErr = nil
+	m.lastStatus = fmt.Sprintf("cleared %d task(s)", count)
+	m.recalculateVisible()
+	return m, m.saveWorkspaceCmd()
 }
 
 func (m *model) switchProject(id string) (tea.Model, tea.Cmd) {
@@ -3356,6 +3519,12 @@ func statusAccent(status domain.Status) lipgloss.TerminalColor {
 		return theme.Peach
 	case domain.StatusDone:
 		return theme.Green
+	case domain.StatusWaiting:
+		return theme.Blue
+	case domain.StatusActive:
+		return theme.Peach
+	case domain.StatusNext:
+		return theme.Mauve
 	default:
 		return theme.Lavender
 	}
@@ -3369,6 +3538,12 @@ func statusIcon(status domain.Status) string {
 		return "\u25d0" // ◐
 	case domain.StatusDone:
 		return "\u25cf" // ●
+	case domain.StatusWaiting:
+		return "\u25cb" // ○
+	case domain.StatusActive:
+		return "\u25d0" // ◐
+	case domain.StatusNext:
+		return "\u25d1" // ◑
 	default:
 		return "\u25cb"
 	}
@@ -3382,6 +3557,12 @@ func statusEmptyMessage(status domain.Status) string {
 		return "Move tasks here with ]"
 	case domain.StatusDone:
 		return "Completed tasks appear here"
+	case domain.StatusWaiting:
+		return "Press n to capture something"
+	case domain.StatusActive:
+		return "What you are on right now"
+	case domain.StatusNext:
+		return "Queue up what comes after"
 	default:
 		return "No tasks"
 	}

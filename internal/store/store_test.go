@@ -160,8 +160,11 @@ func TestSQLiteStorePersistsProjectsAndColumns(t *testing.T) {
 		t.Fatalf("load workspace: %v", err)
 	}
 
-	if len(loaded.Projects) != 2 {
-		t.Fatalf("unexpected projects count: got %d want 2", len(loaded.Projects))
+	if len(loaded.RegularProjects()) != 2 {
+		t.Fatalf("unexpected projects count: got %d want 2", len(loaded.RegularProjects()))
+	}
+	if loaded.DailyProject() == nil {
+		t.Fatal("expected daily board to load")
 	}
 	loadedProject := loaded.ProjectByID(project.ID)
 	if loadedProject == nil {
@@ -246,5 +249,62 @@ func TestSQLiteStorePersistsArchivedTasks(t *testing.T) {
 	}
 	if got := loaded.ActiveProject().Board.Order[domain.StatusDone]; len(got) != 0 {
 		t.Fatalf("expected archived task out of active order, got %v", got)
+	}
+}
+
+// TestSQLiteStoreLoadsPreDailyWorkspace guards against the decoder merging a
+// pre-populated workspace into the stored one, which used to flag an existing
+// project as the daily board and steal its tasks.
+func TestSQLiteStoreLoadsPreDailyWorkspace(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "board.db")
+	sqliteStore, err := NewSQLiteStore(dbPath)
+	if err != nil {
+		t.Fatalf("new sqlite store: %v", err)
+	}
+	defer sqliteStore.Close()
+
+	// Workspace blob as written by a version without the daily board.
+	legacy := `{
+		"version": 1,
+		"active_project_id": "p2",
+		"projects": [
+			{"id": "p1", "name": "Personal", "board": {"version": 1, "columns": ["backlog", "in_progress", "done"], "tasks": {}, "order": {}}},
+			{"id": "p2", "name": "tmux-agent-manager", "board": {"version": 1, "columns": ["backlog", "in_progress", "done"], "tasks": {"t1": {"id": "t1", "title": "keep me", "status": "backlog"}}, "order": {"backlog": ["t1"]}}}
+		]
+	}`
+	if _, err := sqliteStore.db.Exec(`INSERT INTO meta (key, value) VALUES ('workspace', ?)`, legacy); err != nil {
+		t.Fatalf("seed workspace: %v", err)
+	}
+
+	loaded, err := sqliteStore.Load()
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+
+	kept := loaded.ProjectByID("p2")
+	if kept == nil {
+		t.Fatal("expected stored project to load")
+	}
+	if kept.Daily {
+		t.Fatal("stored project must not become the daily board")
+	}
+	if len(kept.Board.Tasks) != 1 {
+		t.Fatalf("stored project tasks = %d, want 1", len(kept.Board.Tasks))
+	}
+	if got := kept.Board.Statuses(); len(got) != 3 || got[0] != domain.StatusBacklog {
+		t.Fatalf("stored project columns changed: %v", got)
+	}
+
+	daily := loaded.DailyProject()
+	if daily == nil {
+		t.Fatal("expected a daily board to be created")
+	}
+	if len(daily.Board.Tasks) != 0 {
+		t.Fatalf("daily board should be empty, got %d tasks", len(daily.Board.Tasks))
+	}
+	if len(loaded.RegularProjects()) != 2 {
+		t.Fatalf("regular projects = %d, want 2", len(loaded.RegularProjects()))
 	}
 }

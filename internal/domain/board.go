@@ -31,6 +31,38 @@ func NewBoard() *Board {
 	return board
 }
 
+// NewDailyBoard builds the fixed waiting/active/next board used by the daily
+// board.
+func NewDailyBoard() *Board {
+	columns := append([]Status(nil), DailyStatusOrder...)
+	board := &Board{
+		Version: 1,
+		Columns: columns,
+		Tasks:   make(map[string]*Task),
+		Order:   make(map[Status][]string, len(columns)),
+	}
+
+	for _, status := range columns {
+		board.Order[status] = []string{}
+	}
+
+	return board
+}
+
+// Clear removes every task from the board, archived ones included, and
+// returns how many were removed. Columns are kept.
+func (b *Board) Clear() int {
+	count := len(b.Tasks)
+	b.Tasks = make(map[string]*Task)
+	if b.Order == nil {
+		b.Order = make(map[Status][]string, len(b.Columns))
+	}
+	for _, status := range b.Columns {
+		b.Order[status] = []string{}
+	}
+	return count
+}
+
 func (b *Board) Clone() *Board {
 	clone := NewBoard()
 	clone.Version = b.Version
