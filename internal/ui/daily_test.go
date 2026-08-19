@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -161,5 +163,177 @@ func TestProjectManagerHidesDailyBoard(t *testing.T) {
 		if project.Daily {
 			t.Fatal("daily board should not be listed in the project manager")
 		}
+	}
+}
+
+func TestDailyPromoteOpensDestinationDialogAndCancels(t *testing.T) {
+	m := newDailyTestModel(t)
+	next, _ := m.updateBoard(runeKey('D'))
+	m = next.(*model)
+	task, err := m.board.AddTask("Promote me", "")
+	if err != nil {
+		t.Fatalf("add task: %v", err)
+	}
+	m.recalculateVisible()
+	m.selectTask(task.ID)
+
+	next, _ = m.updateBoard(runeKey('P'))
+	m = next.(*model)
+	if m.mode != modeDailyPromote {
+		t.Fatalf("mode = %v, want %v", m.mode, modeDailyPromote)
+	}
+	if len(m.dailyPromotionTargets()) != len(m.workspace.ActiveProject().Board.Statuses()) {
+		t.Fatalf("unexpected promotion targets: %v", m.dailyPromotionTargets())
+	}
+
+	next, _ = m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEsc})
+	m = next.(*model)
+	if m.mode != modeBoard || m.board.Tasks[task.ID] == nil {
+		t.Fatal("cancel should return to daily board without moving task")
+	}
+}
+
+func TestDailyPromoteMovesTaskToChosenProjectColumn(t *testing.T) {
+	m := newDailyTestModel(t)
+	target, err := m.workspace.CreateProject("Work")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	m.activateProject(target.ID)
+	next, _ := m.updateBoard(runeKey('D'))
+	m = next.(*model)
+	task, err := m.board.AddTask("Ship release", "Keep details")
+	if err != nil {
+		t.Fatalf("add task: %v", err)
+	}
+	daily := m.project
+	m.recalculateVisible()
+	m.selectTask(task.ID)
+
+	next, _ = m.updateBoard(runeKey('P'))
+	m = next.(*model)
+	targets := m.dailyPromotionTargets()
+	wantCursor := -1
+	for i, destination := range targets {
+		if destination.project.ID == target.ID && destination.status == domain.StatusInProgress {
+			wantCursor = i
+			break
+		}
+	}
+	if wantCursor < 0 {
+		t.Fatal("missing Work / In Progress destination")
+	}
+	m.promotionCursor = wantCursor
+
+	next, cmd := m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(*model)
+	if cmd == nil {
+		t.Fatal("expected save command")
+	}
+	if daily.Board.Tasks[task.ID] == nil {
+		t.Fatal("task should remain on daily board until save succeeds")
+	}
+	next, _ = m.Update(cmd())
+	m = next.(*model)
+	target = m.workspace.ProjectByID(target.ID)
+	promoted := target.Board.Tasks[task.ID]
+	if m.mode != modeBoard || !m.onDailyBoard() {
+		t.Fatal("promotion should return to daily board")
+	}
+	if m.board.Tasks[task.ID] != nil {
+		t.Fatal("task remained on daily board")
+	}
+	if promoted == nil || promoted.Status != domain.StatusInProgress || promoted.Title != task.Title || promoted.Description != task.Description {
+		t.Fatalf("task not promoted to target column: %+v", promoted)
+	}
+	if !strings.Contains(m.lastStatus, "Work") || !strings.Contains(m.lastStatus, "In Progress") {
+		t.Fatalf("unexpected status: %q", m.lastStatus)
+	}
+}
+
+func TestDailyPromoteRelocatesWhiteboardFiles(t *testing.T) {
+	m := newDailyTestModel(t)
+	target := m.workspace.ActiveProject()
+	next, _ := m.updateBoard(runeKey('D'))
+	m = next.(*model)
+	task, err := m.board.AddTask("Promote drawing", "")
+	if err != nil {
+		t.Fatalf("add task: %v", err)
+	}
+	oldPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, "Sketch", ".xopp")
+	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+		t.Fatalf("create whiteboard directory: %v", err)
+	}
+	if err := os.WriteFile(oldPath, []byte("drawing"), 0o644); err != nil {
+		t.Fatalf("create whiteboard: %v", err)
+	}
+	task.Whiteboards = []domain.Whiteboard{{ID: "wb-1", Name: "Sketch", Path: oldPath, Format: "xopp"}}
+	m.recalculateVisible()
+	m.selectTask(task.ID)
+
+	next, _ = m.updateBoard(runeKey('P'))
+	m = next.(*model)
+	next, cmd := m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(*model)
+	next, _ = m.Update(cmd())
+	m = next.(*model)
+	task = m.workspace.ProjectByID(target.ID).Board.Tasks[task.ID]
+
+	newPath := resolveWhiteboardPath(m.dataPath, target.Name, task.ID, "Sketch", ".xopp")
+	if task.Whiteboards[0].Path != newPath {
+		t.Fatalf("whiteboard path = %q, want %q", task.Whiteboards[0].Path, newPath)
+	}
+	if _, err := os.Stat(newPath); err != nil {
+		t.Fatalf("promoted whiteboard missing: %v", err)
+	}
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Fatalf("old whiteboard still exists or stat failed: %v", err)
+	}
+}
+
+func TestDailyPromoteSaveFailureLeavesTaskOnDailyBoard(t *testing.T) {
+	m := newDailyTestModel(t)
+	m.store.(*stubWorkspaceStore).err = errors.New("disk full")
+	next, _ := m.updateBoard(runeKey('D'))
+	m = next.(*model)
+	task, err := m.board.AddTask("Stay daily", "")
+	if err != nil {
+		t.Fatalf("add task: %v", err)
+	}
+	oldPath := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, "Notes", ".xopp")
+	if err := os.MkdirAll(filepath.Dir(oldPath), 0o755); err != nil {
+		t.Fatalf("create whiteboard directory: %v", err)
+	}
+	if err := os.WriteFile(oldPath, []byte("notes"), 0o644); err != nil {
+		t.Fatalf("create whiteboard: %v", err)
+	}
+	task.Whiteboards = []domain.Whiteboard{{ID: "wb-1", Name: "Notes", Path: oldPath, Format: "xopp"}}
+	m.recalculateVisible()
+	m.selectTask(task.ID)
+
+	next, _ = m.updateBoard(runeKey('P'))
+	m = next.(*model)
+	next, cmd := m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(*model)
+	if !m.promotionPending {
+		t.Fatal("expected pending promotion")
+	}
+	next, _ = m.Update(cmd())
+	m = next.(*model)
+
+	if m.promotionPending || m.mode != modeDailyPromote {
+		t.Fatalf("failed promotion state: pending=%v mode=%v", m.promotionPending, m.mode)
+	}
+	if m.board.Tasks[task.ID] != task {
+		t.Fatal("save failure removed task from daily board")
+	}
+	if task.Whiteboards[0].Path != oldPath {
+		t.Fatalf("whiteboard path = %q, want rollback to %q", task.Whiteboards[0].Path, oldPath)
+	}
+	if _, err := os.Stat(oldPath); err != nil {
+		t.Fatalf("daily whiteboard was not restored: %v", err)
+	}
+	if m.lastErr == nil || !strings.Contains(m.lastErr.Error(), "disk full") {
+		t.Fatalf("unexpected error: %v", m.lastErr)
 	}
 }

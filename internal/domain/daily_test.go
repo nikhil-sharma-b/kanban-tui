@@ -22,6 +22,70 @@ func TestNewWorkspaceHasSingleDailyBoard(t *testing.T) {
 	}
 }
 
+func TestPromoteDailyTaskMovesTaskToProjectColumn(t *testing.T) {
+	workspace := NewWorkspace()
+	daily := workspace.DailyProject()
+	target := workspace.ActiveProject()
+	task, err := daily.Board.AddTask("Plan release", "Write the checklist")
+	if err != nil {
+		t.Fatalf("add daily task: %v", err)
+	}
+	task.Whiteboards = []Whiteboard{{ID: "whiteboard-1", Name: "Plan"}}
+	createdAt := task.CreatedAt
+
+	promoted, err := workspace.PromoteDailyTask(task.ID, target.ID, StatusInProgress)
+	if err != nil {
+		t.Fatalf("promote daily task: %v", err)
+	}
+	if promoted != task {
+		t.Fatal("promotion should preserve the task")
+	}
+	if daily.Board.Tasks[task.ID] != nil {
+		t.Fatal("task remained on daily board")
+	}
+	if target.Board.Tasks[task.ID] != task {
+		t.Fatal("task missing from target project")
+	}
+	if task.Status != StatusInProgress {
+		t.Fatalf("status = %q, want %q", task.Status, StatusInProgress)
+	}
+	if len(target.Board.Order[StatusInProgress]) != 1 || target.Board.Order[StatusInProgress][0] != task.ID {
+		t.Fatalf("unexpected target order: %v", target.Board.Order[StatusInProgress])
+	}
+	if task.Title != "Plan release" || task.Description != "Write the checklist" || !task.CreatedAt.Equal(createdAt) || len(task.Whiteboards) != 1 {
+		t.Fatalf("task data not preserved: %+v", task)
+	}
+	if !task.UpdatedAt.After(createdAt) && !task.UpdatedAt.Equal(createdAt) {
+		t.Fatal("updated timestamp moved backwards")
+	}
+}
+
+func TestPromoteDailyTaskRejectsInvalidTargetWithoutMovingTask(t *testing.T) {
+	workspace := NewWorkspace()
+	daily := workspace.DailyProject()
+	task, err := daily.Board.AddTask("Keep daily", "")
+	if err != nil {
+		t.Fatalf("add daily task: %v", err)
+	}
+	originalUpdatedAt := task.UpdatedAt
+
+	if _, err := workspace.PromoteDailyTask(task.ID, "missing", StatusBacklog); err == nil {
+		t.Fatal("expected missing target error")
+	}
+	if daily.Board.Tasks[task.ID] != task {
+		t.Fatal("failed promotion removed task")
+	}
+	if !task.UpdatedAt.Equal(originalUpdatedAt) {
+		t.Fatalf("failed promotion changed timestamp from %v to %v", originalUpdatedAt, task.UpdatedAt)
+	}
+	if _, err := workspace.PromoteDailyTask(task.ID, workspace.ActiveProject().ID, Status("Missing")); err == nil {
+		t.Fatal("expected missing column error")
+	}
+	if _, err := workspace.PromoteDailyTask(task.ID, daily.ID, StatusWaiting); err == nil {
+		t.Fatal("expected daily target error")
+	}
+}
+
 func TestNormalizeAddsMissingDailyBoard(t *testing.T) {
 	project, err := NewProject("Work")
 	if err != nil {

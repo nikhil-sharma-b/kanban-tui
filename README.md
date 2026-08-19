@@ -136,6 +136,7 @@ Keys inside the daily board:
 - `n`: capture a new task in Waiting
 - `[` / `]`: move a task between Waiting, Active and Next
 - `space`: mark the selected task done - it disappears from the board and moves to the archive
+- `P`: promote the selected task into a project column
 - `z`: view the tasks you already marked done (`r` restores one to the board)
 - `X`: clear the board, deleting every daily task including the done ones (with confirm)
 

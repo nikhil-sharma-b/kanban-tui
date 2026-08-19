@@ -267,6 +267,54 @@ func (w *Workspace) DailyProject() *Project {
 	return nil
 }
 
+// PromoteDailyTask moves an active task from the daily board to the end of a
+// regular project column while preserving its identity and associated data.
+func (w *Workspace) PromoteDailyTask(taskID, targetProjectID string, targetStatus Status) (*Task, error) {
+	daily := w.DailyProject()
+	if daily == nil || daily.Board == nil {
+		return nil, fmt.Errorf("daily board not found")
+	}
+	task, ok := daily.Board.Tasks[taskID]
+	if !ok || task == nil || task.Archived() {
+		return nil, fmt.Errorf("active daily task %s not found", taskID)
+	}
+
+	target := w.ProjectByID(targetProjectID)
+	if target == nil || target.Board == nil {
+		return nil, fmt.Errorf("target project not found")
+	}
+	if target.Daily {
+		return nil, fmt.Errorf("target must be a regular project")
+	}
+	if target.Board.StatusIndex(targetStatus) < 0 {
+		return nil, fmt.Errorf("target column %s not found", targetStatus)
+	}
+	if _, exists := target.Board.Tasks[taskID]; exists {
+		return nil, fmt.Errorf("task %s already exists in target project", taskID)
+	}
+	if target.Board.Tasks == nil {
+		target.Board.Tasks = make(map[string]*Task)
+	}
+	if target.Board.Order == nil {
+		target.Board.Order = make(map[Status][]string)
+	}
+
+	for status, ids := range daily.Board.Order {
+		daily.Board.Order[status] = removeID(ids, taskID)
+	}
+	delete(daily.Board.Tasks, taskID)
+
+	task.Status = targetStatus
+	task.ArchivedAt = nil
+	task.ArchivedFrom = ""
+	task.Touch()
+	target.Board.Tasks[taskID] = task
+	target.Board.Order[targetStatus] = append(target.Board.Order[targetStatus], taskID)
+	daily.Touch()
+	target.Touch()
+	return task, nil
+}
+
 // RegularProjects returns every project except the daily board.
 func (w *Workspace) RegularProjects() []*Project {
 	projects := make([]*Project, 0, len(w.Projects))

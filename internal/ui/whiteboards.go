@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,6 +48,11 @@ var createWhiteboardFile = func(path string) error {
 
 var removeWhiteboardFile = os.Remove
 var moveWhiteboardFile = os.Rename
+
+type stagedWhiteboardFile struct {
+	oldPath string
+	newPath string
+}
 
 func resolveWhiteboardRoot(dataPath string) string {
 	if root := strings.TrimSpace(os.Getenv("KANBAN_TUI_WHITEBOARD_DIR")); root != "" {
@@ -125,6 +131,88 @@ func relocateProjectWhiteboardFiles(project *domain.Project, dataPath string, pr
 		}
 	}
 	return nil
+}
+
+// stageTaskWhiteboardFiles copies a task's files to their future project paths.
+// The caller commits by removing old files only after workspace persistence.
+func stageTaskWhiteboardFiles(task *domain.Task, dataPath, projectName string) (commit func() error, rollback func() error, err error) {
+	if task == nil {
+		return func() error { return nil }, func() error { return nil }, nil
+	}
+	staged := make([]stagedWhiteboardFile, 0, len(task.Whiteboards))
+	paths := make([]string, len(task.Whiteboards))
+
+	for i, whiteboard := range task.Whiteboards {
+		newPath := resolveWhiteboardPath(dataPath, projectName, task.ID, whiteboard.Name, whiteboard.Extension())
+		paths[i] = newPath
+		if whiteboard.Path == newPath {
+			continue
+		}
+		if whiteboard.Path == "" {
+			return nil, nil, fmt.Errorf("whiteboard %s has no source path", whiteboard.Name)
+		}
+		if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
+			return nil, nil, stagedWhiteboardError(err, removeStagedWhiteboards(staged))
+		}
+		if err := copyWhiteboardFile(whiteboard.Path, newPath); err != nil {
+			return nil, nil, stagedWhiteboardError(err, removeStagedWhiteboards(staged))
+		}
+		staged = append(staged, stagedWhiteboardFile{oldPath: whiteboard.Path, newPath: newPath})
+	}
+	for i := range task.Whiteboards {
+		task.Whiteboards[i].Path = paths[i]
+	}
+	return func() error { return removeOriginalWhiteboards(staged) }, func() error { return removeStagedWhiteboards(staged) }, nil
+}
+
+func copyWhiteboardFile(source, target string) (err error) {
+	src, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dst, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := dst.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			_ = os.Remove(target)
+		}
+	}()
+	_, err = io.Copy(dst, src)
+	return err
+}
+
+func removeStagedWhiteboards(staged []stagedWhiteboardFile) error {
+	var firstErr error
+	for i := len(staged) - 1; i >= 0; i-- {
+		if err := os.Remove(staged[i].newPath); err != nil && !os.IsNotExist(err) && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func removeOriginalWhiteboards(staged []stagedWhiteboardFile) error {
+	var firstErr error
+	for _, file := range staged {
+		if err := os.Remove(file.oldPath); err != nil && !os.IsNotExist(err) && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+func stagedWhiteboardError(stageErr, cleanupErr error) error {
+	if cleanupErr != nil {
+		return fmt.Errorf("%v; clean staged files: %w", stageErr, cleanupErr)
+	}
+	return stageErr
 }
 
 func slugifyProjectName(name string) string {

@@ -111,6 +111,7 @@ const (
 	modeConfirm
 	modeArchive
 	modeArchiveDetail
+	modeDailyPromote
 )
 
 // bulkArchiveAge is the fixed v1 threshold for archiving old Done tasks.
@@ -118,6 +119,25 @@ const bulkArchiveAge = 30 * 24 * time.Hour
 
 type saveFinishedMsg struct {
 	err error
+}
+
+type queuedSaveFinishedMsg struct {
+	sequence uint64
+	msg      tea.Msg
+}
+
+type dailyPromotionTarget struct {
+	project *domain.Project
+	status  domain.Status
+}
+
+type dailyPromotionFinishedMsg struct {
+	workspace  *domain.Workspace
+	dailyID    string
+	targetName string
+	status     domain.Status
+	warning    error
+	err        error
 }
 
 type editorFinishedMsg struct {
@@ -151,6 +171,7 @@ type keyMap struct {
 	ArchiveView  key.Binding
 	Daily        key.Binding
 	DailyDone    key.Binding
+	DailyPromote key.Binding
 	DailyClear   key.Binding
 	Help         key.Binding
 	Quit         key.Binding
@@ -166,7 +187,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.MoveColLeft, k.MoveColRight, k.MoveLeft, k.MoveRight},
 		{k.ReorderUp, k.ReorderDown, k.NewTask, k.NewColumn, k.Projects, k.RenameCol, k.DeleteCol, k.Search, k.Open, k.Edit, k.Delete},
 		{k.Archive, k.ArchiveOld, k.ArchiveView},
-		{k.Daily, k.DailyDone, k.DailyClear},
+		{k.Daily, k.DailyDone, k.DailyPromote, k.DailyClear},
 		{k.Help, k.Quit},
 	}
 }
@@ -199,6 +220,11 @@ type model struct {
 	archiveCursor      int
 	archiveFilterInput textinput.Model
 	archiveFiltering   bool
+	promotionCursor    int
+	promotionPending   bool
+	saveBarrier        <-chan struct{}
+	saveSequence       uint64
+	latestSaveResult   uint64
 	titleInput         textinput.Model
 	descInput          textarea.Model
 	searchInput        textinput.Model
@@ -307,6 +333,8 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		visible[status] = []string{}
 	}
 
+	initialSaveBarrier := make(chan struct{})
+	close(initialSaveBarrier)
 	m := &model{
 		workspace:          workspace,
 		project:            project,
@@ -324,6 +352,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		projectFilterInput: projectFilterInput,
 		whiteboardInput:    whiteboardInput,
 		archiveFilterInput: archiveFilterInput,
+		saveBarrier:        initialSaveBarrier,
 		help:               help.New(),
 		showHelp:           true,
 		keys: keyMap{
@@ -352,6 +381,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 			ArchiveView:  key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "archive view")),
 			Daily:        key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "daily board")),
 			DailyDone:    key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "daily: mark done")),
+			DailyPromote: key.NewBinding(key.WithKeys("P"), key.WithHelp("P", "daily: promote")),
 			DailyClear:   key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "daily: clear board")),
 			Help:         key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
 			Quit:         key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
@@ -379,6 +409,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncResponsiveLayout()
 		m.syncAllScroll()
 		return m, nil
+	case queuedSaveFinishedMsg:
+		if msg.sequence < m.latestSaveResult {
+			return m, nil
+		}
+		m.latestSaveResult = msg.sequence
+		return m.Update(msg.msg)
 	case saveFinishedMsg:
 		m.lastErr = msg.err
 		if msg.err != nil {
@@ -386,6 +422,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.lastStatus == "" {
 			m.lastStatus = "saved"
 		}
+		return m, nil
+	case dailyPromotionFinishedMsg:
+		m.promotionPending = false
+		if msg.err != nil {
+			m.lastErr = msg.err
+			m.lastStatus = "promotion failed"
+			return m, nil
+		}
+		m.workspace = msg.workspace
+		m.activateProject(msg.dailyID)
+		m.mode = modeBoard
+		m.lastErr = msg.warning
+		m.lastStatus = fmt.Sprintf("promoted to %s / %s", msg.targetName, msg.status.Title())
 		return m, nil
 	case editorFinishedMsg:
 		return m.handleEditorResult(msg)
@@ -415,6 +464,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateArchive(msg)
 		case modeArchiveDetail:
 			return m.updateArchiveDetail(msg)
+		case modeDailyPromote:
+			return m.updateDailyPromote(msg)
 		default:
 			return m.updateBoard(msg)
 		}
@@ -458,6 +509,8 @@ func (m *model) View() string {
 		return m.placeOverlayCenter(view, m.renderArchiveDialog())
 	case modeArchiveDetail:
 		return m.placeOverlayCenter(view, m.renderTaskDetail(m.selectedArchivedTask(), true))
+	case modeDailyPromote:
+		return m.placeOverlayCenter(view, m.renderDailyPromoteDialog())
 	default:
 		return view
 	}
@@ -473,6 +526,16 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.DailyDone):
 			return m.markDailyDone()
+		case key.Matches(msg, m.keys.DailyPromote):
+			if m.selectedTask() == nil {
+				m.lastErr = nil
+				m.lastStatus = "select a daily task to promote"
+				return m, nil
+			}
+			m.promotionCursor = m.defaultPromotionTargetIndex()
+			m.mode = modeDailyPromote
+			m.lastErr = nil
+			return m, nil
 		case key.Matches(msg, m.keys.DailyClear):
 			if len(m.board.Tasks) == 0 {
 				m.lastErr = nil
@@ -2519,6 +2582,7 @@ func (m *model) renderFooter() string {
 			keyStyle.Render("j/k") + descStyle.Render(" task") + sep +
 			keyStyle.Render("n") + descStyle.Render(" new") + sep +
 			keyStyle.Render("[/]") + descStyle.Render(" move") + sep +
+			keyStyle.Render("P") + descStyle.Render(" promote") + sep +
 			keyStyle.Render("space") + descStyle.Render(" done") + sep +
 			keyStyle.Render("D") + descStyle.Render(" back")
 		if !compact {
@@ -3086,6 +3150,53 @@ func (m *model) renderProjectsDialog() string {
 	return lipgloss.NewStyle().Width(dialogWidth).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.Blue).Background(theme.Base).Render(content)
 }
 
+func (m *model) renderDailyPromoteDialog() string {
+	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Green).Render("Promote daily task")
+	dialogWidth := m.dialogWidth(projectDialogMaxWidth)
+	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
+	separator := lipgloss.NewStyle().Foreground(theme.Green).Render(strings.Repeat("━", contentWidth))
+	targets := m.dailyPromotionTargets()
+	cursor := min(m.promotionCursor, max(0, len(targets)-1))
+
+	maxRows := max(1, m.height-12)
+	start := max(0, cursor-maxRows/2)
+	end := min(len(targets), start+maxRows)
+	start = max(0, end-maxRows)
+	rows := make([]string, 0, end-start)
+	for i := start; i < end; i++ {
+		target := targets[i]
+		prefix := "  "
+		if i == cursor {
+			prefix = lipgloss.NewStyle().Foreground(theme.Mauve).Render("▸ ")
+		}
+		label := target.project.Name + " / " + target.status.Title()
+		rows = append(rows, prefix+truncate(label, max(1, contentWidth-lipgloss.Width(prefix))))
+	}
+	if len(rows) == 0 {
+		rows = append(rows, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render("No project columns available"))
+	}
+
+	errView := ""
+	if m.lastErr != nil {
+		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("✗ " + m.lastErr.Error())
+	}
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
+	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
+	hint := keyStyle.Render("enter") + hintStyle.Render(" promote  ") +
+		keyStyle.Render("j/k") + hintStyle.Render(" move  ") +
+		keyStyle.Render("esc") + hintStyle.Render(" cancel")
+	if m.promotionPending {
+		hint = hintStyle.Render("Promoting...")
+	}
+
+	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", strings.Join(rows, "\n"))
+	if errView != "" {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
+	}
+	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
+	return lipgloss.NewStyle().Width(dialogWidth).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.Green).Background(theme.Base).Render(content)
+}
+
 func (m *model) renderArchiveDialog() string {
 	projectName := ""
 	if m.project != nil {
@@ -3401,6 +3512,104 @@ func (m *model) toggleDaily() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *model) dailyPromotionTargets() []dailyPromotionTarget {
+	if m.workspace == nil {
+		return nil
+	}
+	targets := make([]dailyPromotionTarget, 0)
+	for _, project := range m.workspace.RegularProjects() {
+		if project.Board == nil {
+			continue
+		}
+		for _, status := range project.Board.Statuses() {
+			targets = append(targets, dailyPromotionTarget{project: project, status: status})
+		}
+	}
+	return targets
+}
+
+func (m *model) defaultPromotionTargetIndex() int {
+	for i, target := range m.dailyPromotionTargets() {
+		if target.project.ID == m.prevProjectID {
+			return i
+		}
+	}
+	return 0
+}
+
+func (m *model) updateDailyPromote(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.promotionPending {
+		return m, nil
+	}
+	targets := m.dailyPromotionTargets()
+	if m.promotionCursor >= len(targets) {
+		m.promotionCursor = max(0, len(targets)-1)
+	}
+
+	switch msg.String() {
+	case "esc":
+		m.mode = modeBoard
+		m.lastErr = nil
+		return m, nil
+	case "up", "k":
+		if m.promotionCursor > 0 {
+			m.promotionCursor--
+		}
+		return m, nil
+	case "down", "j":
+		if m.promotionCursor < len(targets)-1 {
+			m.promotionCursor++
+		}
+		return m, nil
+	case "enter":
+		if len(targets) == 0 {
+			return m, nil
+		}
+		task := m.selectedTask()
+		if task == nil {
+			m.mode = modeBoard
+			m.lastErr = fmt.Errorf("daily task not found")
+			return m, nil
+		}
+		target := targets[m.promotionCursor]
+		workspace := m.workspace.Clone()
+		promoted, err := workspace.PromoteDailyTask(task.ID, target.project.ID, target.status)
+		if err != nil {
+			m.lastErr = err
+			return m, nil
+		}
+		m.promotionPending = true
+		m.lastErr = nil
+		m.lastStatus = ""
+		dailyID := m.project.ID
+		return m, m.queueSave(func() tea.Msg {
+			return promoteDailyTask(m.store, workspace, promoted, m.dataPath, dailyID, target.project.Name, target.status)
+		})
+	}
+
+	return m, nil
+}
+
+func promoteDailyTask(workspaceStore store.WorkspaceStore, workspace *domain.Workspace, task *domain.Task, dataPath, dailyID, targetName string, status domain.Status) tea.Msg {
+	commitFiles, rollbackFiles, err := stageTaskWhiteboardFiles(task, dataPath, targetName)
+	if err != nil {
+		return dailyPromotionFinishedMsg{err: fmt.Errorf("stage whiteboards: %w", err)}
+	}
+	if err := workspaceStore.Save(workspace); err != nil {
+		if cleanupErr := rollbackFiles(); cleanupErr != nil {
+			err = fmt.Errorf("save promotion: %v; clean staged whiteboards: %w", err, cleanupErr)
+		}
+		return dailyPromotionFinishedMsg{err: err}
+	}
+	return dailyPromotionFinishedMsg{
+		workspace:  workspace,
+		dailyID:    dailyID,
+		targetName: targetName,
+		status:     status,
+		warning:    commitFiles(),
+	}
+}
+
 // markDailyDone archives the selected daily task so it stops showing on the
 // board but stays available in the archive view.
 func (m *model) markDailyDone() (tea.Model, tea.Cmd) {
@@ -3453,12 +3662,22 @@ func (m *model) saveWorkspaceCmd() tea.Cmd {
 	if m.project != nil {
 		m.project.Touch()
 	}
-	return saveWorkspaceCmd(m.store, m.workspace.Clone())
+	workspace := m.workspace.Clone()
+	return m.queueSave(func() tea.Msg {
+		return saveFinishedMsg{err: m.store.Save(workspace)}
+	})
 }
 
-func saveWorkspaceCmd(workspaceStore store.WorkspaceStore, workspace *domain.Workspace) tea.Cmd {
+func (m *model) queueSave(action func() tea.Msg) tea.Cmd {
+	previous := m.saveBarrier
+	done := make(chan struct{})
+	m.saveBarrier = done
+	m.saveSequence++
+	sequence := m.saveSequence
 	return func() tea.Msg {
-		return saveFinishedMsg{err: workspaceStore.Save(workspace)}
+		<-previous
+		defer close(done)
+		return queuedSaveFinishedMsg{sequence: sequence, msg: action()}
 	}
 }
 
