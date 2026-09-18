@@ -58,26 +58,46 @@ Existing JSON data is migrated automatically on first run:
 
 ## Keys
 
+Board keys follow Neovim: bare keys only navigate, and everything that creates, changes or opens something sits behind the leader, `space` (shown as `SPC`). Press `space` and a which-key popup in the bottom-right lists what can follow; groups like `+task` open a submenu. `esc` cancels a half-typed sequence.
+
+Navigation:
+
 - `h` / `l`: switch columns
 - `j` / `k`: move selection
-- `H` / `L`: move active column left/right
-- `c`: add custom column
-- `p`: open project manager
-- `D`: jump into the daily board (press again to jump back)
-- `r`: rename active column
-- `d`: delete active column (at least one column always kept; tasks are moved to the nearest adjacent column)
-- `n`: create task
+- `gg` / `G`: first / last task in the column
 - `/`: search tasks
-- `e`: edit selected task
-- `[` / `]`: move task left or right across columns
-- `J` / `K`: reorder inside a column
 - `enter`: open task details
-- `x`: delete selected task
-- `A`: archive selected task (with confirm)
-- `ctrl+a`: archive Done tasks not updated in more than 30 days (with confirm)
-- `z`: open archive view
-- `?`: toggle help
+- `?`: show all keys
 - `q`: quit
+
+`SPC t` (+task):
+
+- `n` new · `e` edit · `x` delete · `a` archive (with confirm)
+- `h` / `l`: move task to the previous / next column
+- `k` / `j`: reorder within the column
+- `w`: whiteboards
+
+`SPC c` (+column):
+
+- `n` new · `r` rename · `d` delete (at least one column always kept; tasks move to the nearest adjacent column)
+- `h` / `l`: move the column left / right
+
+`SPC d` (+daily):
+
+- `d`: jump into the daily board (press again to jump back)
+- `m` mark done · `p` promote · `X` clear (daily board only; see below)
+
+`SPC a` (+archive):
+
+- `v`: open archive view
+- `o`: archive Done tasks not updated in more than 30 days (with confirm)
+
+`SPC p` (+project):
+
+- `p`: open project manager (list / switch)
+- `n`: new project
+- `r`: rename current project
+- `x`: delete current project (with confirm)
 
 Inside task details:
 
@@ -132,13 +152,13 @@ Columns cannot be added, renamed, reordered, or deleted there.
 
 Keys inside the daily board:
 
-- `D`: leave the daily board and go back to the last project you were on
-- `n`: capture a new task in Waiting
-- `[` / `]`: move a task between Waiting, Active and Next
-- `space`: mark the selected task done - it disappears from the board and moves to the archive
-- `P`: promote the selected task into a project column
-- `z`: view the tasks you already marked done (`r` restores one to the board)
-- `X`: clear the board, deleting every daily task including the done ones (with confirm)
+- `SPC d d`: leave the daily board and go back to the last project you were on
+- `SPC t n`: capture a new task in Waiting
+- `SPC t h` / `SPC t l`: move a task between Waiting, Active and Next
+- `SPC d m`: mark the selected task done - it disappears from the board and moves to the archive
+- `SPC d p`: promote the selected task into a project column
+- `SPC a v`: view the tasks you already marked done (`r` restores one to the board)
+- `SPC d X`: clear the board, deleting every daily task including the done ones (with confirm)
 
 ## Whiteboards
 

@@ -11,8 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/cursor"
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -145,53 +143,6 @@ type editorFinishedMsg struct {
 	path string
 }
 
-type keyMap struct {
-	Left         key.Binding
-	Right        key.Binding
-	Up           key.Binding
-	Down         key.Binding
-	MoveLeft     key.Binding
-	MoveRight    key.Binding
-	ReorderUp    key.Binding
-	ReorderDown  key.Binding
-	MoveColLeft  key.Binding
-	MoveColRight key.Binding
-	RenameCol    key.Binding
-	DeleteCol    key.Binding
-	NewTask      key.Binding
-	NewColumn    key.Binding
-	Projects     key.Binding
-	Whiteboards  key.Binding
-	Search       key.Binding
-	Edit         key.Binding
-	Open         key.Binding
-	Delete       key.Binding
-	Archive      key.Binding
-	ArchiveOld   key.Binding
-	ArchiveView  key.Binding
-	Daily        key.Binding
-	DailyDone    key.Binding
-	DailyPromote key.Binding
-	DailyClear   key.Binding
-	Help         key.Binding
-	Quit         key.Binding
-}
-
-func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.NewTask, k.NewColumn, k.Projects, k.Daily, k.Open, k.Edit, k.Archive, k.ArchiveView, k.Quit}
-}
-
-func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Left, k.Right, k.Up, k.Down},
-		{k.MoveColLeft, k.MoveColRight, k.MoveLeft, k.MoveRight},
-		{k.ReorderUp, k.ReorderDown, k.NewTask, k.NewColumn, k.Projects, k.RenameCol, k.DeleteCol, k.Search, k.Open, k.Edit, k.Delete},
-		{k.Archive, k.ArchiveOld, k.ArchiveView},
-		{k.Daily, k.DailyDone, k.DailyPromote, k.DailyClear},
-		{k.Help, k.Quit},
-	}
-}
-
 type model struct {
 	workspace          *domain.Workspace
 	project            *domain.Project
@@ -228,8 +179,8 @@ type model struct {
 	titleInput         textinput.Model
 	descInput          textarea.Model
 	searchInput        textinput.Model
-	help               help.Model
-	keys               keyMap
+	pendingKeys        []string // unfinished key sequence, e.g. ["space", "t"]
+	projectEditPrev    mode     // where the project name dialog returns on cancel/rename
 	editingTaskID      string
 	vimNormal          bool
 	vimVisual          *vimSelection
@@ -353,39 +304,6 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		whiteboardInput:    whiteboardInput,
 		archiveFilterInput: archiveFilterInput,
 		saveBarrier:        initialSaveBarrier,
-		help:               help.New(),
-		showHelp:           true,
-		keys: keyMap{
-			Left:         key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("h/\u2190", "column left")),
-			Right:        key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("l/\u2192", "column right")),
-			Up:           key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("k/\u2191", "prev task")),
-			Down:         key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("j/\u2193", "next task")),
-			MoveLeft:     key.NewBinding(key.WithKeys("["), key.WithHelp("[", "move left")),
-			MoveRight:    key.NewBinding(key.WithKeys("]"), key.WithHelp("]", "move right")),
-			ReorderUp:    key.NewBinding(key.WithKeys("K"), key.WithHelp("K", "reorder up")),
-			ReorderDown:  key.NewBinding(key.WithKeys("J"), key.WithHelp("J", "reorder down")),
-			NewTask:      key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "new task")),
-			NewColumn:    key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "new column")),
-			Projects:     key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "projects")),
-			Whiteboards:  key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "whiteboards")),
-			MoveColLeft:  key.NewBinding(key.WithKeys("H"), key.WithHelp("H", "move column left")),
-			MoveColRight: key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "move column right")),
-			RenameCol:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "rename column")),
-			DeleteCol:    key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete column")),
-			Search:       key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
-			Edit:         key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit selected")),
-			Open:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("\u23ce", "details")),
-			Delete:       key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
-			Archive:      key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "archive task")),
-			ArchiveOld:   key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "archive old done")),
-			ArchiveView:  key.NewBinding(key.WithKeys("z"), key.WithHelp("z", "archive view")),
-			Daily:        key.NewBinding(key.WithKeys("D"), key.WithHelp("D", "daily board")),
-			DailyDone:    key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "daily: mark done")),
-			DailyPromote: key.NewBinding(key.WithKeys("P"), key.WithHelp("P", "daily: promote")),
-			DailyClear:   key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "daily: clear board")),
-			Help:         key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle help")),
-			Quit:         key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
-		},
 	}
 
 	if !project.Daily {
@@ -512,6 +430,12 @@ func (m *model) View() string {
 	case modeDailyPromote:
 		return m.placeOverlayCenter(view, m.renderDailyPromoteDialog())
 	default:
+		if m.showHelp {
+			return m.placeOverlayCenter(view, m.renderHelpOverlay())
+		}
+		if float := m.renderWhichKey(); float != "" {
+			return m.placeFloatBottomRight(view, float, lipgloss.Height(footer))
+		}
 		return view
 	}
 }
@@ -521,75 +445,89 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if len(statuses) == 0 {
 		return m, nil
 	}
+	if m.showHelp {
+		if k := msg.String(); k == "esc" || k == "?" || k == "q" {
+			m.showHelp = false
+		}
+		return m, nil
+	}
 
 	if m.onDailyBoard() {
-		switch {
-		case key.Matches(msg, m.keys.DailyDone):
-			return m.markDailyDone()
-		case key.Matches(msg, m.keys.DailyPromote):
-			if m.selectedTask() == nil {
-				m.lastErr = nil
-				m.lastStatus = "select a daily task to promote"
-				return m, nil
-			}
-			m.promotionCursor = m.defaultPromotionTargetIndex()
-			m.mode = modeDailyPromote
-			m.lastErr = nil
-			return m, nil
-		case key.Matches(msg, m.keys.DailyClear):
-			if len(m.board.Tasks) == 0 {
-				m.lastErr = nil
-				m.lastStatus = "daily board is already empty"
-				return m, nil
-			}
-			return m.askConfirm(
-				fmt.Sprintf("Clear the daily board? %d task(s) will be deleted.", len(m.board.Tasks)),
-				modeBoard,
-				func() (tea.Model, tea.Cmd) { return m.clearDailyBoard() },
-			)
-		case key.Matches(msg, m.keys.NewColumn),
-			key.Matches(msg, m.keys.RenameCol),
-			key.Matches(msg, m.keys.DeleteCol),
-			key.Matches(msg, m.keys.MoveColLeft),
-			key.Matches(msg, m.keys.MoveColRight):
+		switch m.peekBoardAction(normalizeKey(msg)) {
+		case actColumnNew, actColumnRename, actColumnDelete, actColumnMoveLeft, actColumnMoveRight:
+			m.pendingKeys = nil
 			m.lastErr = nil
 			m.lastStatus = "daily board columns are fixed"
 			return m, nil
 		}
 	}
 
-	switch {
-	case key.Matches(msg, m.keys.Quit):
+	switch m.resolveBoardKey(normalizeKey(msg)) {
+	case actQuit:
 		return m, tea.Quit
-	case key.Matches(msg, m.keys.Daily):
+	case actDailyToggle:
 		return m.toggleDaily()
-	case key.Matches(msg, m.keys.Left):
+	case actDailyDone:
+		if m.onDailyBoard() {
+			return m.markDailyDone()
+		}
+		m.lastStatus = "only on the daily board"
+	case actDailyPromote:
+		if !m.onDailyBoard() {
+			m.lastStatus = "only on the daily board"
+			return m, nil
+		}
+		if m.selectedTask() == nil {
+			m.lastErr = nil
+			m.lastStatus = "select a daily task to promote"
+			return m, nil
+		}
+		m.promotionCursor = m.defaultPromotionTargetIndex()
+		m.mode = modeDailyPromote
+		m.lastErr = nil
+		return m, nil
+	case actDailyClear:
+		if !m.onDailyBoard() {
+			m.lastStatus = "only on the daily board"
+			return m, nil
+		}
+		if len(m.board.Tasks) == 0 {
+			m.lastErr = nil
+			m.lastStatus = "daily board is already empty"
+			return m, nil
+		}
+		return m.askConfirm(
+			fmt.Sprintf("Clear the daily board? %d task(s) will be deleted.", len(m.board.Tasks)),
+			modeBoard,
+			func() (tea.Model, tea.Cmd) { return m.clearDailyBoard() },
+		)
+	case actColumnLeft:
 		if m.activeColumn > 0 {
 			m.activeColumn--
 		}
 		m.syncScroll(statuses[m.activeColumn])
-	case key.Matches(msg, m.keys.Right):
+	case actColumnRight:
 		if m.activeColumn < len(statuses)-1 {
 			m.activeColumn++
 		}
 		m.syncScroll(statuses[m.activeColumn])
-	case key.Matches(msg, m.keys.Up):
+	case actTaskUp:
 		m.moveSelection(-1)
-	case key.Matches(msg, m.keys.Down):
+	case actTaskDown:
 		m.moveSelection(1)
-	case key.Matches(msg, m.keys.MoveLeft):
+	case actTaskMoveLeft:
 		return m.shiftSelected(-1)
-	case key.Matches(msg, m.keys.MoveRight):
+	case actTaskMoveRight:
 		return m.shiftSelected(1)
-	case key.Matches(msg, m.keys.MoveColLeft):
+	case actColumnMoveLeft:
 		return m.moveColumn(-1)
-	case key.Matches(msg, m.keys.MoveColRight):
+	case actColumnMoveRight:
 		return m.moveColumn(1)
-	case key.Matches(msg, m.keys.ReorderUp):
+	case actTaskReorderUp:
 		return m.reorderSelected(-1)
-	case key.Matches(msg, m.keys.ReorderDown):
+	case actTaskReorderDown:
 		return m.reorderSelected(1)
-	case key.Matches(msg, m.keys.NewTask):
+	case actTaskNew:
 		m.editingTaskID = ""
 		m.mode = modeCreate
 		m.vimNormal = false
@@ -602,15 +540,15 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.descInput.Blur()
 		m.lastErr = nil
 		return m, tea.Batch(textinput.Blink, m.syncVimCursor())
-	case key.Matches(msg, m.keys.Edit):
+	case actTaskEdit:
 		return m.beginEditSelected()
-	case key.Matches(msg, m.keys.NewColumn):
+	case actColumnNew:
 		m.mode = modeAddColumn
 		m.columnInput.SetValue("")
 		m.columnInput.Focus()
 		m.lastErr = nil
 		return m, textinput.Blink
-	case key.Matches(msg, m.keys.Projects):
+	case actProjects:
 		m.mode = modeProjects
 		m.projectCursor = m.activeProjectIndex()
 		m.projectInput.Blur()
@@ -619,9 +557,9 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.projectFilterInput.Focus()
 		m.lastErr = nil
 		return m, textinput.Blink
-	case key.Matches(msg, m.keys.RenameCol):
+	case actColumnRename:
 		return m.beginRenameColumn()
-	case key.Matches(msg, m.keys.DeleteCol):
+	case actColumnDelete:
 		statuses := m.board.Statuses()
 		if len(statuses) > 0 && m.activeColumn < len(statuses) {
 			col := statuses[m.activeColumn]
@@ -632,18 +570,18 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m.askConfirm(msg, modeBoard, func() (tea.Model, tea.Cmd) { return m.deleteColumn() })
 		}
-	case key.Matches(msg, m.keys.Search):
+	case actSearch:
 		m.mode = modeSearch
 		m.filterDraft = m.filter
 		m.searchInput.SetValue(m.filter)
 		m.searchInput.CursorEnd()
 		m.searchInput.Focus()
 		return m, textinput.Blink
-	case key.Matches(msg, m.keys.Open):
+	case actOpen:
 		if m.selectedTask() != nil {
 			m.mode = modeDetail
 		}
-	case key.Matches(msg, m.keys.Delete):
+	case actTaskDelete:
 		task := m.selectedTask()
 		if task != nil {
 			title := task.Title
@@ -656,7 +594,7 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				func() (tea.Model, tea.Cmd) { return m.deleteSelected() },
 			)
 		}
-	case key.Matches(msg, m.keys.Archive):
+	case actTaskArchive:
 		task := m.selectedTask()
 		if task != nil {
 			title := task.Title
@@ -669,21 +607,37 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				func() (tea.Model, tea.Cmd) { return m.archiveSelected() },
 			)
 		}
-	case key.Matches(msg, m.keys.ArchiveOld):
+	case actArchiveOld:
 		return m.askConfirm(
 			"Archive Done tasks not updated in more than 30 days?",
 			modeBoard,
 			func() (tea.Model, tea.Cmd) { return m.archiveOldDone() },
 		)
-	case key.Matches(msg, m.keys.ArchiveView):
+	case actArchiveView:
 		m.mode = modeArchive
 		m.archiveCursor = 0
 		m.archiveFiltering = false
 		m.archiveFilterInput.SetValue("")
 		m.archiveFilterInput.Blur()
 		m.lastErr = nil
-	case key.Matches(msg, m.keys.Help):
+	case actHelp:
 		m.showHelp = !m.showHelp
+	case actTaskTop:
+		m.moveSelection(-len(m.visible[statuses[m.activeColumn]]))
+	case actTaskBottom:
+		m.moveSelection(len(m.visible[statuses[m.activeColumn]]))
+	case actTaskWhiteboards:
+		return m.openWhiteboards()
+	case actProjectNew:
+		return m.beginProjectEdit("", "", modeBoard)
+	case actProjectRename:
+		if m.project != nil {
+			return m.beginProjectEdit(m.project.ID, m.project.Name, modeBoard)
+		}
+	case actProjectDelete:
+		if m.project != nil {
+			return m.confirmDeleteProject(m.project, modeBoard)
+		}
 	}
 
 	return m, nil
@@ -1346,49 +1300,56 @@ func (m *model) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		return m.switchProject(projects[m.projectCursor].ID)
 	case "n":
-		m.mode = modeProjectEdit
-		m.projectDraft = ""
-		m.projectInput.SetValue("")
-		m.projectInput.Focus()
-		m.lastErr = nil
-		return m, textinput.Blink
+		return m.beginProjectEdit("", "", modeProjects)
 	case "e":
-		m.mode = modeProjectEdit
-		m.projectDraft = projects[m.projectCursor].ID
-		m.projectInput.SetValue(projects[m.projectCursor].Name)
-		m.projectInput.Focus()
-		m.lastErr = nil
-		return m, textinput.Blink
-	case "x":
 		project := projects[m.projectCursor]
-		return m.askConfirm(
-			fmt.Sprintf("Delete project %q and all its tasks?", project.Name),
-			modeProjects,
-			func() (tea.Model, tea.Cmd) {
-				if err := m.workspace.DeleteProject(project.ID); err != nil {
-					m.lastErr = err
-					m.mode = modeProjects
-					return m, nil
-				}
-				m.activateProject(m.workspace.ActiveProjectID)
-				if remaining := len(m.workspace.RegularProjects()); m.projectCursor >= remaining {
-					m.projectCursor = remaining - 1
-				}
-				m.lastErr = nil
-				m.lastStatus = fmt.Sprintf("deleted project %s", project.Name)
-				m.mode = modeProjects
-				return m, m.saveWorkspaceCmd()
-			},
-		)
+		return m.beginProjectEdit(project.ID, project.Name, modeProjects)
+	case "x":
+		return m.confirmDeleteProject(projects[m.projectCursor], modeProjects)
 	}
 
 	return m, nil
 }
 
+// beginProjectEdit opens the project name dialog: a new project when id is
+// empty, otherwise a rename. back is where cancelling or renaming returns.
+func (m *model) beginProjectEdit(id, name string, back mode) (tea.Model, tea.Cmd) {
+	m.mode = modeProjectEdit
+	m.projectEditPrev = back
+	m.projectDraft = id
+	m.projectInput.SetValue(name)
+	m.projectInput.CursorEnd()
+	m.projectInput.Focus()
+	m.lastErr = nil
+	return m, textinput.Blink
+}
+
+func (m *model) confirmDeleteProject(project *domain.Project, back mode) (tea.Model, tea.Cmd) {
+	return m.askConfirm(
+		fmt.Sprintf("Delete project %q and all its tasks?", project.Name),
+		back,
+		func() (tea.Model, tea.Cmd) {
+			if err := m.workspace.DeleteProject(project.ID); err != nil {
+				m.lastErr = err
+				m.mode = back
+				return m, nil
+			}
+			m.activateProject(m.workspace.ActiveProjectID)
+			if remaining := len(m.workspace.RegularProjects()); m.projectCursor >= remaining {
+				m.projectCursor = remaining - 1
+			}
+			m.lastErr = nil
+			m.lastStatus = fmt.Sprintf("deleted project %s", project.Name)
+			m.mode = back
+			return m, m.saveWorkspaceCmd()
+		},
+	)
+}
+
 func (m *model) updateProjectEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		m.mode = modeProjects
+		m.mode = m.projectEditPrev
 		m.projectInput.Blur()
 		m.lastErr = nil
 		m.projectDraft = ""
@@ -1419,7 +1380,7 @@ func (m *model) updateProjectEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.lastErr = fmt.Errorf("rename project whiteboards: %w", err)
 			return m, nil
 		}
-		m.mode = modeProjects
+		m.mode = m.projectEditPrev
 		m.projectInput.Blur()
 		m.projectDraft = ""
 		m.projectCursor = m.regularProjectIndex(project.ID)
@@ -2570,81 +2531,39 @@ func (m *model) renderTaskCard(task *domain.Task, width int, selected bool, acce
 // ─── Footer ──────────────────────────────────────────────────────────────────
 
 func (m *model) renderFooter() string {
-	var content string
-	compact := m.useCompactBoardLayout()
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext1).Bold(true)
+	descStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
+	sep := lipgloss.NewStyle().Foreground(theme.Surface1).Render("  \u2502  ")
 
-	if m.onDailyBoard() {
-		keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext1).Bold(true)
-		descStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
-		sep := lipgloss.NewStyle().Foreground(theme.Surface1).Render("  │  ")
-
-		content = keyStyle.Render("h/l") + descStyle.Render(" column") + sep +
-			keyStyle.Render("j/k") + descStyle.Render(" task") + sep +
-			keyStyle.Render("n") + descStyle.Render(" new") + sep +
-			keyStyle.Render("[/]") + descStyle.Render(" move") + sep +
-			keyStyle.Render("P") + descStyle.Render(" promote") + sep +
-			keyStyle.Render("space") + descStyle.Render(" done") + sep +
-			keyStyle.Render("D") + descStyle.Render(" back")
-		if !compact {
-			content += sep +
-				keyStyle.Render("X") + descStyle.Render(" clear board") + sep +
-				keyStyle.Render("z") + descStyle.Render(" done items") + sep +
-				keyStyle.Render("q") + descStyle.Render(" quit")
-		}
-
-		return lipgloss.NewStyle().
-			Width(m.width).
-			Padding(0, 2, 1, 2).
-			Foreground(theme.Subtext0).
-			Render(content)
+	colHint := " navigate"
+	if m.useCompactBoardLayout() {
+		colHint = " column"
 	}
-
-	if compact {
-		keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext1).Bold(true)
-		descStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
-		sepStyle := lipgloss.NewStyle().Foreground(theme.Surface1)
-		sep := sepStyle.Render("  \u2502  ")
-
-		content = keyStyle.Render("h/l") + descStyle.Render(" column") + sep +
-			keyStyle.Render("j/k") + descStyle.Render(" task") + sep +
-			keyStyle.Render("n") + descStyle.Render(" new") + sep +
-			keyStyle.Render("p") + descStyle.Render(" projects") + sep +
-			keyStyle.Render("D") + descStyle.Render(" daily") + sep +
-			keyStyle.Render("/") + descStyle.Render(" search") + sep +
-			keyStyle.Render("\u23ce") + descStyle.Render(" open") + sep +
-			keyStyle.Render("?") + descStyle.Render(" help") + sep +
-			keyStyle.Render("q") + descStyle.Render(" quit")
-
-		if m.showHelp {
-			content += sep +
-				keyStyle.Render("[/]") + descStyle.Render(" move") + sep +
-				keyStyle.Render("H/L") + descStyle.Render(" reorder col") + sep +
-				keyStyle.Render("e") + descStyle.Render(" edit") + sep +
-				keyStyle.Render("x") + descStyle.Render(" delete")
-		}
-	} else if m.showHelp {
-		content = m.help.View(m.keys)
+	hints := []string{
+		keyStyle.Render("h/l") + descStyle.Render(colHint),
+		keyStyle.Render("j/k") + descStyle.Render(" task"),
+	}
+	if m.onDailyBoard() {
+		hints = append(hints,
+			keyStyle.Render("SPC d m")+descStyle.Render(" done"),
+			keyStyle.Render("SPC d p")+descStyle.Render(" promote"),
+			keyStyle.Render("SPC d d")+descStyle.Render(" back"),
+		)
 	} else {
-		keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext1).Bold(true)
-		descStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
-		sepStyle := lipgloss.NewStyle().Foreground(theme.Surface1)
-		sep := sepStyle.Render("  \u2502  ")
-
-		content = keyStyle.Render("h/l") + descStyle.Render(" navigate") + sep +
-			keyStyle.Render("j/k") + descStyle.Render(" select") + sep +
-			keyStyle.Render("H") + descStyle.Render(" move col") + sep +
-			keyStyle.Render("L") + descStyle.Render(" move col") + sep +
-			keyStyle.Render("e") + descStyle.Render(" edit") + sep +
-			keyStyle.Render("c") + descStyle.Render(" column") + sep +
-			keyStyle.Render("p") + descStyle.Render(" projects") + sep +
-			keyStyle.Render("D") + descStyle.Render(" daily") + sep +
-			keyStyle.Render("r") + descStyle.Render(" rename") + sep +
-			keyStyle.Render("d") + descStyle.Render(" delete") + sep +
-			keyStyle.Render("n") + descStyle.Render(" new") + sep +
-			keyStyle.Render("/") + descStyle.Render(" search") + sep +
-			keyStyle.Render("\u23ce") + descStyle.Render(" details") + sep +
-			keyStyle.Render("q") + descStyle.Render(" quit") + sep +
-			keyStyle.Render("?") + descStyle.Render(" more")
+		hints = append(hints,
+			keyStyle.Render("/")+descStyle.Render(" search"),
+			keyStyle.Render("\u23ce")+descStyle.Render(" open"),
+		)
+	}
+	hints = append(hints,
+		keyStyle.Render("SPC")+descStyle.Render(" leader"),
+		keyStyle.Render("?")+descStyle.Render(" help"),
+		keyStyle.Render("q")+descStyle.Render(" quit"),
+	)
+	content := strings.Join(hints, sep)
+	if len(m.pendingKeys) > 0 {
+		content = lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true).
+			Render(displayKeys(strings.Join(m.pendingKeys, " "))+" \u2026") + sep + content
 	}
 
 	return lipgloss.NewStyle().
@@ -3773,7 +3692,7 @@ func statusEmptyMessage(status domain.Status) string {
 	case domain.StatusBacklog:
 		return "Press n to add a task"
 	case domain.StatusInProgress:
-		return "Move tasks here with ]"
+		return "Move tasks here with SPC t l"
 	case domain.StatusDone:
 		return "Completed tasks appear here"
 	case domain.StatusWaiting:

@@ -37,8 +37,7 @@ func newArchiveTestModel(t *testing.T) (*model, *domain.Task) {
 func TestArchiveKeyOpensConfirmation(t *testing.T) {
 	m, _ := newArchiveTestModel(t)
 
-	next, _ := m.updateBoard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
-	got := next.(*model)
+	got := pressBoardKeys(m, " ", "t", "a")
 	if got.mode != modeConfirm {
 		t.Fatalf("mode = %v, want %v", got.mode, modeConfirm)
 	}
@@ -50,8 +49,7 @@ func TestArchiveKeyOpensConfirmation(t *testing.T) {
 func TestConfirmArchivesSelectedTaskAndSaves(t *testing.T) {
 	m, task := newArchiveTestModel(t)
 
-	next, _ := m.updateBoard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'A'}})
-	got := next.(*model)
+	got := pressBoardKeys(m, " ", "t", "a")
 	next, cmd := got.updateConfirm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	got = next.(*model)
 
@@ -76,8 +74,7 @@ func TestArchiveViewListsArchivedTask(t *testing.T) {
 	}
 	m.recalculateVisible()
 
-	next, _ := m.updateBoard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}})
-	got := next.(*model)
+	got := pressBoardKeys(m, " ", "a", "v")
 	if got.mode != modeArchive {
 		t.Fatalf("mode = %v, want %v", got.mode, modeArchive)
 	}
@@ -139,8 +136,7 @@ func TestArchiveViewFilterMatchesTitleAndDescription(t *testing.T) {
 func TestBulkArchiveConfirmMessage(t *testing.T) {
 	m, _ := newArchiveTestModel(t)
 
-	next, _ := m.updateBoard(tea.KeyMsg{Type: tea.KeyCtrlA})
-	got := next.(*model)
+	got := pressBoardKeys(m, " ", "a", "o")
 	if got.mode != modeConfirm {
 		t.Fatalf("mode = %v, want %v", got.mode, modeConfirm)
 	}

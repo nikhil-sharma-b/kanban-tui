@@ -23,6 +23,21 @@ func newDailyTestModel(t *testing.T) *model {
 	return m
 }
 
+// pressBoardSeq feeds a key sequence to the board, " " being the leader, and
+// returns what the last key produced.
+func pressBoardSeq(m *model, keys ...string) (tea.Model, tea.Cmd) {
+	var next tea.Model = m
+	var cmd tea.Cmd
+	for _, k := range keys {
+		msg := runeKey([]rune(k)[0])
+		if k == " " {
+			msg = tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}
+		}
+		next, cmd = next.(*model).updateBoard(msg)
+	}
+	return next, cmd
+}
+
 func runeKey(r rune) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
 }
@@ -31,7 +46,7 @@ func TestDailyKeyTogglesBoard(t *testing.T) {
 	m := newDailyTestModel(t)
 	start := m.project.ID
 
-	next, _ := m.updateBoard(runeKey('D'))
+	next, _ := pressBoardSeq(m, " ", "d", "d")
 	got := next.(*model)
 	if !got.onDailyBoard() {
 		t.Fatal("expected daily board to be active")
@@ -40,7 +55,7 @@ func TestDailyKeyTogglesBoard(t *testing.T) {
 		t.Fatalf("unexpected daily columns: %v", cols)
 	}
 
-	next, _ = got.updateBoard(runeKey('D'))
+	next, _ = pressBoardSeq(got, " ", "d", "d")
 	got = next.(*model)
 	if got.onDailyBoard() {
 		t.Fatal("expected to leave the daily board")
@@ -52,7 +67,7 @@ func TestDailyKeyTogglesBoard(t *testing.T) {
 
 func TestDailyDoneArchivesTaskAndHidesIt(t *testing.T) {
 	m := newDailyTestModel(t)
-	next, _ := m.updateBoard(runeKey('D'))
+	next, _ := pressBoardSeq(m, " ", "d", "d")
 	m = next.(*model)
 
 	task, err := m.board.AddTask("Reply to mail", "")
@@ -62,7 +77,7 @@ func TestDailyDoneArchivesTaskAndHidesIt(t *testing.T) {
 	m.recalculateVisible()
 	m.selectTask(task.ID)
 
-	next, cmd := m.updateBoard(tea.KeyMsg{Type: tea.KeySpace})
+	next, cmd := pressBoardSeq(m, " ", "d", "m")
 	m = next.(*model)
 	if cmd == nil {
 		t.Fatal("expected a save command")
@@ -80,7 +95,7 @@ func TestDailyDoneArchivesTaskAndHidesIt(t *testing.T) {
 
 func TestDailyClearAsksConfirmationThenDeletesEverything(t *testing.T) {
 	m := newDailyTestModel(t)
-	next, _ := m.updateBoard(runeKey('D'))
+	next, _ := pressBoardSeq(m, " ", "d", "d")
 	m = next.(*model)
 
 	if _, err := m.board.AddTask("one", ""); err != nil {
@@ -91,7 +106,7 @@ func TestDailyClearAsksConfirmationThenDeletesEverything(t *testing.T) {
 	}
 	m.recalculateVisible()
 
-	next, _ = m.updateBoard(runeKey('X'))
+	next, _ = pressBoardSeq(m, " ", "d", "X")
 	m = next.(*model)
 	if m.mode != modeConfirm {
 		t.Fatalf("mode = %v, want %v", m.mode, modeConfirm)
@@ -120,14 +135,14 @@ func TestDailyClearDoesNotTouchOtherProjects(t *testing.T) {
 		t.Fatalf("add task: %v", err)
 	}
 
-	next, _ := m.updateBoard(runeKey('D'))
+	next, _ := pressBoardSeq(m, " ", "d", "d")
 	m = next.(*model)
 	if _, err := m.board.AddTask("daily", ""); err != nil {
 		t.Fatalf("add task: %v", err)
 	}
 	m.recalculateVisible()
 
-	next, _ = m.updateBoard(runeKey('X'))
+	next, _ = pressBoardSeq(m, " ", "d", "X")
 	m = next.(*model)
 	next, _ = m.updateConfirm(runeKey('y'))
 	m = next.(*model)
@@ -139,17 +154,17 @@ func TestDailyClearDoesNotTouchOtherProjects(t *testing.T) {
 
 func TestDailyBoardRejectsColumnEdits(t *testing.T) {
 	m := newDailyTestModel(t)
-	next, _ := m.updateBoard(runeKey('D'))
+	next, _ := pressBoardSeq(m, " ", "d", "d")
 	m = next.(*model)
 
-	for _, r := range []rune{'c', 'r', 'd', 'H', 'L'} {
-		next, _ = m.updateBoard(runeKey(r))
+	for _, k := range []string{"n", "r", "d", "h", "l"} {
+		next, _ = pressBoardSeq(m, " ", "c", k)
 		m = next.(*model)
 		if m.mode != modeBoard {
-			t.Fatalf("key %q changed mode to %v", r, m.mode)
+			t.Fatalf("SPC c %s changed mode to %v", k, m.mode)
 		}
 		if cols := m.board.Statuses(); len(cols) != 3 {
-			t.Fatalf("key %q changed columns: %v", r, cols)
+			t.Fatalf("SPC c %s changed columns: %v", k, cols)
 		}
 	}
 	if m.lastStatus != "daily board columns are fixed" {
@@ -168,7 +183,7 @@ func TestProjectManagerHidesDailyBoard(t *testing.T) {
 
 func TestDailyPromoteOpensDestinationDialogAndCancels(t *testing.T) {
 	m := newDailyTestModel(t)
-	next, _ := m.updateBoard(runeKey('D'))
+	next, _ := pressBoardSeq(m, " ", "d", "d")
 	m = next.(*model)
 	task, err := m.board.AddTask("Promote me", "")
 	if err != nil {
@@ -177,7 +192,7 @@ func TestDailyPromoteOpensDestinationDialogAndCancels(t *testing.T) {
 	m.recalculateVisible()
 	m.selectTask(task.ID)
 
-	next, _ = m.updateBoard(runeKey('P'))
+	next, _ = pressBoardSeq(m, " ", "d", "p")
 	m = next.(*model)
 	if m.mode != modeDailyPromote {
 		t.Fatalf("mode = %v, want %v", m.mode, modeDailyPromote)
@@ -200,7 +215,7 @@ func TestDailyPromoteMovesTaskToChosenProjectColumn(t *testing.T) {
 		t.Fatalf("create project: %v", err)
 	}
 	m.activateProject(target.ID)
-	next, _ := m.updateBoard(runeKey('D'))
+	next, _ := pressBoardSeq(m, " ", "d", "d")
 	m = next.(*model)
 	task, err := m.board.AddTask("Ship release", "Keep details")
 	if err != nil {
@@ -210,7 +225,7 @@ func TestDailyPromoteMovesTaskToChosenProjectColumn(t *testing.T) {
 	m.recalculateVisible()
 	m.selectTask(task.ID)
 
-	next, _ = m.updateBoard(runeKey('P'))
+	next, _ = pressBoardSeq(m, " ", "d", "p")
 	m = next.(*model)
 	targets := m.dailyPromotionTargets()
 	wantCursor := -1
@@ -254,7 +269,7 @@ func TestDailyPromoteMovesTaskToChosenProjectColumn(t *testing.T) {
 func TestDailyPromoteRelocatesWhiteboardFiles(t *testing.T) {
 	m := newDailyTestModel(t)
 	target := m.workspace.ActiveProject()
-	next, _ := m.updateBoard(runeKey('D'))
+	next, _ := pressBoardSeq(m, " ", "d", "d")
 	m = next.(*model)
 	task, err := m.board.AddTask("Promote drawing", "")
 	if err != nil {
@@ -271,7 +286,7 @@ func TestDailyPromoteRelocatesWhiteboardFiles(t *testing.T) {
 	m.recalculateVisible()
 	m.selectTask(task.ID)
 
-	next, _ = m.updateBoard(runeKey('P'))
+	next, _ = pressBoardSeq(m, " ", "d", "p")
 	m = next.(*model)
 	next, cmd := m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(*model)
@@ -294,7 +309,7 @@ func TestDailyPromoteRelocatesWhiteboardFiles(t *testing.T) {
 func TestDailyPromoteSaveFailureLeavesTaskOnDailyBoard(t *testing.T) {
 	m := newDailyTestModel(t)
 	m.store.(*stubWorkspaceStore).err = errors.New("disk full")
-	next, _ := m.updateBoard(runeKey('D'))
+	next, _ := pressBoardSeq(m, " ", "d", "d")
 	m = next.(*model)
 	task, err := m.board.AddTask("Stay daily", "")
 	if err != nil {
@@ -311,7 +326,7 @@ func TestDailyPromoteSaveFailureLeavesTaskOnDailyBoard(t *testing.T) {
 	m.recalculateVisible()
 	m.selectTask(task.ID)
 
-	next, _ = m.updateBoard(runeKey('P'))
+	next, _ = pressBoardSeq(m, " ", "d", "p")
 	m = next.(*model)
 	next, cmd := m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(*model)
