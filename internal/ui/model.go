@@ -3009,7 +3009,7 @@ func (m *model) renderAddColumnDialog() string {
 
 func (m *model) renderProjectsDialog() string {
 	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Blue).Render("Projects")
-	dialogWidth := m.dialogWidth(projectDialogMaxWidth)
+	dialogWidth := m.dialogWidth(projectDialogMaxWidth + 8)
 	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
 	separator := lipgloss.NewStyle().Foreground(theme.Blue).Render(strings.Repeat("\u2501", contentWidth))
 
