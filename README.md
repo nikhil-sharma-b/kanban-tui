@@ -14,6 +14,14 @@ The app is built around a normalized board model:
 
 That keeps state updates cheap and avoids repainting entire task sets when boards get large.
 
+## Install
+
+```bash
+make install      # builds and installs to ~/.local/bin/kanban
+```
+
+Make sure `~/.local/bin` is on your `PATH`, then run `kanban` from anywhere. Install elsewhere with `make install PREFIX=/usr/local` (may need `sudo`), and remove it with `make uninstall`. Rerun `make install` after pulling changes.
+
 ## Run
 
 ```bash
