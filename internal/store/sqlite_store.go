@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -17,10 +18,18 @@ import (
 
 const timestampLayout = time.RFC3339Nano
 
+// ErrConflict means another process saved the workspace after this store
+// last loaded or saved it. Saving anyway would discard that process's changes,
+// so the caller has to reload and reapply.
+var ErrConflict = errors.New("workspace was changed by another process")
+
 type SQLiteStore struct {
 	path string
 	db   *sql.DB
 	mu   sync.Mutex
+	// revision is the meta revision this store last loaded or wrote. Save
+	// only succeeds while the database is still at this revision.
+	revision int64
 }
 
 func NewSQLiteStore(path string) (*SQLiteStore, error) {
@@ -54,6 +63,14 @@ func (s *SQLiteStore) Load() (*domain.Workspace, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Read the revision before the workspace: if a save lands in between, the
+	// stale revision makes our next save conflict instead of overwriting it.
+	revision, err := s.loadRevision()
+	if err != nil {
+		return nil, err
+	}
+	s.revision = revision
+
 	workspace, err := s.loadWorkspaceBlob()
 	if err != nil {
 		return nil, err
@@ -86,14 +103,61 @@ func (s *SQLiteStore) Save(workspace *domain.Workspace) error {
 		return fmt.Errorf("encode workspace: %w", err)
 	}
 
-	if _, err := s.db.Exec(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin save: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Bumping the revision first takes the write lock, so the check and the
+	// workspace write are atomic against other processes.
+	result, err := tx.Exec(`
+		UPDATE meta SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)
+		WHERE key = 'revision' AND CAST(value AS INTEGER) = ?
+	`, s.revision)
+	if err != nil {
+		return fmt.Errorf("bump revision: %w", err)
+	}
+	if rows, err := result.RowsAffected(); err != nil {
+		return fmt.Errorf("bump revision: %w", err)
+	} else if rows == 0 {
+		return ErrConflict
+	}
+
+	if _, err := tx.Exec(`
 		INSERT INTO meta (key, value) VALUES ('workspace', ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value
 	`, string(payload)); err != nil {
 		return fmt.Errorf("store workspace: %w", err)
 	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit save: %w", err)
+	}
 
+	s.revision++
 	return nil
+}
+
+// Changed reports whether another process has saved the workspace since this
+// store last loaded or saved it.
+func (s *SQLiteStore) Changed() (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	revision, err := s.loadRevision()
+	if err != nil {
+		return false, err
+	}
+	return revision != s.revision, nil
+}
+
+func (s *SQLiteStore) loadRevision() (int64, error) {
+	var revision int64
+	err := s.db.QueryRow(`SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'revision'`).Scan(&revision)
+	if err != nil {
+		return 0, fmt.Errorf("load revision: %w", err)
+	}
+	return revision, nil
 }
 
 func (s *SQLiteStore) loadWorkspaceBlob() (*domain.Workspace, error) {
@@ -215,6 +279,7 @@ func (s *SQLiteStore) init() error {
 			key TEXT PRIMARY KEY,
 			value TEXT NOT NULL
 		)`,
+		`INSERT OR IGNORE INTO meta (key, value) VALUES ('revision', '0')`,
 	}
 
 	for _, statement := range schema {

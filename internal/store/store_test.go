@@ -308,3 +308,59 @@ func TestSQLiteStoreLoadsPreDailyWorkspace(t *testing.T) {
 		t.Fatalf("regular projects = %d, want 2", len(loaded.RegularProjects()))
 	}
 }
+
+func TestSQLiteStoreRejectsStaleSave(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "board.db")
+	open := func() *SQLiteStore {
+		s, err := NewSQLiteStore(dbPath)
+		if err != nil {
+			t.Fatalf("new sqlite store: %v", err)
+		}
+		t.Cleanup(func() { s.Close() })
+		return s
+	}
+	tui, cli := open(), open()
+
+	tuiWorkspace, err := tui.Load()
+	if err != nil {
+		t.Fatalf("tui load: %v", err)
+	}
+	cliWorkspace, err := cli.Load()
+	if err != nil {
+		t.Fatalf("cli load: %v", err)
+	}
+
+	if _, err := cliWorkspace.ActiveProject().Board.AddTask("from cli", ""); err != nil {
+		t.Fatalf("add task: %v", err)
+	}
+	if err := cli.Save(cliWorkspace); err != nil {
+		t.Fatalf("cli save: %v", err)
+	}
+
+	changed, err := tui.Changed()
+	if err != nil || !changed {
+		t.Fatalf("expected tui to see a change, got %v, %v", changed, err)
+	}
+	if err := tui.Save(tuiWorkspace); err != ErrConflict {
+		t.Fatalf("expected ErrConflict, got %v", err)
+	}
+
+	reloaded, err := tui.Load()
+	if err != nil {
+		t.Fatalf("tui reload: %v", err)
+	}
+	if got := reloaded.ActiveProject().Board.ActiveTaskCount(); got != 1 {
+		t.Fatalf("expected cli task after reload, got %d tasks", got)
+	}
+	if changed, _ := tui.Changed(); changed {
+		t.Fatal("expected no change right after reload")
+	}
+	if err := tui.Save(reloaded); err != nil {
+		t.Fatalf("save after reload: %v", err)
+	}
+	if changed, _ := tui.Changed(); changed {
+		t.Fatal("own save must not count as an external change")
+	}
+}

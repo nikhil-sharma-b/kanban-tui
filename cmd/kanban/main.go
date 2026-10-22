@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/nikhilsharma/kanban-tui/internal/cli"
 	"github.com/nikhilsharma/kanban-tui/internal/store"
 	"github.com/nikhilsharma/kanban-tui/internal/ui"
 )
@@ -15,6 +16,10 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "resolve storage paths: %v\n", err)
 		os.Exit(1)
+	}
+
+	if args := os.Args[1:]; cli.IsCommand(args) {
+		os.Exit(cli.Run(args, os.Stdout, os.Stderr, dataPath, legacyPath))
 	}
 
 	boardStore, err := store.Open(dataPath, legacyPath)

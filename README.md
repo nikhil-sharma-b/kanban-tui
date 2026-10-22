@@ -56,6 +56,27 @@ Existing JSON data is migrated automatically on first run:
 - the default legacy file is `board.json` in the same app config directory
 - if `KANBAN_TUI_DATA_FILE` points to a legacy `.json` file, the app imports it into a sibling `.db` file with the same base name
 
+## CLI
+
+Any arguments run a single command instead of the TUI, which makes the board scriptable and usable by AI agents:
+
+```bash
+kanban task add "Write release notes" -p Work --column "in progress"
+kanban task list -p Work --json
+kanban task move 3f2a --column done        # unique ID prefix is enough
+kanban daily add "Call Bob"
+kanban daily promote 9c1e --to Work
+```
+
+Run `kanban help` for every command. Notes:
+
+- every command accepts `--json` and prints the affected task, project or board
+- projects are referenced by name (case-insensitive) or ID; `-p` defaults to the active project
+- tasks are referenced by full ID or any unique prefix, across all projects
+- errors go to stderr; exit code `1` for failures, `2` for bad usage
+
+The CLI and TUI can run at the same time. The TUI picks up CLI changes within a second. If both write at once, the store rejects the stale save: the CLI retries on fresh data, and the TUI reloads and reports that its last change was dropped.
+
 ## Keys
 
 Board keys follow Neovim: bare keys only navigate, and everything that creates, changes or opens something sits behind the leader, `space` (shown as `SPC`). Press `space` and a which-key popup in the bottom-right lists what can follow; groups like `+task` open a submenu. `esc` cancels a half-typed sequence.

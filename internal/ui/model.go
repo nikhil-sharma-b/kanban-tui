@@ -173,6 +173,7 @@ type model struct {
 	archiveFiltering   bool
 	promotionCursor    int
 	promotionPending   bool
+	reloading          bool
 	saveBarrier        <-chan struct{}
 	saveSequence       uint64
 	latestSaveResult   uint64
@@ -316,7 +317,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 }
 
 func (m *model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, m.scheduleExternalCheck())
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -333,7 +334,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.latestSaveResult = msg.sequence
 		return m.Update(msg.msg)
+	case externalCheckMsg:
+		return m.handleExternalCheck()
+	case externalChangeMsg:
+		return m.handleExternalChange(msg)
+	case workspaceReloadedMsg:
+		return m.handleWorkspaceReloaded(msg)
 	case saveFinishedMsg:
+		if isSaveConflict(msg.err) {
+			if m.reloading {
+				return m, nil
+			}
+			return m, m.reloadWorkspaceCmd(true)
+		}
 		m.lastErr = msg.err
 		if msg.err != nil {
 			m.lastStatus = "save failed"
@@ -343,6 +356,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case dailyPromotionFinishedMsg:
 		m.promotionPending = false
+		if isSaveConflict(msg.err) {
+			m.mode = modeBoard
+			if m.reloading {
+				return m, nil
+			}
+			return m, m.reloadWorkspaceCmd(true)
+		}
 		if msg.err != nil {
 			m.lastErr = msg.err
 			m.lastStatus = "promotion failed"
