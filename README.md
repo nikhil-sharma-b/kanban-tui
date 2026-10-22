@@ -22,6 +22,16 @@ make install      # builds and installs to ~/.local/bin/kanban
 
 Make sure `~/.local/bin` is on your `PATH`, then run `kanban` from anywhere. Install elsewhere with `make install PREFIX=/usr/local` (may need `sudo`), and remove it with `make uninstall`. Rerun `make install` after pulling changes.
 
+### Agent skill
+
+`skills/kanban/SKILL.md` teaches AI agents (Claude Code and others that read `~/.claude/skills`) to drive the board through the CLI. Install it with:
+
+```bash
+make install-skill   # symlinks ~/.claude/skills/kanban to this repo
+```
+
+Because it is a symlink, pulling the repo updates the skill too. Point it elsewhere with `make install-skill SKILLDIR=/path/to/skills`.
+
 ## Run
 
 ```bash
