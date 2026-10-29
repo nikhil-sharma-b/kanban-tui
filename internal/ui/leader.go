@@ -40,6 +40,7 @@ const (
 	actTaskReorderUp
 	actTaskReorderDown
 	actTaskWhiteboards
+	actTaskCopyID
 
 	actColumnNew
 	actColumnRename
@@ -95,6 +96,7 @@ var boardBindings = []boardBinding{
 	{"space t k", actTaskReorderUp, "reorder up"},
 	{"space t j", actTaskReorderDown, "reorder down"},
 	{"space t w", actTaskWhiteboards, "whiteboards"},
+	{"space t y", actTaskCopyID, "copy ID"},
 
 	{"space c n", actColumnNew, "new"},
 	{"space c r", actColumnRename, "rename"},

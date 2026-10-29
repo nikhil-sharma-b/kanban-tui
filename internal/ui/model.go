@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"github.com/atotto/clipboard"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -646,6 +647,8 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.moveSelection(-len(m.visible[statuses[m.activeColumn]]))
 	case actTaskBottom:
 		m.moveSelection(len(m.visible[statuses[m.activeColumn]]))
+	case actTaskCopyID:
+		return m.copySelectedTaskID()
 	case actTaskWhiteboards:
 		return m.openWhiteboards()
 	case actProjectNew:
@@ -1513,8 +1516,26 @@ func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.beginEditSelected()
 	case "w":
 		return m.openWhiteboards()
+	case "y":
+		return m.copySelectedTaskID()
 	}
 
+	return m, nil
+}
+
+// copySelectedTaskID puts the full task ID on the system clipboard so it can be
+// handed to the kanban CLI or an agent.
+func (m *model) copySelectedTaskID() (tea.Model, tea.Cmd) {
+	task := m.selectedTask()
+	if task == nil {
+		return m, nil
+	}
+	if err := clipboard.WriteAll(task.ID); err != nil {
+		m.lastErr = fmt.Errorf("copy ID: %w", err)
+		return m, nil
+	}
+	m.lastErr = nil
+	m.lastStatus = fmt.Sprintf("copied ID %s", shortID(task.ID))
 	return m, nil
 }
 
@@ -2608,6 +2629,11 @@ func (m *model) renderCreateDialog() string {
 		Bold(true).
 		Foreground(theme.Mauve).
 		Render(fmt.Sprintf("\u25c6  %s", titleText))
+	if isEditing {
+		title += lipgloss.NewStyle().
+			Foreground(theme.Overlay0).
+			Render("  " + m.editingTaskID)
+	}
 
 	titleLabel := lipgloss.NewStyle().
 		Foreground(theme.Overlay0).
@@ -2857,6 +2883,7 @@ func (m *model) renderTaskDetail(task *domain.Task, archived bool) string {
 	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
 	hint := keyStyle.Render("e") + hintStyle.Render(" edit  ") +
 		keyStyle.Render("w") + hintStyle.Render(" whiteboards  ") +
+		keyStyle.Render("y") + hintStyle.Render(" copy ID  ") +
 		keyStyle.Render("esc") + hintStyle.Render(" close")
 	if archived {
 		hint = keyStyle.Render("r") + hintStyle.Render(" restore  ") +
