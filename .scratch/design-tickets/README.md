@@ -2,7 +2,7 @@
 
 Order: 00 → 01 → 02, then any order, 19 last.
 
-- [ ] [00 · Foundations: tokens and component kit](00-foundations.md)
+- [x] [00 · Foundations: tokens and component kit](00-foundations.md)
 - [ ] [01 · Board (main screen)](01-board.md)
 - [ ] [02 · Narrow layout (80×24)](02-narrow-80x24.md)
 - [ ] [03 · Task detail / edit (modeDetail)](03-task-detail.md)
