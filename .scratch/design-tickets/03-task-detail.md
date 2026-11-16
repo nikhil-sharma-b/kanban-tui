@@ -10,3 +10,12 @@
 - Narrow layout follows the **breakpoint rule** (frame `02/breakpoint-rule`): N = clamp(floor(W/28), 1, 4) visible columns; dialogs min(60, W−8) cells wide.
 - **No data model changes.** Use only fields that exist today: task id/title/description/status/whiteboards/created/updated/archived, columns, projects, daily board. Anything new (theme, prefs) lives in a separate optional config file, never in `board.db`/`board.json`.
 - Show keybinds for every action on the screen.
+
+## Decision
+- Page `03 Task detail`: frames `03/view`, `03/edit-title`, `03/edit-description`, `03/status-picker`, `03/whiteboards`, `03/copied`, `03/unsaved`, `03/empty-title`, plus `03/view-80x24`, `03/edit-description-80x24`.
+- Edit in place inside the detail dialog (no hop to the create dialog); vim modes kept; `ctrl+s`/`:w` save, `:wq` save & close, `ctrl+e` $EDITOR.
+- `s` opens an in-dialog column picker (j/k or 1–N, ↵ move) using existing columns.
+- `w` focuses the whiteboard list in place; management keys per ticket 08.
+- Meta: 8-char ID · created · relative updated; `y` copies the full ID, confirmation replaces the hint row.
+- Unsaved edits on esc → "Discard changes?" (ctrl+s save · n keep editing · y discard). Empty title blocks save with an inline error.
+- Width per `02/breakpoint-rule`; at 80×24 hints wrap to two rows.
