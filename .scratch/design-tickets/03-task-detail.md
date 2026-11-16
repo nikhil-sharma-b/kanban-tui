@@ -18,6 +18,6 @@
 - Title row carries status + updated age in text-dim (`todo · 2d ago`); no meta line, no description label. ID only via `y`.
 - Description: fixed 8-row region (7 at 80×24), scrolls (J/K, cursor-follow); `↓ N more lines` in text-faint only on overflow. Whiteboards: fixed 3-row region, hidden when empty.
 - Footer is one row, always: either a message/prompt (`:wq▏`, errors, `copied a3f91c07`, discard y/n) or 3–4 mode hints + `? more`, never both.
-- Rose marks focus only.
+- Rose marks focus only. Focus bar spacing matches the selected card: ½-cell bar, 1½-cell gap, text in column 2 — bar lives in a reserved gutter so text never shifts on focus.
 - `s` opens a column popover; `w` focuses the whiteboard list; `y` copies the full ID.
 - All colours bound to Dusk variables.
