@@ -12,7 +12,7 @@
 - Show keybinds for every action on the screen.
 
 ## Decision
-- Page `03 Task detail`: `03/view`, `03/edit-title`, `03/edit-description`, `03/command-line`, `03/status-picker`, `03/whiteboards`, `03/copied`, `03/unsaved`, `03/empty-title`, plus `03/view-80x24`, `03/command-line-80x24`.
+- Page `03 Task detail`: `03/view`, `03/edit-title`, `03/edit-description`, `03/command-line`, `03/status-picker`, `03/whiteboards`, `03/copied`, `03/unsaved`, `03/empty-title`, `03/no-whiteboards`, plus `03/view-80x24`, `03/command-line-80x24`.
 - Fixed-size dialog: min(60, W−8) × min(20, H−4) cells; no layout shift while interacting.
 - No input boxes: focused field = rose accent bar + cursor. Edit in place (no hop to the create dialog); vim modes kept.
 - Title row carries status + updated age in text-dim (`todo · 2d ago`); no meta line, no description label. ID only via `y`.
