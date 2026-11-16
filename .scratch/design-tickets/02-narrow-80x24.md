@@ -14,3 +14,8 @@ Decide how the board behaves when 4 columns do not fit: e.g. a single focused co
 - Every frame at **120×36 cells (1280×760)** plus the **80×24** variant where layout changes.
 - **No data model changes.** Use only fields that exist today: task id/title/description/status/whiteboards/created/updated/archived, columns, projects, daily board. Anything new (theme, prefs) lives in a separate optional config file, never in `board.db`/`board.json`.
 - Show keybinds for every action on the screen.
+
+## Decision
+- 2 columns + edge counts at 80×24 (not tabs). Rule lives in frame `02/breakpoint-rule` on page `02 Narrow`:
+  - N = clamp(floor(W/28), 1, 4) visible columns; window slides with h/l; `‹ n` / `n ›` count hidden columns.
+  - Dialogs min(60, W−8) cells, centred over a scrim.
