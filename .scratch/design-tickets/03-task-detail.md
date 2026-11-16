@@ -12,10 +12,10 @@
 - Show keybinds for every action on the screen.
 
 ## Decision
-- Page `03 Task detail`: frames `03/view`, `03/edit-title`, `03/edit-description`, `03/status-picker`, `03/whiteboards`, `03/copied`, `03/unsaved`, `03/empty-title`, plus `03/view-80x24`, `03/edit-description-80x24`.
-- Edit in place inside the detail dialog (no hop to the create dialog); vim modes kept; `ctrl+s`/`:w` save, `:wq` save & close, `ctrl+e` $EDITOR.
-- `s` opens an in-dialog column picker (j/k or 1–N, ↵ move) using existing columns.
-- `w` focuses the whiteboard list in place; management keys per ticket 08.
-- Meta: 8-char ID · created · relative updated; `y` copies the full ID, confirmation replaces the hint row.
-- Unsaved edits on esc → "Discard changes?" (ctrl+s save · n keep editing · y discard). Empty title blocks save with an inline error.
-- Width per `02/breakpoint-rule`; at 80×24 hints wrap to two rows.
+- Page `03 Task detail`: `03/view`, `03/edit-title`, `03/edit-description`, `03/command-line`, `03/status-picker`, `03/whiteboards`, `03/copied`, `03/unsaved`, `03/empty-title`, plus `03/view-80x24`, `03/command-line-80x24`.
+- Fixed-size dialog: min(60, W−8) × min(20, H−4) cells; no layout shift while interacting.
+- No input boxes: focused field = rose accent bar + cursor. Edit in place (no hop to the create dialog); vim modes kept.
+- Description: fixed 6-row region (5 at 80×24) that scrolls (J/K, cursor-follow), with `ln N · 1–6 of 9` in its header. Whiteboards: fixed 3-row region.
+- One status line above the hints for the typed command (`:wq▏`), errors, confirmations and the discard prompt; cleared on next key.
+- `s` opens a column popover; `w` focuses the whiteboard list; `y` copies the full ID.
+- All colours bound to Dusk variables.
