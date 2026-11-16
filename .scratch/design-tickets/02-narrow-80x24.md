@@ -17,5 +17,5 @@ Decide how the board behaves when 4 columns do not fit: e.g. a single focused co
 
 ## Decision
 - 2 columns + edge counts at 80×24 (not tabs). Rule lives in frame `02/breakpoint-rule` on page `02 Narrow`:
-  - N = clamp(floor(W/28), 1, 4) visible columns; window slides with h/l; `‹ n` / `n ›` count hidden columns.
+  - N = clamp(floor(W/28), 1, 4) visible columns; window slides with h/l; hidden columns are named at the edges in the faint tone (`‹ backlog │ todo · 3`, `doing · done ›`; 3+ hidden → `doing +2 ›`).
   - Dialogs min(60, W−8) cells, centred over a scrim.
