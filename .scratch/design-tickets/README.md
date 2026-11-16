@@ -6,7 +6,7 @@ Order: 00 → 01 → 02, then any order, 19 last.
 - [x] [01 · Board (main screen)](01-board.md)
 - [x] [02 · Narrow layout (80×24)](02-narrow-80x24.md)
 - [x] [03 · Task detail / edit (modeDetail)](03-task-detail.md)
-- [ ] [04 · New task (modeCreate)](04-create-task.md)
+- [x] [04 · New task (modeCreate)](04-create-task.md)
 - [ ] [05 · Search and filter (modeSearch)](05-search-filter.md)
 - [ ] [06 · Columns: add, rename, delete (modeAddColumn, modeRenameColumn)](06-columns.md)
 - [ ] [07 · Projects (modeProjects, modeProjectEdit)](07-projects.md)
