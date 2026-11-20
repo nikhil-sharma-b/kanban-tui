@@ -11,7 +11,7 @@ Order: 00 → 01 → 02, then any order, 19 last.
 - [x] [06 · Columns: add, rename, delete (modeAddColumn, modeRenameColumn)](06-columns.md)
 - [x] [07 · Projects (modeProjects, modeProjectEdit)](07-projects.md)
 - [x] [08 · Whiteboards (modeWhiteboards, modeWhiteboardRename)](08-whiteboards.md)
-- [ ] [09 · Confirmation pattern (modeConfirm)](09-confirm.md)
+- [x] [09 · Confirmation pattern (modeConfirm)](09-confirm.md)
 - [ ] [10 · Archive (modeArchive, modeArchiveDetail)](10-archive.md)
 - [ ] [11 · Daily board and promote (modeDailyPromote)](11-daily.md)
 - [ ] [12 · Command palette (:)](12-command-palette.md)
