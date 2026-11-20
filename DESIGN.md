@@ -159,7 +159,7 @@ All components live on **00 Foundations → Components**, with a light-mode prev
 | List row | `State=default / selected / disabled` | Every pickable row: projects, whiteboards, status/column pickers |
 | Menu | — | Popovers (status picker, column picker) |
 | Badge | — | Board tags such as `daily` |
-| Toast | `Kind=success / danger / info` | Transient feedback over the board |
+| Toast | `Kind=success / danger / info` × `Hint` (boolean: `· key label`, e.g. `u undo`) | Transient feedback, bottom-right one row above the keybar |
 | Status message | `Kind=success / danger / info / prompt` | One-row messages in a dialog footer or keybar |
 | Command line | — | Typed `:` commands (`:wq▏`) |
 | Scroll hint | `Dir=up / down` | `↑ N more` / `↓ N more` overflow markers |
