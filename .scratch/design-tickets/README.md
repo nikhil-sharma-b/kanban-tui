@@ -15,7 +15,7 @@ Order: 00 → 01 → 02, then any order, 19 last.
 - [x] [10 · Archive (modeArchive, modeArchiveDetail)](10-archive.md)
 - [x] [11 · Daily board and promote (modeDailyPromote)](11-daily.md)
 - [x] [12 · Command palette (:)](12-command-palette.md)
-- [ ] [13 · Focus mode (z)](13-focus-mode.md)
+- [x] [13 · Focus mode (z)](13-focus-mode.md)
 - [ ] [14 · Which-key leader popup (SPC)](14-which-key.md)
 - [ ] [15 · Feedback: toasts, saving, live reload, errors](15-feedback.md)
 - [ ] [16 · Light Dusk](16-light-dusk.md)
