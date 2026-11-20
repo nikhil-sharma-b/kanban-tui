@@ -187,9 +187,9 @@ The key hint system is what users rely on most, so it has the strictest rules.
 
 **The Board Keybar Rule.** The board keybar is exactly: `h j k l select · ↵ open · / search · SPC t n new · SPC t e edit · SPC t h l move · SPC t x delete · SPC more · ? help`. With a filter applied, `/ search` becomes `/ refine` and `SPC more` becomes `esc clear filter`. At 80×24 (`Size=narrow`) it keeps `h j k l select · ↵ open · SPC t n new · SPC more · ? help` (filter: `/ refine · esc clear filter` replace the middle). Don't reword or reorder it per screen.
 
-**The Safe-Key-First Rule.** Destructive confirmations are always `esc ↵ keep · y <verb>` (`delete`, `clear`, `archive`), with the safe key first. `↵` keeps, never confirms; only `y` runs the action. This is the one exception to "confirm before leave".
+**The Safe-Key-First Rule.** Tier 1 confirmations (one task, one whiteboard, archive) are always `esc ↵ keep · y <verb>` (`delete`, `archive`), with the safe key first. `↵` keeps, never confirms; only `y` runs the action. Tier 2 (project, non-empty column, clear daily) asks the user to type the name: footer `esc keep` until it matches, then `↵ delete · esc keep`. This is the one exception to "confirm before leave".
 
-**The Confirm Pattern Rule** (page `09 Confirm`). Every destructive or bulk action uses one Dialog: title = verb + quoted object, body = what will be lost with real counts, then one Status message (`danger` `can't be undone` for permanent loss, `info` for archive), then the footer above.
+**The Confirm Pattern Rule** (page `09 Confirm`). Every destructive or bulk action uses one Dialog: title = verb + quoted object, body = what will be lost with real counts, then one Status message (`danger` `can't be undone` for permanent loss, `info` for archive), then the footer above. Tier 2 adds a focused Text input above the Status message, which reads `info` `type “name” to delete` until it matches, then `danger` `↵ deletes N tasks for good`.
 
 **The Same-Key Rule.** A key means the same thing everywhere it appears. `↵` confirms, `esc` backs out one level, `?` opens help. Lists use `j k`; use `↑↓` only where the list has a live text filter that would swallow `j k`.
 
