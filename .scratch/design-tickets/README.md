@@ -17,7 +17,7 @@ Order: 00 → 01 → 02, then any order, 19 last.
 - [x] [12 · Command palette (:)](12-command-palette.md)
 - [x] [13 · Focus mode (z)](13-focus-mode.md)
 - [x] [14 · Which-key leader popup (SPC)](14-which-key.md)
-- [ ] [15 · Feedback: toasts, saving, live reload, errors](15-feedback.md)
+- [x] [15 · Feedback: toasts, saving, live reload, errors](15-feedback.md)
 - [ ] [16 · Light Dusk](16-light-dusk.md)
 - [ ] [17 · Theme setting and fallbacks](17-theme-setting.md)
 - [ ] [18 · First run and empty workspace](18-first-run.md)
