@@ -106,7 +106,7 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 
 **The Variables-Only Rule.** Every fill and text colour is bound to a Dusk variable so the `light` and `ansi16` modes work. A raw hex on a screen frame is a bug.
 
-**The Terminal-Theme Rule.** In `theme = terminal` nothing is painted: selected → reverse video, accent → bold, dim/faint/done → faint attribute, danger → ANSI 1, success → ANSI 2. Don't design anything that only works through fill colour.
+**The Terminal-Theme Rule.** The setting is `theme = dusk | dusk-light | terminal` in the optional `config.toml` beside `board.db` (default `dusk`). `terminal` is auto: it reads the terminal background and uses `dark` or `light` (no answer → `dark`). Separately, a terminal without truecolor/256 colours gets the `ansi16` mode: bg never painted, selected → colour 8 fill, accent → magenta, dim/faint/done → colour 8 / faint attribute, danger → ANSI 1, success → ANSI 2. Don't design anything that only works through subtle fill differences. See page `17 Theme setting`.
 
 ## Typography
 
