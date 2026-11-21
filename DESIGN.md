@@ -126,7 +126,7 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 
 - **Cell grid:** 1 cell = 1 col × 1 row = 8.4 × 18 px. Every size is whole cells; half rows exist only through block glyphs.
 - **Frames:** each state at 120×36 cells (1008×648), plus an 80×24 variant whenever layout changes. Name frames `<ticket>/<state>` and `<ticket>/<state>-80x24`, one page per ticket.
-- **120×36 rows:** row 1 header · row 3 column headers · rows 4–34 cards · row 36 keybar. Screen gutter 5 cols, column gap 3 cols.
+- **120×36 rows:** row 1 header · row 3 column headers · rows 4–34 cards · row 36 keybar. Screen gutter 5 cols, column gap 3 cols. The keybar is the exception: it spans cols 2–119 (1-col margins, 118 cols) so the full Board Keybar Rule fits, and hints inside it sit 2 cols apart.
 - **Breakpoint rule** (frame `02/breakpoint-rule`): visible columns N = clamp(floor(W/28), 1, 4). Hidden columns are named in the **Column rail**.
 - **Dialogs:** min(60, W−8) cells wide, min(20, H−4) rows tall, fixed size. Nothing changes height while the user interacts.
 - **Compact density** below 30 rows: card insets dropped, 1 blank row between cards.
