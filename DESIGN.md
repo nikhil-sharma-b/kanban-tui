@@ -255,7 +255,7 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 | Dialog size | min(60, W−8) cols × min(20, H−4) rows, fixed while open |
 | Keybar | `Size=wide` at W ≥ 100, else `Size=narrow` |
 | Density | H < 30 → compact: no card insets, 1 blank row between cards |
-| Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`). At 80×24 both columns sit under it, so it drops onto the keybar instead, leaving a blank row below the selected card. Menus are whole rows: the border is drawn inside the padding |
+| Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`). At 80×24 both columns sit under it, so it drops onto the keybar instead, leaving a blank row below the selected card. Menus are whole rows: the border is drawn inside the padding. The popover is only as tall as its entries (root 6 rows, a group up to 8) and grows upward from a fixed bottom edge |
 
 ## Keybind map
 
