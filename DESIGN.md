@@ -120,7 +120,7 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 ### Named Rules
 **The One Size Rule.** Hierarchy is colour token + bold. No italics, no underline, no new sizes. Use the three text styles; never set a font by hand.
 
-**The Glyph Whitelist Rule.** Allowed glyphs: `▌ ▀ ▄ ▗ ▖ ▝ ▘ › · ↑ ↓ ● ╭ ╮ ╰ ╯ │ ─ ▏ ◇ ↵ ✓ ✗`. No Nerd Font icons, no emoji.
+**The Glyph Whitelist Rule.** Allowed glyphs: `▌ ▀ ▄ ▗ ▖ ▝ ▘ › · ↑ ↓ ● ╭ ╮ ╰ ╯ │ ─ ▏ ◇ ↵ ✓ ✗ …`. `…` (U+2026, one cell) only ends truncated text. No Nerd Font icons, no emoji.
 
 ## Layout
 
@@ -129,6 +129,7 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 - **120×36 rows:** row 1 blank · row 2 header · row 4 column headers · rows 5–33 cards · row 35 keybar · row 36 blank. At 80×24 the same 1-row margin: header row 2, column rail row 21, keybar row 23. Screen gutter is 2 cols at every size (16.8 px, close to the 18 px row, so the margin looks even on all sides). Column gap is 4 cols at 120×36 and 2 at 80×24; columns are 26 cols wide at 120×36. The keybar sits on the same gutters, with hints 3 cols apart.
 - **Breakpoint rule** (frame `02/breakpoint-rule`): visible columns N = clamp(floor(W/28), 1, 4). Hidden columns are named in the **Column rail**.
 - **Dialogs:** min(60, W−8) cells wide, min(20, H−4) rows tall, fixed size. Nothing changes height while the user interacts.
+- **Truncation:** card titles and descriptions are one line each. Text wider than the card's text area (card width − 3 cols: 23 at 120×36, 34 at 80×24) is cut to width − 1 cols, trailing spaces dropped, and ends in `…`. lipgloss: `strings.TrimRight(ansi.Truncate(s, w-1, ""), " ") + "…"`.
 - **Compact density** below 30 rows: card insets dropped, 1 blank row between cards.
 
 ## Elevation & Depth
