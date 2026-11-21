@@ -126,7 +126,7 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 
 - **Cell grid:** 1 cell = 1 col × 1 row = 8.4 × 18 px. Every size is whole cells; half rows exist only through block glyphs.
 - **Frames:** each state at 120×36 cells (1008×648), plus an 80×24 variant whenever layout changes. Name frames `<ticket>/<state>` and `<ticket>/<state>-80x24`, one page per ticket.
-- **120×36 rows:** row 1 header · row 3 column headers · rows 4–34 cards · row 36 keybar. Screen gutter 5 cols, column gap 3 cols. The keybar is the exception: it spans cols 2–119 (1-col margins, 118 cols) so the full Board Keybar Rule fits, and hints inside it sit 2 cols apart.
+- **120×36 rows:** row 1 header · row 3 column headers · rows 4–34 cards · row 36 keybar. Screen gutter 5 cols, column gap 3 cols. The keybar sits on the same gutters, with hints 3 cols apart.
 - **Breakpoint rule** (frame `02/breakpoint-rule`): visible columns N = clamp(floor(W/28), 1, 4). Hidden columns are named in the **Column rail**.
 - **Dialogs:** min(60, W−8) cells wide, min(20, H−4) rows tall, fixed size. Nothing changes height while the user interacts.
 - **Compact density** below 30 rows: card insets dropped, 1 blank row between cards.
@@ -185,7 +185,7 @@ The key hint system is what users rely on most, so it has the strictest rules.
 6. **Help:** `? help` (board) or `? more` (dialogs), always last
 7. Overflow markers such as `↓ 1 more line` sit after the hints, aligned right
 
-**The Board Keybar Rule.** The board keybar is exactly: `h j k l select · ↵ open · / search · SPC t n new · SPC t e edit · SPC t h l move · SPC t x delete · SPC more · ? help`. With a filter applied, `/ search` becomes `/ refine` and `SPC more` becomes `esc clear filter`. At 80×24 (`Size=narrow`) it keeps `h j k l select · ↵ open · SPC t n new · SPC more · ? help` (filter: `/ refine · esc clear filter` replace the middle). On the daily board the same slots carry the daily actions: `h j k l select · ↵ open · SPC t n new · SPC t h l move · SPC d m done · SPC d p promote · SPC d d back · SPC more · ? help` (narrow: `h j k l select · ↵ open · SPC d p promote · SPC more · ? help`). Don't reword or reorder it per screen.
+**The Board Keybar Rule.** The board keybar is exactly: `h j k l select · ↵ open · / search · SPC t n new · SPC t h l move · SPC more · ? help` (85 cols; edit and delete live under `SPC t`, shown by which-key, so every keybar fits the 110 cols between the gutters). With a filter applied, `/ search` becomes `/ refine` and `SPC more` becomes `esc clear filter`. At 80×24 (`Size=narrow`) it keeps `h j k l select · ↵ open · SPC t n new · SPC more · ? help` (filter: `/ refine · esc clear filter` replace the middle). On the daily board the same slots carry the daily actions: `h j k l select · ↵ open · SPC t n new · SPC d m done · SPC d p promote · SPC d d back · SPC more · ? help` (narrow: `h j k l select · ↵ open · SPC d p promote · SPC more · ? help`). Don't reword or reorder it per screen.
 
 **The Safe-Key-First Rule.** Tier 1 confirmations (one task, one whiteboard, archive) are always `esc keep · y <verb>` (`delete`, `archive`), with the safe key first. `↵` is inert in them: only `y` acts and only `esc` keeps, so a reflex enter can't delete and `↵` never means cancel. Tier 2 (project, non-empty column, clear daily) asks the user to type the name: footer `esc keep` until it matches, then `↵ delete · esc keep`. This is the one exception to "confirm before leave".
 
