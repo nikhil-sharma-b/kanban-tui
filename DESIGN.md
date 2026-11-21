@@ -197,7 +197,7 @@ The key hint system is what users rely on most, so it has the strictest rules.
 
 ## Screens
 
-Every page in `design.figcraft`, with its ticket and frames (120×36 = 1008×648, 80×24 = 672×432, both whole cells). Pages 01 and 14 are refit to that grid, with one blank row above the header and below the keybar. Pages 02–13 and 15–18 are still drawn at the old 1280×760 and need the same refit. Every frame on pages 01–18 is named `<ticket>/<state>`.
+Every page in `design.figcraft`, with its ticket and frames (120×36 = 1008×648, 80×24 = 672×432, both whole cells). Every screen frame is refit to that grid, with one blank row above the header and below the keybar. `02/breakpoint-rule` is a reference sheet, not a screen, and stays 1280×760. Every frame on pages 01–18 is named `<ticket>/<state>`.
 
 | Page | Ticket | Frames |
 |---|---|---|
@@ -255,7 +255,7 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 | Dialog size | min(60, W−8) cols × min(20, H−4) rows, fixed while open |
 | Keybar | `Size=wide` at W ≥ 100, else `Size=narrow` |
 | Density | H < 30 → compact: no card insets, 1 blank row between cards |
-| Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`). At 80×24 both columns sit under it, so it drops onto the keybar instead, leaving a blank row below the selected card. Menus are whole rows: the border is drawn inside the padding. The popover is only as tall as its entries (root 6 rows, a group up to 8) and grows upward from a fixed bottom edge |
+| Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`). At 80×24 both columns sit under it, so it drops onto the keybar instead, leaving a blank row below the selected card. Menus and dialogs are whole rows: the border is drawn inside the padding. The popover is only as tall as its entries (root 6 rows, a group up to 8) and grows upward from a fixed bottom edge |
 
 ## Keybind map
 
