@@ -125,7 +125,7 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 ## Layout
 
 - **Cell grid:** 1 cell = 1 col × 1 row = 8.4 × 18 px. Every size is whole cells; half rows exist only through block glyphs.
-- **Frames:** each state at 120×36 cells (1280×760), plus an 80×24 variant whenever layout changes. Name frames `<ticket>/<state>` and `<ticket>/<state>-80x24`, one page per ticket.
+- **Frames:** each state at 120×36 cells (1008×648), plus an 80×24 variant whenever layout changes. Name frames `<ticket>/<state>` and `<ticket>/<state>-80x24`, one page per ticket.
 - **120×36 rows:** row 1 header · row 3 column headers · rows 4–34 cards · row 36 keybar. Screen gutter 5 cols, column gap 3 cols.
 - **Breakpoint rule** (frame `02/breakpoint-rule`): visible columns N = clamp(floor(W/28), 1, 4). Hidden columns are named in the **Column rail**.
 - **Dialogs:** min(60, W−8) cells wide, min(20, H−4) rows tall, fixed size. Nothing changes height while the user interacts.
@@ -197,7 +197,7 @@ The key hint system is what users rely on most, so it has the strictest rules.
 
 ## Screens
 
-Every page in `design.figcraft`, with its ticket and frames (all 120×36 = 1280×760; `-80x24` frames are 672×432). Checked in the handoff review: every frame on pages 01–18 is named `<ticket>/<state>` and has the right size.
+Every page in `design.figcraft`, with its ticket and frames (120×36 = 1008×648, 80×24 = 672×432, both whole cells). Pages 01 and 14 are refit to that grid: header row 1, keybar on the last row, no half-row padding. Pages 02–13 and 15–18 are still drawn at the old 1280×760 and need the same refit. Every frame on pages 01–18 is named `<ticket>/<state>`.
 
 | Page | Ticket | Frames |
 |---|---|---|
@@ -255,7 +255,7 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 | Dialog size | min(60, W−8) cols × min(20, H−4) rows, fixed while open |
 | Keybar | `Size=wide` at W ≥ 100, else `Size=narrow` |
 | Density | H < 30 → compact: no card insets, 1 blank row between cards |
-| Which-key | corner popover; flips to top when it would cover the selection (`14/placement-flip`) |
+| Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`) |
 
 ## Keybind map
 
