@@ -126,7 +126,7 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 
 - **Cell grid:** 1 cell = 1 col × 1 row = 8.4 × 18 px. Every size is whole cells; half rows exist only through block glyphs.
 - **Frames:** each state at 120×36 cells (1008×648), plus an 80×24 variant whenever layout changes. Name frames `<ticket>/<state>` and `<ticket>/<state>-80x24`, one page per ticket.
-- **120×36 rows:** row 1 header · row 3 column headers · rows 4–34 cards · row 36 keybar. Screen gutter 5 cols, column gap 3 cols. The keybar sits on the same gutters, with hints 3 cols apart.
+- **120×36 rows:** row 1 blank · row 2 header · row 4 column headers · rows 5–33 cards · row 35 keybar · row 36 blank. At 80×24 the same 1-row margin: header row 2, column rail row 21, keybar row 23. Screen gutter 5 cols, column gap 3 cols. The keybar sits on the same gutters, with hints 3 cols apart.
 - **Breakpoint rule** (frame `02/breakpoint-rule`): visible columns N = clamp(floor(W/28), 1, 4). Hidden columns are named in the **Column rail**.
 - **Dialogs:** min(60, W−8) cells wide, min(20, H−4) rows tall, fixed size. Nothing changes height while the user interacts.
 - **Compact density** below 30 rows: card insets dropped, 1 blank row between cards.
@@ -197,7 +197,7 @@ The key hint system is what users rely on most, so it has the strictest rules.
 
 ## Screens
 
-Every page in `design.figcraft`, with its ticket and frames (120×36 = 1008×648, 80×24 = 672×432, both whole cells). Pages 01 and 14 are refit to that grid: header row 1, keybar on the last row, no half-row padding. Pages 02–13 and 15–18 are still drawn at the old 1280×760 and need the same refit. Every frame on pages 01–18 is named `<ticket>/<state>`.
+Every page in `design.figcraft`, with its ticket and frames (120×36 = 1008×648, 80×24 = 672×432, both whole cells). Pages 01 and 14 are refit to that grid, with one blank row above the header and below the keybar. Pages 02–13 and 15–18 are still drawn at the old 1280×760 and need the same refit. Every frame on pages 01–18 is named `<ticket>/<state>`.
 
 | Page | Ticket | Frames |
 |---|---|---|
