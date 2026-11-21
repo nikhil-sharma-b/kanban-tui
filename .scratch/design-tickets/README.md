@@ -19,6 +19,6 @@ Order: 00 → 01 → 02, then any order, 19 last.
 - [x] [14 · Which-key leader popup (SPC)](14-which-key.md)
 - [x] [15 · Feedback: toasts, saving, live reload, errors](15-feedback.md)
 - [x] [16 · Light Dusk](16-light-dusk.md)
-- [ ] [17 · Theme setting and fallbacks](17-theme-setting.md)
+- [x] [17 · Theme setting and fallbacks](17-theme-setting.md)
 - [ ] [18 · First run and empty workspace](18-first-run.md)
 - [ ] [19 · Handoff: DESIGN.md and review](19-handoff.md)
