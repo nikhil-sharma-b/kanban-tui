@@ -195,6 +195,94 @@ The key hint system is what users rely on most, so it has the strictest rules.
 
 **The Short Footer Rule.** A dialog footer is one row: either a Status message or 3–4 hints plus `? more`, never both. Extra keys go behind `?`.
 
+## Screens
+
+Every page in `design.figcraft`, with its ticket and frames (all 120×36 = 1280×760; `-80x24` frames are 672×432). Checked in the handoff review: every frame on pages 01–18 is named `<ticket>/<state>` and has the right size.
+
+| Page | Ticket | Frames |
+|---|---|---|
+| 01 Board | [ticket](.scratch/design-tickets/01-board.md) | `01/default`, `01/default-80x24`, `01/sync-error`, `01/sync-reloaded`, `01/filter-active`, `01/more-columns`, `01/overflow-column`, `01/empty-board`, `01/empty-column` |
+| 02 Narrow | [ticket](.scratch/design-tickets/02-narrow-80x24.md) | `02/dialog-80x24`, `02/move-right-80x24`, `02/board-80x24`, `02/breakpoint-rule` |
+| 03 Task detail | [ticket](.scratch/design-tickets/03-task-detail.md) | `03/view`, `03/no-whiteboards`, `03/empty-title`, `03/unsaved`, `03/copied`, `03/whiteboards`, `03/status-picker`, `03/command-line`, `03/edit-description`, `03/edit-title`, `03/command-line-80x24`, `03/view-80x24` |
+| 04 New task | [ticket](.scratch/design-tickets/04-create-task.md) | `04/empty`, `04/created`, `04/empty-title`, `04/command-line`, `04/description`, `04/typing`, `04/column-picker`, `04/typing-80x24`, `04/created-80x24` |
+| 05 Search and filter | [ticket](.scratch/design-tickets/05-search-filter.md) | `05/typing`, `05/live-filtered`, `05/no-results`, `05/filter-persisting`, `05/cleared`, `05/typing-80x24`, `05/no-results-80x24`, `05/filter-persisting-80x24`, `05/live-filtered-80x24`, `05/cleared-80x24` |
+| 06 Columns | [ticket](.scratch/design-tickets/06-columns.md) | `06/add`, `06/rename-in-place`, `06/delete-non-empty`, `06/duplicate-name`, `06/add-80x24`, `06/rename-in-place-80x24`, `06/delete-non-empty-80x24`, `06/duplicate-name-80x24` |
+| 07 Projects | [ticket](.scratch/design-tickets/07-projects.md) | `07/switcher`, `07/single-project`, `07/no-matches`, `07/filtering`, `07/actions`, `07/new`, `07/rename`, `07/delete`, `07/switcher-80x24`, `07/actions-80x24`, `07/filtering-80x24`, `07/no-matches-80x24`, `07/single-project-80x24`, `07/new-80x24`, `07/rename-80x24`, `07/delete-80x24` |
+| 08 Whiteboards | [ticket](.scratch/design-tickets/08-whiteboards.md) | `08/list`, `08/empty`, `08/delete`, `08/rename`, `08/open-in-editor`, `08/list-80x24`, `08/open-in-editor-80x24`, `08/rename-80x24`, `08/delete-80x24`, `08/empty-80x24` |
+| 09 Confirm | [ticket](.scratch/design-tickets/09-confirm.md) | `09/delete-task`, `09/delete-column`, `09/delete-column-matched`, `09/delete-project`, `09/delete-project-matched`, `09/delete-project-typing`, `09/delete-whiteboard`, `09/clear-daily`, `09/clear-daily-matched`, `09/archive-task`, `09/archive-old`, `09/delete-task-80x24`, `09/delete-project-80x24`, `09/archive-old-80x24` |
+| 10 Archive | [ticket](.scratch/design-tickets/10-archive.md) | `10/list`, `10/searching`, `10/no-match`, `10/empty`, `10/detail`, `10/restored`, `10/restore-fallback`, `10/archive-old`, `10/archived-old`, `10/archive-old-none`, `10/list-80x24`, `10/searching-80x24`, `10/detail-80x24`, `10/archive-old-80x24`, `10/empty-80x24` |
+| 11 Daily | [ticket](.scratch/design-tickets/11-daily.md) | `11/daily`, `11/empty`, `11/promoted`, `11/promote-project`, `11/no-columns-fallback`, `11/promote-column`, `11/daily-80x24`, `11/empty-80x24`, `11/promote-column-80x24`, `11/promote-project-80x24` |
+| 12 Command palette | [ticket](.scratch/design-tickets/12-command-palette.md) | `12/empty`, `12/second-step`, `12/no-match`, `12/typing`, `12/from-dialog`, `12/empty-80x24`, `12/second-step-80x24` |
+| 13 Focus mode | [ticket](.scratch/design-tickets/13-focus-mode.md) | `13/doing`, `13/doing-80x24`, `13/advanced`, `13/no-doing` |
+| 14 Which-key | [ticket](.scratch/design-tickets/14-which-key.md) | `14/root`, `14/unbound`, `14/pending`, `14/group-task`, `14/group-task-80x24`, `14/root-80x24`, `14/placement-flip` |
+| 15 Feedback | [ticket](.scratch/design-tickets/15-feedback.md) | `15/saved`, `15/archived-undo`, `15/moved`, `15/copied-id`, `15/archived-undo-80x24`, `15/store-unreadable-80x24`, `15/save-error`, `15/external-reload`, `15/store-unreadable` |
+| 16 Light Dusk | [ticket](.scratch/design-tickets/16-light-dusk.md) | `16/board`, `16/board-80x24`, `16/task-detail`, `16/task-detail-80x24`, `16/projects`, `16/projects-80x24`, `16/palette`, `16/palette-80x24`, `16/focus`, `16/focus-80x24` |
+| 17 Theme setting | [ticket](.scratch/design-tickets/17-theme-setting.md) | `17/dusk-ansi16`, `17/terminal`, `17/dusk-light`, `17/dusk`, `17/palette-theme`, `17/palette-theme-80x24` |
+| 18 First run | [ticket](.scratch/design-tickets/18-first-run.md) | `18/first-task`, `18/no-projects-80x24`, `18/first-project`, `18/no-projects`, `18/cheat-sheet`, `18/cheat-sheet-80x24` |
+
+## Tokens → lipgloss
+
+One `Palette` struct per theme, one field per token, built with `lipgloss.Color`. `dusk` uses the dark column, `dusk-light` the light column, `terminal` picks one of the two from the detected background (`lipgloss.HasDarkBackground()`, no answer → dark). When `termenv` reports fewer than 256 colours, use the ansi16 column whatever the theme. `NoColor{}` means leave the attribute unset (`lipgloss.NoColor{}`).
+
+| Token | dark (`dusk`) | light (`dusk-light`) | ansi16 |
+|---|---|---|---|
+| `bg` | `#17151A` | `#F7F3F6` | `NoColor{}` (never painted) |
+| `surface` | `#1F1C23` | `#EEE8ED` | `"0"` |
+| `surface-done` | `#1B191E` | `#F3EFF2` | `NoColor{}` |
+| `surface-selected` | `#2A2430` | `#E8D9E4` | `"8"` |
+| `border` | `#2E2A33` | `#DDD5DC` | `"8"` |
+| `accent` | `#D4A5C7` | `#8E4F7E` | `"5"` |
+| `text` | `#E2DBE6` | `#221E26` | `"15"` |
+| `text-card` | `#C9C2CD` | `#3A333F` | `"7"` |
+| `text-muted` | `#A39BA8` | `#5F5765` | `"7"` |
+| `text-dim` | `#6E6675` | `#756D7A` | `"8"` |
+| `text-faint` | `#4A4550` | `#928B96` | `"8" + Faint(true)` |
+| `text-done` | `#4F4955` | `#8F8892` | `"8" + Faint(true)` |
+| `meta` | `#9A8296` | `#745A6F` | `"5" + Faint(true)` |
+| `success` | `#9FC6A6` | `#3F7D4E` | `"2"` |
+| `danger` | `#E28C8C` | `#B44A4A` | `"1"` |
+
+- **Typography:** `Dusk/Title` → `.Bold(true)`; `Dusk/Body` and `Dusk/Hint` → plain. The 13px hint size is a mockup detail; terminals have one size.
+- **Rounded:** card corners → quarter-block glyphs `▗▖▝▘` in `surface` on `bg`; dialog → `lipgloss.RoundedBorder()` with `BorderForeground(border)`.
+- **Spacing:** `cell-w`/`cell-h` are mockup units only; in code every size is whole cells.
+- **Scrim:** the FigCraft `scrim` variable (70% black overlay) is a mockup aid. In code there is no transparency: re-render the board behind a dialog with every foreground set to `text-faint` and fills dropped.
+
+## Breakpoints
+
+| Width W / height H | Rule |
+|---|---|
+| Visible columns | N = clamp(floor(W/28), 1, 4); hidden columns listed in the Column rail |
+| Dialog size | min(60, W−8) cols × min(20, H−4) rows, fixed while open |
+| Keybar | `Size=wide` at W ≥ 100, else `Size=narrow` |
+| Density | H < 30 → compact: no card insets, 1 blank row between cards |
+| Which-key | corner popover; flips to top when it would cover the selection (`14/placement-flip`) |
+
+## Keybind map
+
+Board keys. Rows marked *planned* come from the designs and are not yet in `internal/ui/leader.go`; every other row matches it. Board screens may only use keys listed here; dialog keys follow the Fixed Order Rule.
+
+| Keys | Action |
+|---|---|
+| `h j k l` / arrows | select column / task |
+| `g g` · `G` | first · last task |
+| `↵` | open task detail |
+| `/` | search / refine filter |
+| `esc` | back one level, clear filter (*planned*; today only cancels a pending leader) |
+| `:` | command palette (page 12, *planned*) |
+| `z` | focus mode (page 13, *planned*) |
+| `?` | help / cheat sheet |
+| `q` · `ctrl+c` | quit |
+| `SPC t` `n e x a` | task: new, edit, delete, archive |
+| `SPC t` `h l` · `k j` | task: move column · reorder |
+| `SPC t` `w y` | task: whiteboards, copy id |
+| `SPC c` `n r d h l` | column: new, rename, delete, move left/right |
+| `SPC p` `p n r x` | project: switch, new, rename, delete |
+| `SPC a` `v o` | archive: view, archive old done |
+| `SPC d` `d m p X` | daily: back (toggle), done, promote, clear |
+| `u` | undo (offered in toasts, page 15, *planned*) |
+
+Dialogs: `j k` (or `↑↓` beside a live filter) move, `↵` confirm, `tab` next field, `ctrl+e` $EDITOR, `:wq` save, `y` confirm (Safe-Key-First Rule), `esc` back.
+
 ## Do's and Don'ts
 
 ### Do:

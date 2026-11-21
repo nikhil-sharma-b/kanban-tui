@@ -21,4 +21,4 @@ Order: 00 → 01 → 02, then any order, 19 last.
 - [x] [16 · Light Dusk](16-light-dusk.md)
 - [x] [17 · Theme setting and fallbacks](17-theme-setting.md)
 - [x] [18 · First run and empty workspace](18-first-run.md)
-- [ ] [19 · Handoff: DESIGN.md and review](19-handoff.md)
+- [x] [19 · Handoff: DESIGN.md and review](19-handoff.md)
