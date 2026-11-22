@@ -61,6 +61,48 @@ func SearchFilter(now time.Time) *domain.Workspace {
 	return workspace(project("home", now, tasks), dailyWithTasks(now))
 }
 
+// ArchiveOld is the home board with every done task untouched for over 30
+// days, as 09/archive-old counts them.
+func ArchiveOld(now time.Time) *domain.Workspace {
+	tasks := homeTasks()
+	for i := range tasks["done"] {
+		tasks["done"][i].age += 30 * 24 * time.Hour
+	}
+	return workspace(project("home", now, tasks), dailyWithTasks(now))
+}
+
+// WithWorkProject adds project "work" to the home workspace: 14 tasks, 5 of
+// them archived, as 09/delete-project describes it.
+func WithWorkProject(now time.Time) *domain.Workspace {
+	specs := map[domain.Status][]taskSpec{}
+	for i := 1; i <= 14; i++ {
+		status := Columns[i%len(Columns)]
+		specs[status] = append(specs[status], taskSpec{title: fmt.Sprintf("work task %d", i), age: time.Duration(i) * 24 * time.Hour})
+	}
+	work := project("work", now, specs)
+	for _, status := range Columns[:2] {
+		ids := work.Board.Order[status]
+		n := min(len(ids), 5-archivedCount(work.Board))
+		for _, id := range ids[:n] {
+			at := now.Add(-time.Hour)
+			task := work.Board.Tasks[id]
+			task.ArchivedAt, task.ArchivedFrom = &at, task.Status
+		}
+		work.Board.Order[status] = ids[n:]
+	}
+	return workspace(project("home", now, homeTasks()), work, dailyWithTasks(now))
+}
+
+func archivedCount(b *domain.Board) int {
+	n := 0
+	for _, t := range b.Tasks {
+		if t.Archived() {
+			n++
+		}
+	}
+	return n
+}
+
 func homeTasks() map[domain.Status][]taskSpec {
 	return map[domain.Status][]taskSpec{
 		"backlog": {

@@ -191,32 +191,3 @@ func drawDiscardFooter(g *termgrid.Grid, p dusk.Palette, row, width int) {
 	}
 	drawStatusMessage(g, p, x, row, width, StatusPrompt, prompt)
 }
-
-func (m *model) taskDeleteDialog() *termgrid.Grid {
-	// 02/dialog-80x24 specifies a shorter confirmation, not a detail view.
-	w, h := m.dialogSize(10)
-	if w < 2 || h < 2 {
-		return nil
-	}
-	task := m.confirmTask
-	title := fmt.Sprintf("Delete task “%s”?", task.Title)
-	body := shortID(task.ID)
-	var losses []string
-	if strings.TrimSpace(task.Description) != "" {
-		losses = append(losses, "its description")
-	}
-	if n := len(task.Whiteboards); n > 0 {
-		link := "links"
-		if n == 1 {
-			link = "link"
-		}
-		losses = append(losses, fmt.Sprintf("its %d whiteboard %s", n, link))
-	}
-	if len(losses) == 2 {
-		body += ", " + strings.Join(losses, " and ")
-	} else if len(losses) == 1 {
-		body += " and " + losses[0]
-	}
-	body += " will be permanently deleted."
-	return confirmationDialog(m.palette, w, h, title, body, true, []KeyHint{{"esc", "keep"}, {"y", "delete"}})
-}

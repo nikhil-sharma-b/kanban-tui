@@ -7,6 +7,8 @@
 **Status:** ready-for-agent
 
 - [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 09/delete-task, 09/delete-column, 09/delete-column-matched, 09/delete-project, 09/delete-project-matched, 09/delete-project-typing, 09/delete-whiteboard, 09/clear-daily, 09/clear-daily-matched, 09/archive-task, 09/archive-old, 09/delete-task-80x24, 09/delete-project-80x24, 09/archive-old-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Tests cover: ↵ is inert in tier 1; tier 2 acts only after an exact match; esc keeps in both tiers
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Tests cover: ↵ is inert in tier 1; tier 2 acts only after an exact match; esc keeps in both tiers
+
+**Open:** 12 of 14 frames enforced. 09/clear-daily and 09/clear-daily-matched draw the home board behind the dialog under a “daily” header; the real daily board can't match that, so only their dialog is enforced (TestClearDailyDialog) and they stay pending until the design is fixed.

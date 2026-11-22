@@ -41,8 +41,8 @@ func TestArchiveKeyOpensConfirmation(t *testing.T) {
 	if got.mode != modeConfirm {
 		t.Fatalf("mode = %v, want %v", got.mode, modeConfirm)
 	}
-	if !strings.Contains(got.confirmMsg, "Archive task") {
-		t.Fatalf("unexpected confirm message: %q", got.confirmMsg)
+	if !strings.Contains(got.confirm.title, "Archive task") {
+		t.Fatalf("unexpected confirm title: %q", got.confirm.title)
 	}
 }
 
@@ -140,8 +140,8 @@ func TestBulkArchiveConfirmMessage(t *testing.T) {
 	if got.mode != modeConfirm {
 		t.Fatalf("mode = %v, want %v", got.mode, modeConfirm)
 	}
-	if got.confirmMsg != "Archive Done tasks not updated in more than 30 days?" {
-		t.Fatalf("unexpected confirm message: %q", got.confirmMsg)
+	if got.confirm.title != "Archive old done tasks?" {
+		t.Fatalf("unexpected confirm title: %q", got.confirm.title)
 	}
 }
 

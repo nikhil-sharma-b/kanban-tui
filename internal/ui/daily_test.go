@@ -111,11 +111,12 @@ func TestDailyClearAsksConfirmationThenDeletesEverything(t *testing.T) {
 	if m.mode != modeConfirm {
 		t.Fatalf("mode = %v, want %v", m.mode, modeConfirm)
 	}
-	if !strings.Contains(m.confirmMsg, "Clear the daily board") {
-		t.Fatalf("unexpected confirm message: %q", m.confirmMsg)
+	if !strings.Contains(m.confirm.title, "Clear the daily board") {
+		t.Fatalf("unexpected confirm title: %q", m.confirm.title)
 	}
 
-	next, cmd := m.updateConfirm(runeKey('y'))
+	m.confirmInput.SetValue("daily")
+	next, cmd := m.updateConfirm(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(*model)
 	if cmd == nil {
 		t.Fatal("expected a save command")

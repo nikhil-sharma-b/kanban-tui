@@ -76,6 +76,36 @@ var Scenarios = map[string]Scenario{
 	"05/no-results-80x24":        searchScenario(80, 24, "x"),
 	"05/filter-persisting-80x24": searchScenario(80, 24, "enter", "l"),
 	"05/cleared-80x24":           searchScenario(80, 24, "enter", "esc"),
+	"09/delete-task":             confirmScenario(sample.Workspace, 120, 36, "space", "t", "x"),
+	"09/delete-task-80x24":       confirmScenario(sample.Workspace, 80, 24, "space", "t", "x"),
+	"09/archive-task":            confirmScenario(sample.Workspace, 120, 36, "space", "t", "a"),
+	"09/archive-old":             confirmScenario(sample.ArchiveOld, 120, 36, "space", "a", "o"),
+	"09/archive-old-80x24":       confirmScenario(sample.ArchiveOld, 80, 24, "space", "a", "o"),
+	"09/delete-whiteboard":       confirmScenario(sample.TaskDetail, 120, 36, "space", "t", "w", "x"),
+	"09/delete-column":           confirmScenario(sample.Workspace, 120, 36, "space", "c", "d"),
+	"09/delete-column-matched":   confirmScenario(sample.Workspace, 120, 36, "space", "c", "d", "t", "o", "d", "o"),
+	"09/clear-daily":             clearDailyScenario(),
+	"09/clear-daily-matched":     clearDailyScenario("d", "a", "i", "l", "y"),
+	"09/delete-project":          deleteProjectScenario(120, 36),
+	"09/delete-project-80x24":    deleteProjectScenario(80, 24),
+	"09/delete-project-typing":   deleteProjectScenario(120, 36, "w", "o", "r"),
+	"09/delete-project-matched":  deleteProjectScenario(120, 36, "w", "o", "r", "k"),
+}
+
+// confirmScenario selects “Undo for move and delete” in todo (the board every
+// 09 frame shows behind its dialog), then presses keys.
+func confirmScenario(ws func(time.Time) *domain.Workspace, w, h int, keys ...string) Scenario {
+	return Scenario{Workspace: ws, W: w, H: h, Palette: dusk.Dark, Keys: append([]string{"l", "j"}, keys...)}
+}
+
+// clearDailyScenario opens the daily board and asks to clear it.
+func clearDailyScenario(keys ...string) Scenario {
+	return Scenario{Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: append([]string{"space", "d", "d", "space", "d", "X"}, keys...)}
+}
+
+// deleteProjectScenario deletes “work” from the projects list, over the home board.
+func deleteProjectScenario(w, h int, keys ...string) Scenario {
+	return confirmScenario(sample.WithWorkProject, w, h, append([]string{"space", "p", "p", "esc", "j", "x"}, keys...)...)
 }
 
 func searchScenario(w, h int, keys ...string) Scenario {

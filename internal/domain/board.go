@@ -808,6 +808,12 @@ func insertStatus(statuses []Status, index int, status Status) []Status {
 	return out
 }
 
+// ReplacementColumn is where DeleteColumn moves status's tasks: the column to
+// its left, or to its right for the first column.
+func (b *Board) ReplacementColumn(status Status) Status {
+	return fallbackColumn(b.Columns, b.StatusIndex(normalizeStatus(status)))
+}
+
 func fallbackColumn(columns []Status, deletedIndex int) Status {
 	if len(columns) <= 1 || deletedIndex < 0 || deletedIndex >= len(columns) {
 		return ""

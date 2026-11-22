@@ -203,10 +203,9 @@ type model struct {
 	showHelp           bool
 	lastStatus         string
 	lastErr            error
-	confirmMsg         string
+	confirm            confirmation
 	confirmPrev        mode
-	confirmAction      func() (tea.Model, tea.Cmd)
-	confirmTask        *domain.Task
+	confirmInput       textinput.Model
 	detailScroll       int
 	detailWhiteboards  bool
 	detailHelp         bool
@@ -320,6 +319,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		descInput:          descInput,
 		searchInput:        searchInput,
 		columnInput:        columnInput,
+		confirmInput:       textinput.New(),
 		projectInput:       projectInput,
 		projectFilterInput: projectFilterInput,
 		whiteboardInput:    whiteboardInput,
@@ -469,8 +469,8 @@ func (m *model) View() string {
 	if m.mode == modeDetail || m.mode == modeDetailEdit || m.mode == modeCreate {
 		return m.placeDialog(board, m.taskDetail())
 	}
-	if m.mode == modeConfirm && m.confirmTask != nil {
-		return m.placeDialog(board, m.taskDeleteDialog())
+	if m.mode == modeConfirm {
+		return m.placeDialog(board, m.confirmDialog())
 	}
 	if m.mode == modeSearch {
 		return m.placeDialog(board, m.searchDialog())
@@ -490,8 +490,6 @@ func (m *model) View() string {
 		return m.placeOverlayCenter(view, m.renderWhiteboardsDialog())
 	case modeWhiteboardRename:
 		return m.placeOverlayCenter(view, m.renderWhiteboardRenameDialog())
-	case modeConfirm:
-		return m.placeOverlayCenter(view, m.renderConfirmDialog())
 	case modeArchive:
 		return m.placeOverlayCenter(view, m.renderArchiveDialog())
 	case modeArchiveDetail:
@@ -575,11 +573,7 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.lastStatus = "daily board is already empty"
 			return m, nil
 		}
-		return m.askConfirm(
-			fmt.Sprintf("Clear the daily board? %d task(s) will be deleted.", len(m.board.Tasks)),
-			modeBoard,
-			func() (tea.Model, tea.Cmd) { return m.clearDailyBoard() },
-		)
+		return m.confirmClearDaily()
 	case actColumnLeft:
 		if m.activeColumn > 0 {
 			m.activeColumn--
@@ -647,13 +641,7 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case actColumnDelete:
 		statuses := m.board.Statuses()
 		if len(statuses) > 0 && m.activeColumn < len(statuses) {
-			col := statuses[m.activeColumn]
-			taskCount := len(m.board.Order[col])
-			msg := fmt.Sprintf("Delete column %q?", col.Title())
-			if taskCount > 0 {
-				msg = fmt.Sprintf("Delete column %q? Its %d task(s) will move to an adjacent column.", col.Title(), taskCount)
-			}
-			return m.askConfirm(msg, modeBoard, func() (tea.Model, tea.Cmd) { return m.deleteColumn() })
+			return m.confirmDeleteColumn(statuses[m.activeColumn])
 		}
 	case actSearch:
 		return m.openSearch()
@@ -667,29 +655,15 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case actTaskDelete:
 		task := m.selectedTask()
 		if task != nil {
-			m.askConfirm("", modeBoard, func() (tea.Model, tea.Cmd) { return m.deleteTask(task) })
-			m.confirmTask = task
-			return m, nil
+			return m.confirmDeleteTask(task, modeBoard)
 		}
 	case actTaskArchive:
 		task := m.selectedTask()
 		if task != nil {
-			title := task.Title
-			if len(title) > 20 {
-				title = title[:20] + "…"
-			}
-			return m.askConfirm(
-				fmt.Sprintf("Archive task %q?", title),
-				modeBoard,
-				func() (tea.Model, tea.Cmd) { return m.archiveSelected() },
-			)
+			return m.confirmArchiveTask(task)
 		}
 	case actArchiveOld:
-		return m.askConfirm(
-			"Archive Done tasks not updated in more than 30 days?",
-			modeBoard,
-			func() (tea.Model, tea.Cmd) { return m.archiveOldDone() },
-		)
+		return m.confirmArchiveOld()
 	case actArchiveView:
 		m.mode = modeArchive
 		m.archiveCursor = 0
@@ -1418,28 +1392,6 @@ func (m *model) beginProjectEdit(id, name string, back mode) (tea.Model, tea.Cmd
 	return m, textinput.Blink
 }
 
-func (m *model) confirmDeleteProject(project *domain.Project, back mode) (tea.Model, tea.Cmd) {
-	return m.askConfirm(
-		fmt.Sprintf("Delete project %q and all its tasks?", project.Name),
-		back,
-		func() (tea.Model, tea.Cmd) {
-			if err := m.workspace.DeleteProject(project.ID); err != nil {
-				m.lastErr = err
-				m.mode = back
-				return m, nil
-			}
-			m.activateProject(m.workspace.ActiveProjectID)
-			if remaining := len(m.workspace.RegularProjects()); m.projectCursor >= remaining {
-				m.projectCursor = remaining - 1
-			}
-			m.lastErr = nil
-			m.lastStatus = fmt.Sprintf("deleted project %s", project.Name)
-			m.mode = back
-			return m, m.saveWorkspaceCmd()
-		},
-	)
-}
-
 func (m *model) updateProjectEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
@@ -1854,18 +1806,6 @@ func (m *model) renameSelectedWhiteboard() (tea.Model, tea.Cmd) {
 	return m, m.saveWorkspaceCmd()
 }
 
-func (m *model) confirmDeleteWhiteboard() (tea.Model, tea.Cmd) {
-	whiteboard := m.selectedWhiteboard()
-	if whiteboard == nil {
-		return m, nil
-	}
-	return m.askConfirm(
-		fmt.Sprintf("Delete whiteboard %q and its file?", whiteboard.Name),
-		modeWhiteboards,
-		func() (tea.Model, tea.Cmd) { return m.deleteSelectedWhiteboard() },
-	)
-}
-
 func (m *model) deleteSelectedWhiteboard() (tea.Model, tea.Cmd) {
 	task := m.selectedTask()
 	whiteboard := m.selectedWhiteboard()
@@ -2125,77 +2065,6 @@ func (m *model) updateArchiveDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 	return m, nil
-}
-
-func (m *model) askConfirm(msg string, prev mode, action func() (tea.Model, tea.Cmd)) (tea.Model, tea.Cmd) {
-	m.confirmTask = nil
-	m.confirmMsg = msg
-	m.confirmPrev = prev
-	m.confirmAction = action
-	m.mode = modeConfirm
-	return m, nil
-}
-
-func (m *model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.confirmTask != nil {
-		switch msg.String() {
-		case "y":
-			m.confirmTask = nil
-			return m.confirmAction()
-		case "esc":
-			m.confirmTask = nil
-			m.mode = m.confirmPrev
-		}
-		return m, nil
-	}
-	switch msg.String() {
-	case "y", "Y", "enter":
-		return m.confirmAction()
-	case "n", "N", "esc":
-		m.mode = m.confirmPrev
-		return m, nil
-	}
-	return m, nil
-}
-
-func (m *model) renderConfirmDialog() string {
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.Red).
-		Render("⚠  Confirm")
-	dialogWidth := m.dialogWidth(40)
-	contentWidth := m.dialogContentWidth(dialogWidth, 2)
-
-	separator := lipgloss.NewStyle().
-		Foreground(theme.Red).
-		Render(strings.Repeat("━", contentWidth))
-
-	message := lipgloss.NewStyle().
-		Foreground(theme.Text).
-		Width(contentWidth).
-		Render(m.confirmMsg)
-
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	hint := keyStyle.Render("y/enter") + hintStyle.Render(" confirm  ") +
-		keyStyle.Render("n/esc") + hintStyle.Render(" cancel")
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		separator,
-		"",
-		message,
-		"",
-		hint,
-	)
-
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Red).
-		Padding(1, 2).
-		Width(dialogWidth).
-		Render(content)
 }
 
 func (m *model) moveSelection(delta int) {
