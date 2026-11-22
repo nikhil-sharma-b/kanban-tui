@@ -19,6 +19,7 @@ import (
 
 	"github.com/nikhilsharma/kanban-tui/internal/domain"
 	"github.com/nikhilsharma/kanban-tui/internal/store"
+	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
 )
 
 const cardSlotHeight = 4
@@ -70,25 +71,25 @@ var theme = struct {
 	Mantle    lipgloss.TerminalColor
 	Crust     lipgloss.TerminalColor
 }{
-	// ANSI colors inherit their RGB values from the user's terminal theme.
-	Rosewater: lipgloss.Color("7"),
-	Flamingo:  lipgloss.Color("1"),
-	Pink:      lipgloss.Color("5"),
-	Mauve:     lipgloss.Color("5"),
-	Red:       lipgloss.Color("1"),
-	Peach:     lipgloss.Color("3"),
-	Yellow:    lipgloss.Color("3"),
-	Green:     lipgloss.Color("2"),
-	Teal:      lipgloss.Color("6"),
-	Blue:      lipgloss.Color("4"),
-	Lavender:  lipgloss.Color("6"),
-	Text:      lipgloss.NoColor{},
-	Subtext1:  lipgloss.NoColor{},
-	Subtext0:  lipgloss.Color("8"),
-	Overlay0:  lipgloss.Color("8"),
-	Surface2:  lipgloss.Color("8"),
-	Surface1:  lipgloss.Color("8"),
-	Surface0:  lipgloss.Color("8"),
+	// Pre-Dusk names, mapped onto Dusk tokens until each screen is redrawn.
+	Rosewater: dusk.Dark.TextCard.Color,
+	Flamingo:  dusk.Dark.Danger.Color,
+	Pink:      dusk.Dark.Accent.Color,
+	Mauve:     dusk.Dark.Accent.Color,
+	Red:       dusk.Dark.Danger.Color,
+	Peach:     dusk.Dark.Meta.Color,
+	Yellow:    dusk.Dark.Meta.Color,
+	Green:     dusk.Dark.Success.Color,
+	Teal:      dusk.Dark.Success.Color,
+	Blue:      dusk.Dark.Meta.Color,
+	Lavender:  dusk.Dark.Accent.Color,
+	Text:      dusk.Dark.Text.Color,
+	Subtext1:  dusk.Dark.TextCard.Color,
+	Subtext0:  dusk.Dark.TextMuted.Color,
+	Overlay0:  dusk.Dark.TextDim.Color,
+	Surface2:  dusk.Dark.TextFaint.Color,
+	Surface1:  dusk.Dark.Border.Color,
+	Surface0:  dusk.Dark.Border.Color,
 	Base:      lipgloss.NoColor{},
 	Mantle:    lipgloss.NoColor{},
 	Crust:     lipgloss.NoColor{},
@@ -198,6 +199,8 @@ type model struct {
 	confirmAction      func() (tea.Model, tea.Cmd)
 	// prevProjectID is the project to return to when leaving the daily board.
 	prevProjectID string
+	palette       dusk.Palette
+	now           func() time.Time
 }
 
 // ansiStripRe matches ANSI escape sequences for the dim/blur effect.
@@ -306,6 +309,8 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		whiteboardInput:    whiteboardInput,
 		archiveFilterInput: archiveFilterInput,
 		saveBarrier:        initialSaveBarrier,
+		palette:            dusk.Dark,
+		now:                time.Now,
 	}
 
 	if !project.Daily {
@@ -418,10 +423,15 @@ func (m *model) View() string {
 		return ""
 	}
 
-	header := m.renderHeader()
-	board := m.renderBoard()
-	footer := m.renderFooter()
-	view := lipgloss.JoinVertical(lipgloss.Left, header, board, footer)
+	var view string
+	footerHeight := 2
+	if m.useCompactBoardLayout() {
+		footer := m.renderFooter()
+		footerHeight = lipgloss.Height(footer)
+		view = lipgloss.JoinVertical(lipgloss.Left, m.renderHeader(), m.renderBoard(), footer)
+	} else {
+		view = m.renderDuskBoard()
+	}
 
 	switch m.mode {
 	case modeCreate:
@@ -455,7 +465,7 @@ func (m *model) View() string {
 			return m.placeOverlayCenter(view, m.renderHelpOverlay())
 		}
 		if float := m.renderWhichKey(); float != "" {
-			return m.placeFloatBottomRight(view, float, lipgloss.Height(footer))
+			return m.placeFloatBottomRight(view, float, footerHeight)
 		}
 		return view
 	}
@@ -2550,7 +2560,7 @@ func (m *model) renderTaskCard(task *domain.Task, width int, selected bool, acce
 		cardParts = append(cardParts, descStyle.Render(desc))
 	}
 	cardParts = append(cardParts, metaStyle.Render(
-		shortID(task.ID)+" \u00b7 "+relativeTime(task.UpdatedAt),
+		shortID(task.ID)+" \u00b7 "+relativeTime(m.clock(), task.UpdatedAt),
 	))
 
 	card := lipgloss.JoinVertical(lipgloss.Left, cardParts...)
@@ -2930,7 +2940,7 @@ func (m *model) renderWhiteboardsDialog() string {
 		}
 		name := lipgloss.NewStyle().Foreground(theme.Text).Render(truncate(whiteboard.Name, max(1, contentWidth/2)))
 		path := lipgloss.NewStyle().Foreground(theme.Subtext0).Render(truncate(whiteboard.Path, max(1, contentWidth-lipgloss.Width(prefix)-6)))
-		meta := lipgloss.NewStyle().Foreground(theme.Overlay0).Render(relativeTime(whiteboard.UpdatedAt))
+		meta := lipgloss.NewStyle().Foreground(theme.Overlay0).Render(relativeTime(m.clock(), whiteboard.UpdatedAt))
 		row := lipgloss.JoinVertical(lipgloss.Left, lipgloss.JoinHorizontal(lipgloss.Center, prefix, name, spacer(max(1, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(name)-lipgloss.Width(meta))), meta), spacer(0)+path)
 		rows = append(rows, row)
 	}
@@ -3753,8 +3763,8 @@ func statusEmptyMessage(status domain.Status) string {
 	}
 }
 
-func relativeTime(t time.Time) string {
-	d := time.Since(t)
+func relativeTime(now, t time.Time) string {
+	d := now.Sub(t)
 	switch {
 	case d < time.Minute:
 		return "just now"

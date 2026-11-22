@@ -3,7 +3,7 @@ PREFIX  ?= $(HOME)/.local
 BINDIR  ?= $(PREFIX)/bin
 SKILLDIR ?= $(HOME)/.claude/skills
 
-.PHONY: build install install-skill uninstall test clean
+.PHONY: build install install-skill uninstall test framecheck clean
 
 build:
 	go build -o $(BINARY) ./cmd/kanban
@@ -24,6 +24,10 @@ uninstall:
 
 test:
 	go test ./...
+
+# Compares the app with design.figcraft; reports for failing frames go to .framecheck/.
+framecheck:
+	go test ./internal/framecheck -count=1 -v -run 'TestFrames|TestComponents|TestLedger'
 
 clean:
 	rm -f $(BINARY)
