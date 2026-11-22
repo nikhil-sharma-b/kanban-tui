@@ -11,11 +11,14 @@ import (
 
 // newDialog draws the Foundations shell. Callers lay out content inside it.
 func newDialog(p dusk.Palette, w, h int) *termgrid.Grid {
-	g := termgrid.New(w, h, tokenBG(p, dusk.SurfaceSelected))
+	return roundedBox(p, w, h, dusk.SurfaceSelected)
+}
+
+func roundedBox(p dusk.Palette, w, h int, surface dusk.Token) *termgrid.Grid {
+	g := termgrid.New(w, h, tokenBG(p, surface))
 	if w < 2 || h < 2 {
 		return g
 	}
-	// The Foundations Dialog uses text-faint, unlike the Menu border.
 	border := tokenFG(p, dusk.TextFaint, false)
 	rule := strings.Repeat("─", w-2)
 	g.Text(0, 0, "╭"+rule+"╮", border)

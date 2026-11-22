@@ -32,6 +32,7 @@ const (
 	searchDialogPadding   = 2
 	createDialogPadding   = 3
 	maxCreateInputWidth   = 84
+	taskTitleCharLimit    = 120
 	maxModalInputWidth    = 42
 	maxDescriptionHeight  = 14
 	minDescriptionHeight  = 4
@@ -96,6 +97,7 @@ const (
 	modeCreate
 	modeSearch
 	modeDetail
+	modeDetailEdit
 	modeAddColumn
 	modeRenameColumn
 	modeProjects
@@ -180,6 +182,13 @@ type model struct {
 	pendingKeys        []string // unfinished key sequence, e.g. ["space", "t"]
 	projectEditPrev    mode     // where the project name dialog returns on cancel/rename
 	editingTaskID      string
+	editReturn         mode
+	editDiscard        bool
+	editHelp           bool
+	editDescTop        int
+	detailTaskID       string
+	detailStatusMenu   bool
+	detailStatusCursor int
 	vimNormal          bool
 	vimVisual          *vimSelection
 	vim                vimEngine
@@ -225,7 +234,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	titleInput := textinput.New()
 	titleInput.Prompt = ""
 	titleInput.Placeholder = "What needs to be done?"
-	titleInput.CharLimit = 120
+	titleInput.CharLimit = taskTitleCharLimit
 	titleInput.Width = maxCreateInputWidth
 	titleInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
 	titleInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
@@ -345,6 +354,9 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.syncResponsiveLayout()
 		m.syncAllScroll()
+		if m.mode == modeDetailEdit {
+			m.resizeDetailEditor()
+		}
 		return m, nil
 	case queuedSaveFinishedMsg:
 		if msg.sequence < m.latestSaveResult {
@@ -398,6 +410,8 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.mode {
 		case modeCreate:
 			return m.updateCreate(msg)
+		case modeDetailEdit:
+			return m.updateDetailEdit(msg)
 		case modeSearch:
 			return m.updateSearch(msg)
 		case modeDetail:
@@ -437,7 +451,7 @@ func (m *model) View() string {
 
 	footerHeight := 2
 	board := m.duskBoard()
-	if m.mode == modeDetail {
+	if m.mode == modeDetail || m.mode == modeDetailEdit {
 		return m.placeDialog(board, m.taskDetail())
 	}
 	if m.mode == modeConfirm && m.confirmTask != nil {
@@ -619,9 +633,11 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.searchInput.Focus()
 		return m, textinput.Blink
 	case actOpen:
-		if m.selectedTask() != nil {
+		if task := m.selectedTask(); task != nil {
 			m.mode = modeDetail
+			m.detailTaskID = task.ID
 			m.detailScroll, m.detailWhiteboards, m.detailHelp, m.detailStatus = 0, false, false, ""
+			m.detailStatusMenu = false
 		}
 	case actTaskDelete:
 		task := m.selectedTask()
@@ -823,6 +839,10 @@ func (m *model) updateCreateInner(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Always handle ctrl+e regardless of vim mode.
 	switch msg.String() {
 	case "ctrl+e":
+		if m.mode == modeDetailEdit {
+			m.titleInput.CharLimit = taskTitleCharLimit
+			m.syncResponsiveLayout()
+		}
 		m.mode = modeBoard
 		m.titleInput.Blur()
 		m.descInput.Blur()
@@ -891,6 +911,9 @@ func (m *model) updateCreateVimNormal(msg tea.KeyMsg, key string) (tea.Model, te
 		if m.vim.pending() {
 			m.vim.reset()
 			return m, nil
+		}
+		if m.mode == modeDetailEdit {
+			return m.requestDetailDiscard()
 		}
 		m.vimNormal = false
 		m.mode = modeBoard
@@ -1103,6 +1126,16 @@ func (m *model) saveTask(closePanel bool) (tea.Model, tea.Cmd) {
 	if m.editingTaskID != "" {
 		task, err := m.board.UpdateTask(m.editingTaskID, title, description)
 		if err != nil {
+			if m.mode == modeDetailEdit {
+				m.detailStatusKind, m.detailStatus = StatusDanger, err.Error()
+				if strings.TrimSpace(title) == "" {
+					m.detailStatus = "title can't be empty"
+					m.descInput.Blur()
+					m.titleInput.Focus()
+					m.vimNormal = false
+				}
+				return m, nil
+			}
 			m.lastErr = err
 			return m, nil
 		}
@@ -1113,6 +1146,13 @@ func (m *model) saveTask(closePanel bool) (tea.Model, tea.Cmd) {
 		m.selectTask(task.ID)
 		if closePanel {
 			m.closeCreatePanel()
+		} else if m.mode == modeDetailEdit {
+			// Compare future changes to the normalized values that were saved.
+			posTitle := m.titleInput.Position()
+			m.titleInput.SetValue(task.Title)
+			m.titleInput.SetCursor(posTitle)
+			pos := descBuffer{m}.Cursor()
+			descBuffer{m}.SetText(task.Description, pos)
 		}
 
 		return m, m.saveWorkspaceCmd()
@@ -1141,6 +1181,10 @@ func (m *model) saveTask(closePanel bool) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) closeCreatePanel() {
+	if m.mode == modeDetailEdit {
+		m.titleInput.CharLimit = taskTitleCharLimit
+		m.syncResponsiveLayout()
+	}
 	m.mode = modeBoard
 	m.editingTaskID = ""
 	m.vimNormal = false
@@ -1459,14 +1503,23 @@ func (m *model) beginEditSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	m.editReturn = m.mode
 	m.editingTaskID = task.ID
-	m.mode = modeCreate
+	m.mode = modeDetailEdit
+	m.editDiscard, m.editHelp = false, false
+	m.editDescTop, m.detailStatus = 0, ""
 	m.vimNormal = false
 	m.vimVisual = nil
 	m.vimReplace = false
+	m.vimCommand, m.vimStatus = "", ""
 	m.vim.reset()
+	m.resizeDetailEditor()
+	// Preserve existing titles over the creation limit (e.g. from the CLI).
+	m.titleInput.CharLimit = max(taskTitleCharLimit, len([]rune(task.Title)))
 	m.titleInput.SetValue(task.Title)
+	m.titleInput.CursorEnd()
 	m.descInput.SetValue(task.Description)
+	descBuffer{m}.SetCursor(0)
 	m.titleInput.Focus()
 	m.descInput.Blur()
 	m.lastErr = nil
@@ -1525,6 +1578,9 @@ func (m *model) deleteColumn() (tea.Model, tea.Cmd) {
 
 func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.detailStatus = ""
+	if m.detailStatusMenu {
+		return m.updateDetailStatusMenu(msg.String())
+	}
 	if msg.String() == "?" {
 		m.detailHelp = !m.detailHelp
 		return m, nil
@@ -1554,6 +1610,11 @@ func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeBoard
 	case "e":
 		return m.beginEditSelected()
+	case "s":
+		if task := m.selectedTask(); task != nil {
+			m.detailStatusMenu = true
+			m.detailStatusCursor = max(0, m.board.StatusIndex(task.Status))
+		}
 	case "w":
 		if task := m.selectedTask(); task != nil && m.detailLayout(len(task.Whiteboards)).listRows > 0 {
 			m.detailWhiteboards, m.whiteboardCursor = true, 0
@@ -1654,6 +1715,7 @@ func (m *model) openWhiteboards() (tea.Model, tea.Cmd) {
 	if task == nil {
 		return m, nil
 	}
+	m.detailTaskID = task.ID
 	if len(task.Whiteboards) == 0 {
 		m.whiteboardCursor = 0
 	} else if m.whiteboardCursor >= len(task.Whiteboards) {
@@ -2276,6 +2338,19 @@ func (m *model) selectTask(id string) {
 }
 
 func (m *model) selectedTask() *domain.Task {
+	switch {
+	case m.mode == modeDetailEdit:
+		return m.board.Tasks[m.editingTaskID]
+	case m.mode == modeDetail || m.mode == modeWhiteboards || m.mode == modeWhiteboardRename ||
+		(m.mode == modeConfirm && m.confirmPrev == modeWhiteboards):
+		if m.detailTaskID != "" {
+			return m.board.Tasks[m.detailTaskID]
+		}
+	}
+	return m.boardSelectedTask()
+}
+
+func (m *model) boardSelectedTask() *domain.Task {
 	if len(m.board.Statuses()) == 0 {
 		return nil
 	}

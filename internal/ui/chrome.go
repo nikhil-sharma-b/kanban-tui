@@ -284,7 +284,7 @@ func (m *model) appHeader() AppHeader {
 // boardHints is the board keybar (DESIGN.md "The Board Keybar Rule"). Hints
 // that need a selected task are left out when there is none.
 func (m *model) boardHints(size KeybarSize) []KeyHint {
-	hasTask := m.selectedTask() != nil
+	hasTask := m.boardSelectedTask() != nil
 	filtered := m.filter != ""
 	var hints []KeyHint
 	add := func(ok bool, key, label string) {

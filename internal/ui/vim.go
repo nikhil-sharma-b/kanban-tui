@@ -624,7 +624,7 @@ func (b descBuffer) Cursor() int {
 	}
 	if row < len(lines) {
 		li := b.m.descInput.LineInfo()
-		pos += min(li.StartColumn+li.CharOffset, len([]rune(lines[row])))
+		pos += min(li.StartColumn+li.ColumnOffset, len([]rune(lines[row])))
 	}
 	return pos
 }
@@ -646,8 +646,10 @@ func (b descBuffer) SetCursor(pos int) {
 			col++
 		}
 	}
+	lines := strings.Split(string(text), "\n")
 	for b.m.descInput.Line() > row {
 		before := b.m.descInput.Line()
+		b.m.descInput.SetCursor(0)
 		b.m.descInput.CursorUp()
 		if b.m.descInput.Line() == before {
 			break
@@ -655,6 +657,7 @@ func (b descBuffer) SetCursor(pos int) {
 	}
 	for b.m.descInput.Line() < row {
 		before := b.m.descInput.Line()
+		b.m.descInput.SetCursor(len([]rune(lines[before])))
 		b.m.descInput.CursorDown()
 		if b.m.descInput.Line() == before {
 			break

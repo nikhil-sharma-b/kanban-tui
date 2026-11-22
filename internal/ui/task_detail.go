@@ -54,6 +54,7 @@ func (m *model) scrollDetail(down bool) {
 
 func (m *model) taskDetail() *termgrid.Grid {
 	task := m.selectedTask()
+	editing := m.mode == modeDetailEdit
 	if task == nil {
 		return nil
 	}
@@ -66,34 +67,60 @@ func (m *model) taskDetail() *termgrid.Grid {
 	const x = 3
 	right := l.width - 2 // exclusive right edge of content
 	textWidth := right - x
-	status := strings.ToLower(task.Status.Title()) + " · " + relativeTime(m.clock(), task.UpdatedAt)
+	status := strings.ToLower(task.Status.Title())
+	switch {
+	case m.editDiscard && editing:
+		status = "modified"
+	case m.detailStatusMenu:
+		status += " ▾"
+	}
+	status += " · " + relativeTime(m.clock(), task.UpdatedAt)
 	titleWidth := textWidth
 	if status = truncateCell(status, textWidth/2); status != "" {
 		titleWidth -= ansi.StringWidth(status) + 1
 		g.Text(right-ansi.StringWidth(status), 1, status, tokenFG(p, dusk.TextDim, false))
 	}
-	drawIdleInput(g, p, 1, 1, titleWidth+2, []string{task.Title}, IdleInputTitle, "")
+	title, description := task.Title, task.Description
+	if editing && !m.editDiscard {
+		title, description = m.titleInput.Value(), m.descInput.Value()
+	}
+	if editing && !m.editDiscard && m.titleInput.Focused() {
+		m.drawEditTitle(g, titleWidth)
+	} else {
+		drawIdleInput(g, p, 1, 1, titleWidth+2, []string{title}, IdleInputTitle, "")
+	}
 
-	lines := wrapDialogText(task.Description, textWidth)
+	lines := wrapDialogText(description, textWidth)
 	start := min(m.detailScroll, max(0, len(lines)-l.descRows))
+	if editing {
+		start = 0
+		if !m.editDiscard {
+			start = min(m.editDescTop, max(0, len(lines)-l.descRows))
+		}
+	}
 	end := min(len(lines), start+l.descRows)
-	drawIdleInput(g, p, 1, detailDescRow, textWidth+2, lines[start:end], IdleInputBody, "")
+	editRemaining := 0
+	if editing && !m.editDiscard && m.descInput.Focused() {
+		editRemaining = m.drawEditDescription(g, l, textWidth)
+	} else {
+		drawIdleInput(g, p, 1, detailDescRow, textWidth+2, lines[start:end], IdleInputBody, "")
+	}
 
 	if l.listRows > 0 {
 		y := detailDescRow + l.descRows + 1
 		label := dusk.TextDim
-		if m.detailWhiteboards {
+		if m.detailWhiteboards && !editing {
 			label = dusk.Accent
 		}
 		g.Text(x, y, truncateCell(fmt.Sprintf("whiteboards · %d", len(task.Whiteboards)), textWidth), tokenFG(p, label, false))
 		first := 0
-		if m.detailWhiteboards {
+		if m.detailWhiteboards && !editing {
 			first = max(0, m.whiteboardCursor-l.listRows+1)
 		}
 		for i := first; i < min(len(task.Whiteboards), first+l.listRows); i++ {
 			w := task.Whiteboards[i]
 			state := ListRowDefault
-			if m.detailWhiteboards && i == m.whiteboardCursor {
+			if m.detailWhiteboards && !editing && i == m.whiteboardCursor {
 				state = ListRowSelected
 			}
 			format := w.Format
@@ -107,8 +134,25 @@ func (m *model) taskDetail() *termgrid.Grid {
 
 	hints := []KeyHint{{"e", "edit"}, {"s", "status"}, {"esc", "close"}, {"?", "more"}}
 	switch {
+	case editing && m.editDiscard:
+		prompt := "discard unsaved changes?"
+		discardHints := []KeyHint{{"y", "yes"}, {"n", "no"}}
+		if hintWidth := dialogHintsWidth(discardHints) + 2; textWidth > hintWidth {
+			prompt = truncateCell(prompt, textWidth-hintWidth)
+			hintX := ansi.StringWidth(prompt) + 2
+			drawDialogHints(g, p, x+hintX, l.footer, textWidth-hintX, discardHints)
+		}
+		drawStatusMessage(g, p, x, l.footer, textWidth, StatusPrompt, prompt)
+		return g
 	case m.detailStatus != "":
 		drawStatusMessage(g, p, x, l.footer, textWidth, m.detailStatusKind, m.detailStatus)
+		return g
+	case editing:
+		m.drawEditFooter(g, l, textWidth, editRemaining)
+		return g
+	case m.detailStatusMenu:
+		m.drawDetailStatusMenu(g, l, task.Status)
+		drawDialogHints(g, p, x, l.footer, textWidth, []KeyHint{{"j k", "move"}, {"↵", "set"}, {"esc", "cancel"}})
 		return g
 	case m.detailWhiteboards && m.detailHelp:
 		hints = []KeyHint{{"j k", "move"}, {"o", "open"}, {"esc", "back"}, {"?", "less"}}

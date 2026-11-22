@@ -4,10 +4,10 @@
 
 **Blocked by:** 05 — Dialog shell and task detail view
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 03/edit-title, 03/edit-description, 03/empty-title, 03/unsaved, 03/status-picker, 03/command-line, 03/command-line-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Every Text input variant, Command line and Menu match their 00 Foundations variants in dark and in the light preview
-- [ ] Vim editing behaviour that exists today keeps working in both fields
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 03/edit-title, 03/edit-description, 03/empty-title, 03/unsaved, 03/status-picker, 03/command-line, 03/command-line-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Every Text input variant, Command line and Menu match their 00 Foundations variants in dark and in the light preview
+- [x] Vim editing behaviour that exists today keeps working in both fields

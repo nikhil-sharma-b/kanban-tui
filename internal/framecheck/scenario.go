@@ -45,6 +45,14 @@ var Scenarios = map[string]Scenario{
 	"03/whiteboards":      {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "w"}},
 	"03/copied":           {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "y"}, WriteClipboard: func(string) error { return nil }},
 	"03/view-80x24":       {Workspace: sample.TaskDetail, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j", "enter"}},
+	"03/edit-title":       {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e"}},
+	// Insert the extra space after the third period, then return to the top.
+	"03/edit-description":   {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e", "tab", "esc", "f", ".", "f", ".", "f", ".", "a", "space", "esc", "g", "g", "i"}},
+	"03/empty-title":        {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e", "esc", "d", "d", ":", "w", "q", "enter"}},
+	"03/unsaved":            {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e", "tab", "!", "esc", "esc"}},
+	"03/status-picker":      {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "s", "j"}},
+	"03/command-line":       {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e", "tab", "esc", ":", "w", "q"}},
+	"03/command-line-80x24": {Workspace: sample.TaskDetail, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e", "tab", "esc", ":", "w", "q"}},
 }
 
 // Run renders the scenario through the app's normal update loop and returns

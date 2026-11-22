@@ -86,3 +86,113 @@ func TestTaskDeletionRequiresY(t *testing.T) {
 		}
 	}
 }
+
+func TestDetailEditCanKeepOrDiscardDraft(t *testing.T) {
+	for _, decision := range []string{"y", "n"} {
+		t.Run(decision, func(t *testing.T) {
+			w := sample.TaskDetail(sample.Now)
+			task := w.ActiveProject().Board.Tasks[sample.DetailTaskID]
+			original := task.Title
+			m := ui.New(w, nil, "")
+			m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+			m = press(m, "l", "j", "enter", "e", "!", "esc", "esc", decision)
+			if task.Title != original {
+				t.Fatalf("answering %s unexpectedly saved %q", decision, task.Title)
+			}
+			if decision == "n" {
+				m = press(m, ":", "w", "q", "enter")
+				if task.Title != original+"!" {
+					t.Errorf("save after keeping draft: title = %q", task.Title)
+				}
+			} else {
+				titleRow := ReadScreen(m.View(), 120, 36, dusk.Dark).Rows()[9]
+				if !strings.Contains(titleRow, original) || strings.Contains(titleRow, original+"!") {
+					t.Errorf("view after discard: %q", titleRow)
+				}
+			}
+		})
+	}
+}
+
+func TestDetailEditScrollFollowsVimCursor(t *testing.T) {
+	for _, size := range []tea.WindowSizeMsg{{Width: 120, Height: 36}, {Width: 80, Height: 24}} {
+		w := sample.TaskDetail(sample.Now)
+		task := w.ActiveProject().Board.Tasks[sample.DetailTaskID]
+		task.Description = strings.Repeat("A long paragraph that wraps across several terminal lines. ", 13) + "\nlast line"
+		m := ui.New(w, nil, "")
+		m, _ = m.Update(size)
+		m = press(m, "l", "j", "enter", "e", "tab", "esc", "G")
+		g := ReadScreen(m.View(), size.Width, size.Height, dusk.Dark)
+		rows := 8
+		if size.Height == 24 {
+			rows = 7
+		}
+		x, y := (size.Width-60)/2+3, (size.Height-20)/2+3+rows-1
+		if c := g.At(x, y); c.Ch != 'l' || c.BG != "text" {
+			t.Fatalf("%dx%d: last line caret = %+v, row %q", size.Width, size.Height, c, g.Rows()[y])
+		}
+		m = press(m, "A", "!", "esc", ":", "w", "q", "enter")
+		if !strings.HasSuffix(task.Description, "\nlast line!") {
+			t.Errorf("%dx%d: Vim append did not edit the last line", size.Width, size.Height)
+		}
+	}
+}
+
+func TestDetailStatusMenuSetsOnlyOnEnter(t *testing.T) {
+	w := sample.TaskDetail(sample.Now)
+	task := w.ActiveProject().Board.Tasks[sample.DetailTaskID]
+	m := ui.New(w, nil, "")
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	m = press(m, "l", "j", "enter", "s", "j", "esc")
+	if task.Status != "todo" {
+		t.Fatalf("cancel changed status to %s", task.Status)
+	}
+	m = press(m, "s", "j", "enter")
+	if task.Status != "doing" {
+		t.Errorf("set: got %s, want doing", task.Status)
+	}
+	titleRow := ReadScreen(m.View(), 120, 36, dusk.Dark).Rows()[9]
+	if !strings.Contains(titleRow, task.Title) || !strings.Contains(titleRow, "doing ·") {
+		t.Errorf("detail lost moved task: %q", titleRow)
+	}
+}
+
+func TestDetailRetainsTaskWhenSaveRemovesItFromFilter(t *testing.T) {
+	w := sample.TaskDetail(sample.Now)
+	m := ui.New(w, nil, "")
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	m = press(m, "/", "Undo for move and delete", "enter", "l", "enter", "e", "esc", "S", "Rewritten", "esc", ":", "w", "enter", "esc")
+	if titleRow := ReadScreen(m.View(), 120, 36, dusk.Dark).Rows()[9]; !strings.Contains(titleRow, "Rewritten") {
+		t.Errorf("detail lost filtered-out task: %q", titleRow)
+	}
+}
+
+func TestDetailCaretAfterFullWidthDescriptionLine(t *testing.T) {
+	w := sample.TaskDetail(sample.Now)
+	task := w.ActiveProject().Board.Tasks[sample.DetailTaskID]
+	task.Description = strings.Repeat("x", 55) + "\nlast line"
+	m := ui.New(w, nil, "")
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	m = press(m, "l", "j", "enter", "e", "tab", "esc", "$")
+	g := ReadScreen(m.View(), 120, 36, dusk.Dark)
+	if end, caret := g.At(87, 11), g.At(33, 12); end.Ch != 'x' || end.BG == "text" || caret.Ch != ' ' || caret.BG != "text" {
+		t.Fatalf("full-line end = %+v, wrapped caret = %+v", end, caret)
+	}
+	m = press(m, "j")
+	if caret := ReadScreen(m.View(), 120, 36, dusk.Dark).At(33, 13); caret.Ch != 'l' || caret.BG != "text" {
+		t.Fatalf("vertical motion did not reach next visual row: %+v", caret)
+	}
+}
+
+func TestEditingDescriptionKeepsLongExistingTitle(t *testing.T) {
+	w := sample.TaskDetail(sample.Now)
+	task := w.ActiveProject().Board.Tasks[sample.DetailTaskID]
+	title := strings.Repeat("Long title ", 12) + "end"
+	task.Title = title
+	m := ui.New(w, nil, "")
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	m = press(m, "l", "j", "enter", "e", "tab", "!", "esc", ":", "w", "q", "enter")
+	if task.Title != title || !strings.HasPrefix(task.Description, "!") {
+		t.Errorf("editing description changed existing title: %q", task.Title)
+	}
+}

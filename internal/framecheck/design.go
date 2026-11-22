@@ -536,6 +536,15 @@ func (r *renderer) fill(n *node, f paint, cx, cy, cw, ch float64) {
 		r.problem(n, "fill at %.2f,%.2f size %.2f×%.2f is off the cell grid", cx, cy, cw, ch)
 		return
 	}
+	if n.Type == "rectangle" && w == 1 && h == 1 && tok == "text" && strings.HasSuffix(n.Name, "caret") {
+		c := r.e.Grid.At(x, y)
+		if c.Ch != ' ' && c.Ch != 0 {
+			c.FG = c.BG
+		}
+		c.BG = tok
+		r.e.Grid.set(x, y, c)
+		return
+	}
 	for row := y; row < y+h; row++ {
 		for col := x; col < x+w; col++ {
 			r.e.Grid.set(col, row, Cell{Ch: ' ', BG: tok})

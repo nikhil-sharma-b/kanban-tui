@@ -230,6 +230,16 @@ func TestComponentsDialogs(t *testing.T) {
 			ui.ApplyScrim(g, p)
 			return g.Render(termenv.TrueColor)
 		}},
+		{"Command line", "Command line", "Status/Command line#0", func(p dusk.Palette, w, _ int) string {
+			return ui.RenderCommandLine(p, w, ":wq")
+		}},
+		{"Menu", "Menu", "List row + Menu/Menu#0", func(p dusk.Palette, w, _ int) string {
+			return ui.RenderMenu(p, w, []ui.MenuItem{
+				{Label: "1 backlog"},
+				{Label: "3 doing", State: ui.ListRowSelected},
+				{Label: "2 todo", Hint: "now", State: ui.ListRowDisabled},
+			})
+		}},
 	}
 	for i, row := range []struct {
 		name, label, hint string
@@ -255,6 +265,31 @@ func TestComponentsDialogs(t *testing.T) {
 		cases = append(cases, fixture{"Text input " + input.name + " " + input.variant, "Text input/Kind=" + input.name + ", State=" + input.variant,
 			fmt.Sprintf("Text input/Text input#%d", input.index), func(p dusk.Palette, w, _ int) string {
 				return ui.RenderIdleInput(p, w, input.value, input.kind, input.placeholder)
+			}})
+	}
+	for _, input := range []struct {
+		name, placeholder string
+		kind              ui.IdleInputKind
+		index, caret      int
+	}{
+		{"field", "", ui.IdleInputField, 0, 13},
+		{"field", "name", ui.IdleInputField, 2, 0},
+		{"title", "", ui.IdleInputTitle, 3, 13},
+		{"title", "title", ui.IdleInputTitle, 5, 0},
+		{"body", "", ui.IdleInputBody, 6, -1},
+		{"body", "description (optional)", ui.IdleInputBody, 8, 0},
+	} {
+		variant := "focused"
+		var lines []string
+		if input.placeholder != "" {
+			variant = "empty"
+		} else {
+			lines = []string{"Undo for move"}
+		}
+		cases = append(cases, fixture{"Text input " + input.name + " " + variant,
+			"Text input/Kind=" + input.name + ", State=" + variant, fmt.Sprintf("Text input/Text input#%d", input.index),
+			func(p dusk.Palette, w, h int) string {
+				return ui.RenderFocusedInput(p, w, h, lines, input.kind, input.placeholder, input.caret, 0)
 			}})
 	}
 	for i, status := range []struct {
