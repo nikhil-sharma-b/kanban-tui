@@ -52,6 +52,15 @@ func TaskDetailWithoutWhiteboards(now time.Time) *domain.Workspace {
 	return w
 }
 
+// SearchFilter is the home board as page 05 Search and filter shows it: the
+// two tasks matching "CLI" carry the descriptions and ages its frames show.
+func SearchFilter(now time.Time) *domain.Workspace {
+	tasks := homeTasks()
+	tasks["doing"][0] = taskSpec{id: "e2d81b4a6c094f1e8b3d5a7c9e1f2468", title: "Live reload from CLI writes", desc: "Repaint on data file change", age: 30 * time.Hour}
+	tasks["done"][1] = taskSpec{id: "d8140e2b7a3c4d5e9f1a2b3c4d5e6f70", title: "Agent skill for CLI", desc: "Document the agent workflow", age: 5 * 24 * time.Hour}
+	return workspace(project("home", now, tasks), dailyWithTasks(now))
+}
+
 func homeTasks() map[domain.Status][]taskSpec {
 	return map[domain.Status][]taskSpec{
 		"backlog": {

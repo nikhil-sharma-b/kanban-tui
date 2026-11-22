@@ -286,7 +286,7 @@ Board keys. Rows marked *planned* come from the designs and are not yet in `inte
 | `g g` · `G` | first · last task |
 | `↵` | open task detail |
 | `/` | search / refine filter |
-| `esc` | back one level, clear filter (*planned*; today only cancels a pending leader) |
+| `esc` | back one level: cancels a pending leader, then clears the filter |
 | `:` | command palette (page 12, *planned*) |
 | `z` | focus mode (page 13, *planned*) |
 | `?` | help / cheat sheet |

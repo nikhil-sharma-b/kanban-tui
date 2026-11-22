@@ -161,7 +161,8 @@ func TestDetailRetainsTaskWhenSaveRemovesItFromFilter(t *testing.T) {
 	w := sample.TaskDetail(sample.Now)
 	m := ui.New(w, nil, "")
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	m = press(m, "/", "Undo for move and delete", "enter", "l", "enter", "e", "esc", "S", "Rewritten", "esc", ":", "w", "enter", "esc")
+	// The filter selects its first match, so no column move is needed.
+	m = press(m, "/", "Undo for move and delete", "enter", "enter", "e", "esc", "S", "Rewritten", "esc", ":", "w", "enter", "esc")
 	if titleRow := ReadScreen(m.View(), 120, 36, dusk.Dark).Rows()[9]; !strings.Contains(titleRow, "Rewritten") {
 		t.Errorf("detail lost filtered-out task: %q", titleRow)
 	}

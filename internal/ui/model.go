@@ -155,6 +155,7 @@ type model struct {
 	visible            map[domain.Status][]string
 	filter             string
 	filterDraft        string
+	filterOrigin       *boardPlace // selection before the filter, restored on clear
 	columnInput        textinput.Model
 	projectInput       textinput.Model
 	mode               mode
@@ -471,11 +472,12 @@ func (m *model) View() string {
 	if m.mode == modeConfirm && m.confirmTask != nil {
 		return m.placeDialog(board, m.taskDeleteDialog())
 	}
+	if m.mode == modeSearch {
+		return m.placeDialog(board, m.searchDialog())
+	}
 	view := renderGrid(board)
 
 	switch m.mode {
-	case modeSearch:
-		return m.placeOverlayCenter(view, m.renderSearchDialog())
 	case modeAddColumn:
 		return m.placeOverlayCenter(view, m.renderAddColumnDialog())
 	case modeRenameColumn:
@@ -529,7 +531,17 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	switch m.resolveBoardKey(normalizeKey(msg)) {
+	if msg.String() == "esc" && len(m.pendingKeys) == 0 && m.filter != "" {
+		m.clearFilter()
+		return m, nil
+	}
+	action := m.resolveBoardKey(normalizeKey(msg))
+	switch action {
+	case actColumnLeft, actColumnRight, actTaskUp, actTaskDown:
+		// Moving while filtered keeps the new place when the filter clears.
+		m.filterOrigin = nil
+	}
+	switch action {
 	case actQuit:
 		return m, tea.Quit
 	case actDailyToggle:
@@ -644,12 +656,7 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.askConfirm(msg, modeBoard, func() (tea.Model, tea.Cmd) { return m.deleteColumn() })
 		}
 	case actSearch:
-		m.mode = modeSearch
-		m.filterDraft = m.filter
-		m.searchInput.SetValue(m.filter)
-		m.searchInput.CursorEnd()
-		m.searchInput.Focus()
-		return m, textinput.Blink
+		return m.openSearch()
 	case actOpen:
 		if task := m.selectedTask(); task != nil {
 			m.mode = modeDetail
@@ -1221,29 +1228,6 @@ func (m *model) closeCreatePanel() {
 	m.editDiscard = false
 	m.titleInput.Blur()
 	m.descInput.Blur()
-}
-
-func (m *model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.filter = m.filterDraft
-		m.mode = modeBoard
-		m.searchInput.Blur()
-		m.recalculateVisible()
-		return m, nil
-	case "enter":
-		m.filter = strings.TrimSpace(m.searchInput.Value())
-		m.mode = modeBoard
-		m.searchInput.Blur()
-		m.recalculateVisible()
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.searchInput, cmd = m.searchInput.Update(msg)
-	m.filter = strings.TrimSpace(m.searchInput.Value())
-	m.recalculateVisible()
-	return m, cmd
 }
 
 func (m *model) updateColumnDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -2421,51 +2405,6 @@ func (m *model) selectedWhiteboard() *domain.Whiteboard {
 // ─── Footer ──────────────────────────────────────────────────────────────────
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
-
-func (m *model) renderSearchDialog() string {
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.Blue).
-		Render("\u2315  Search")
-	dialogWidth := m.dialogWidth(searchDialogMaxWidth)
-	contentWidth := m.dialogContentWidth(dialogWidth, searchDialogPadding)
-
-	separator := lipgloss.NewStyle().
-		Foreground(theme.Blue).
-		Render(strings.Repeat("\u2501", contentWidth))
-
-	totalVisible := 0
-	for _, status := range m.board.Statuses() {
-		totalVisible += len(m.visible[status])
-	}
-	resultText := lipgloss.NewStyle().Foreground(theme.Subtext0).
-		Render(fmt.Sprintf("%d tasks matching", totalVisible))
-
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	hint := keyStyle.Render("enter") + hintStyle.Render(" apply  ") +
-		keyStyle.Render("esc") + hintStyle.Render(" restore")
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		separator,
-		"",
-		m.searchInput.View(),
-		"",
-		resultText,
-		"",
-		hint,
-	)
-
-	return lipgloss.NewStyle().
-		Width(dialogWidth).
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Blue).
-		Background(theme.Base).
-		Render(content)
-}
 
 // renderTaskDetail renders the detail dialog for an explicit task so archived
 // tasks (which are never the active-board selection) can reuse it. archived

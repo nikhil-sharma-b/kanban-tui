@@ -4,9 +4,9 @@
 
 **Blocked by:** 06 — Task editing
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 05/typing, 05/live-filtered, 05/no-results, 05/filter-persisting, 05/cleared, 05/typing-80x24, 05/no-results-80x24, 05/filter-persisting-80x24, 05/live-filtered-80x24, 05/cleared-80x24, 01/filter-active
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] The filter lives in memory only; nothing is written to the store
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 05/typing, 05/live-filtered, 05/no-results, 05/filter-persisting, 05/cleared, 05/typing-80x24, 05/no-results-80x24, 05/filter-persisting-80x24, 05/live-filtered-80x24, 05/cleared-80x24, 01/filter-active
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] The filter lives in memory only; nothing is written to the store

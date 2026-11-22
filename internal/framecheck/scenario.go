@@ -64,6 +64,22 @@ var Scenarios = map[string]Scenario{
 	"04/command-line":       newTaskScenario(120, 36, newTaskTitle, "tab", newTaskLine1, "enter", newTaskLine2, "esc", ":", "w", "q"),
 	"04/created":            newTaskCreatedScenario(120, 36),
 	"04/created-80x24":      newTaskCreatedScenario(80, 24),
+	"01/filter-active":      searchScenario(120, 36, "enter"),
+	// Typing "CLI" over the todo selection previews the two matches.
+	"05/typing":                  searchScenario(120, 36),
+	"05/live-filtered":           searchScenario(120, 36, "enter"),
+	"05/no-results":              searchScenario(120, 36, "x"),
+	"05/filter-persisting":       searchScenario(120, 36, "enter", "l"),
+	"05/cleared":                 searchScenario(120, 36, "enter", "esc"),
+	"05/typing-80x24":            searchScenario(80, 24),
+	"05/live-filtered-80x24":     searchScenario(80, 24, "enter"),
+	"05/no-results-80x24":        searchScenario(80, 24, "x"),
+	"05/filter-persisting-80x24": searchScenario(80, 24, "enter", "l"),
+	"05/cleared-80x24":           searchScenario(80, 24, "enter", "esc"),
+}
+
+func searchScenario(w, h int, keys ...string) Scenario {
+	return Scenario{Workspace: sample.SearchFilter, W: w, H: h, Palette: dusk.Dark, Keys: append([]string{"l", "j", "/", "C", "L", "I"}, keys...)}
 }
 
 const (

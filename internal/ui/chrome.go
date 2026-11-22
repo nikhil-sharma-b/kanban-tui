@@ -104,12 +104,17 @@ type AppHeader struct {
 	Project string
 	Counts  string
 	Sync    Sync
+	// Filter is the applied query, shown as a Badge chip after the project.
+	Filter string
 }
 
 func drawAppHeader(g *termgrid.Grid, p dusk.Palette, x, y, width int, h AppHeader) {
 	col := g.Text(x, y, "kanban-tui", tokenFG(p, dusk.Text, true))
 	col = g.Text(col+1, y, "›", tokenFG(p, dusk.TextFaint, false))
-	g.Text(col+1, y, h.Project, tokenFG(p, dusk.Accent, false))
+	col = g.Text(col+1, y, h.Project, tokenFG(p, dusk.Accent, false))
+	if h.Filter != "" {
+		drawBadge(g, p, col+1, y, "/ "+h.Filter)
+	}
 
 	dot, text, label := dusk.Success, dusk.TextDim, "live"
 	switch h.Sync {
@@ -271,6 +276,14 @@ func (m *model) appHeader() AppHeader {
 		open += len(m.board.Order[status])
 	}
 	h.Counts = fmt.Sprintf("%d open", open)
+	if m.filter != "" {
+		matches, total := m.filterCounts()
+		h.Counts = fmt.Sprintf("%d of %d match", matches, total)
+		if m.mode != modeSearch {
+			h.Filter = m.filter
+		}
+		return h
+	}
 	if first, n := m.boardWindow(); n < len(m.board.Statuses()) && !m.showRail() {
 		h.Counts = fmt.Sprintf("columns %d–%d of %d", first+1, first+n, len(m.board.Statuses()))
 		return h
@@ -289,8 +302,9 @@ func (m *model) appHeader() AppHeader {
 // boardHints is the board keybar (DESIGN.md "The Board Keybar Rule"). Hints
 // that need a selected task are left out when there is none.
 func (m *model) boardHints(size KeybarSize) []KeyHint {
-	hasTask := m.boardSelectedTask() != nil
 	filtered := m.filter != ""
+	// A filter keeps its keybar steady, matches or not (05/no-results).
+	hasTask := filtered || m.boardSelectedTask() != nil
 	var hints []KeyHint
 	add := func(ok bool, key, label string) {
 		if ok {
@@ -395,11 +409,15 @@ func (m *model) duskBoard() *termgrid.Grid {
 			if i == 0 && first > 0 && !rail {
 				hx = g.Text(x, 3, "‹", tokenFG(p, dusk.TextDim, false)) + 1
 			}
-			hx = drawColumnHeader(g, p, hx, 3, columnLabel(status, len(m.visible[status])), active)
+			label := columnLabel(status, len(m.visible[status]))
+			if m.filter != "" {
+				label = fmt.Sprintf("%s/%d", label, len(m.board.Order[status]))
+			}
+			hx = drawColumnHeader(g, p, hx, 3, label, active)
 			if i == n-1 && first+n < len(statuses) && !rail {
 				g.Text(hx+1, 3, "›", tokenFG(p, dusk.TextDim, false))
 			}
-			m.drawColumnBody(g, x, 4, colWidth, m.duskBodyHeight(), status, active && (m.mode != modeCreate || m.compact()), active || !boardEmpty)
+			m.drawColumnBody(g, x, 4, colWidth, m.duskBodyHeight(), status, active && (m.mode != modeCreate || m.compact()), m.filter == "" && (active || !boardEmpty))
 		}
 	}
 
