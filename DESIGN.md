@@ -20,17 +20,17 @@ colors:
 typography:
   title:
     fontFamily: "Menlo, monospace"
-    fontSize: "14px"
+    fontSize: "13.94px"
     fontWeight: 700
     lineHeight: "18px"
   body:
     fontFamily: "Menlo, monospace"
-    fontSize: "14px"
+    fontSize: "13.94px"
     fontWeight: 400
     lineHeight: "18px"
   label:
     fontFamily: "Menlo, monospace"
-    fontSize: "13px"
+    fontSize: "13.94px"
     fontWeight: 400
     lineHeight: "18px"
 rounded:
@@ -110,12 +110,15 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 
 ## Typography
 
-**Font:** Menlo (monospace), one size.
+**Font:** Menlo (monospace), one size: 13.94 px on an 18 px line. That is the size at which FigCraft advances every Menlo glyph, regular or bold, by exactly 8.4 px, so one character is one cell wide.
 
 ### Hierarchy
-- **Title** (Menlo Bold 14/18, text style `Dusk/Title`): dialog titles and the selected card title only.
-- **Body** (Menlo Regular 14/18, `Dusk/Body`): card titles, dialog body, field labels, inline meta.
-- **Label** (Menlo Regular 13/18, `Dusk/Hint`): key hints, scroll hints, chrome.
+- **Title** (Menlo Bold 13.94/18, text style `Dusk/Title`): dialog titles, the selected card title, and the bold chrome: app name, active column header, badge, prompt.
+- **Body** (Menlo Regular 13.94/18, `Dusk/Body`): card titles, dialog body, field labels, inline meta.
+- **Label** (Menlo Regular 13.94/18, `Dusk/Hint`): key hints, scroll hints, chrome. Same size as Body; the separate style only names the role.
+
+### Text boxes
+FigCraft rounds an auto-width text box up to a whole pixel, so a run of hugging texts drifts off the 8.4 px columns. Every single-line text box is therefore fixed width = glyph count × 8.4 px (`textAutoResize: height`); on an instance that width is the one non-content override the Override-Only-Content Rule allows. Card titles, descriptions and meta fill the card's text area instead. A box that is too narrow wraps onto a second line and turns 36 px tall, which is easy to spot.
 
 ### Named Rules
 **The One Size Rule.** Hierarchy is colour token + bold. No italics, no underline, no new sizes. Use the three text styles; never set a font by hand.
@@ -124,13 +127,14 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 
 ## Layout
 
-- **Cell grid:** 1 cell = 1 col × 1 row = 8.4 × 18 px. Every size is whole cells; half rows exist only through block glyphs.
+- **Cell grid:** 1 cell = 1 col × 1 row = 8.4 × 18 px. Every frame, instance and text box sits on whole cells relative to its screen frame and is whole cells in size; half rows exist only through block glyphs. The only exceptions are the shapes in **Shape → glyph rules** below.
 - **Frames:** each state at 120×36 cells (1008×648), plus an 80×24 variant whenever layout changes. Name frames `<ticket>/<state>` and `<ticket>/<state>-80x24`, one page per ticket.
 - **120×36 rows:** row 1 blank · row 2 header · row 4 column headers · rows 5–33 cards · row 35 keybar · row 36 blank. At 80×24 the same 1-row margin: header row 2, column rail row 21, keybar row 23. Screen gutter is 2 cols at every size (16.8 px, close to the 18 px row, so the margin looks even on all sides). Column gap is 4 cols at 120×36 and 2 at 80×24; columns are 26 cols wide at 120×36. The keybar sits on the same gutters, with hints 3 cols apart.
 - **Breakpoint rule** (frame `02/breakpoint-rule`): visible columns N = clamp(floor(W/28), 1, 4). Hidden columns are named in the **Column rail**.
 - **Dialogs:** min(60, W−8) cells wide, min(20, H−4) rows tall, fixed size. Nothing changes height while the user interacts.
 - **Truncation:** card titles and descriptions are one line each. Text wider than the card's text area (card width − 3 cols: 23 at 120×36, 34 at 80×24) is cut to width − 1 cols, trailing spaces dropped, and ends in `…`. lipgloss: `strings.TrimRight(ansi.Truncate(s, w-1, ""), " ") + "…"`.
-- **Compact density** below 30 rows: card insets dropped, 1 blank row between cards.
+- **Cards in a column:** at regular density a one-line card is 3 rows (inset row, title row, inset row) and cards stack with no gap; the half-row insets make the visible 1-row gap. The first card's top inset row sits directly under the column header (row 5 at 120×36).
+- **Compact density** below 30 rows (every 80×24 frame): `Density=compact` cards, no inset rows, 1 blank row between cards and below the column header.
 
 ## Elevation & Depth
 
@@ -138,9 +142,23 @@ Flat. Terminals have no shadows or transparency. Depth comes from tonal layering
 
 ## Shapes
 
-- **Cards:** quarter-block glyphs cut the corners (reads as 4px radius). Text always starts at col 2 in every state, so titles never shift when the selection moves.
-- **Dialogs and menus:** `╭╮╰╯` rounded box drawn in `border`.
-- **Focus:** a full-height `▌` accent bar, never an outline (an outline costs 2 rows and 2 cols).
+- **Cards:** quarter-block glyphs cut the corners (reads as 4px radius). Text always starts at col 2 in every state, so titles never shift when the selection moves. One col of right padding, so the text area is card width − 3 cols.
+- **Dialogs and menus:** `╭╮╰╯` rounded box drawn in `border`. The border takes the outer ring of cells: 1 row top and bottom, 1 col left and right. Inside a dialog the content starts at col 1; a row with a focus bar puts `▌` in col 1 and its text from col 3, and all other dialog text (title, body, labels, hints) also starts at col 3. One blank col stays inside the right border. A menu's rows start at col 1, their `▌` in col 1 and text from col 3.
+- **Focus:** a `▌` accent bar down every text row of the focused item, never an outline (an outline costs 2 rows and 2 cols). Rows with a bar (list rows, text inputs) put the bar in their col 0 and their text at col 2, like cards.
+- **Carets:** one full cell (8.4 × 18), in field inputs and in the command line.
+
+### Shape → glyph rules
+
+Every cell the app paints can be read from a frame: a text node gives the glyph, foreground (its fill variable) and bold (`Dusk/Title`) for one cell per character, and a filled frame or rectangle on whole cells gives the background of the cells it covers. The shapes below are the only nodes allowed off the cell grid, and each one maps to cells like this:
+
+| Shape in FigCraft | Cells in the terminal |
+|---|---|
+| Card `surface` rectangle: 4 px radius, inset 9 px from the top and bottom of its whole-row card frame (`Density=regular`) | Top inset row `▗`, then `▄` up to the last col, then `▖`; bottom inset row `▝`, `▀` repeated, `▘`; across the card's width, foreground = the surface colour, background = what is behind the card. The rows between are the surface colour as background. |
+| Card `surface` rectangle at `Density=compact` (square, full height) | Plain background cells, no corner or inset glyphs. |
+| Accent bar 4.2 px wide at col 0: Card `bar`, List row `focus bar`, Text input `Input focus bar` | `▌` in `accent` on the row's background, in every row the bar spans. A card's bar spans its text rows only, never the inset rows. |
+| Dialog and Menu frame stroke (1 px inside, 6 px / 4 px radius) | `╭─╮` in the top row, `│` in the left and right cols, `╰─╯` in the bottom row, foreground = the stroke colour, on the frame's fill. |
+| Caret rectangle (one full cell, `text` fill) | That cell with `text` as background (reverse video), not the terminal cursor. |
+| Scrim instance (full-frame `scrim` overlay) | No overlay: the board behind the dialog is repainted with every foreground set to `text-faint` and its fills dropped. |
 
 ## Components
 
@@ -148,7 +166,7 @@ All components live on **00 Foundations → Components**, with a light-mode prev
 
 | Component | Variants | Use it for |
 |---|---|---|
-| Card | `State=default / selected / done` | Every task on a board or list of tasks |
+| Card | `State=default / selected / done` × `Density=regular / compact` | Every task on a board or list of tasks (`compact` below 30 rows) |
 | Column header | `State=normal / active / editing` | Column titles, including in-place rename |
 | Column rail | — | Names of columns hidden at narrow widths |
 | App header | `Sync=live / error / reloaded` | Row 1 of every board screen |
@@ -162,7 +180,7 @@ All components live on **00 Foundations → Components**, with a light-mode prev
 | Badge | — | Board tags such as `daily` |
 | Toast | `Kind=success / danger / info` × `Hint` (boolean: `· key label`, e.g. `u undo`) | Transient feedback, bottom-right one row above the keybar |
 | Status message | `Kind=success / danger / info / prompt` | One-row messages in a dialog footer or keybar |
-| Command line | — | Typed `:` commands (`:wq▏`) |
+| Command line | — | Typed `:` commands (`:wq` and a full-cell caret) |
 | Scroll hint | `Dir=up / down` | `↑ N more` / `↓ N more` overflow markers |
 
 ### Named Rules
@@ -170,7 +188,7 @@ All components live on **00 Foundations → Components**, with a light-mode prev
 
 **The Extend-Don't-Fork Rule.** If no component fits, the fix goes into 00 Foundations: add a variant or property to the closest component (and to the light preview), then use it on the screen. Only create a new component when nothing is close, ask the user first, and add it to the table above in the same change.
 
-**The Override-Only-Content Rule.** On an instance, override text and the variant property. Don't override fills, fonts, padding or spacing. If you need to, the component needs a new variant.
+**The Override-Only-Content Rule.** On an instance, override text and the variant property, plus the fixed width of a single-line text box when its text changes (glyph count × 8.4 px, see **Typography → Text boxes**). Don't override fills, fonts, padding or spacing. If you need to, the component needs a new variant.
 
 ### Key hints
 
@@ -243,8 +261,8 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 | `success` | `#9FC6A6` | `#3F7D4E` | `"2"` |
 | `danger` | `#E28C8C` | `#B44A4A` | `"1"` |
 
-- **Typography:** `Dusk/Title` → `.Bold(true)`; `Dusk/Body` and `Dusk/Hint` → plain. The 13px hint size is a mockup detail; terminals have one size.
-- **Rounded:** card corners → quarter-block glyphs `▗▖▝▘` in `surface` on `bg`; dialog → `lipgloss.RoundedBorder()` with `BorderForeground(border)`.
+- **Typography:** `Dusk/Title` → `.Bold(true)`; `Dusk/Body` and `Dusk/Hint` → plain. The 13.94 px size is a mockup detail that makes one glyph exactly one 8.4 px cell; terminals have one size.
+- **Rounded:** card corners → quarter-block glyphs `▗▖▝▘` in `surface` on `bg`, inside the inset rows `▄`/`▀` (see **Shape → glyph rules**); dialog and menu → `lipgloss.RoundedBorder()` with `BorderForeground(border)`.
 - **Spacing:** `cell-w`/`cell-h` are mockup units only; in code every size is whole cells.
 - **Scrim:** the FigCraft `scrim` variable (70% black overlay) is a mockup aid. In code there is no transparency: re-render the board behind a dialog with every foreground set to `text-faint` and fills dropped.
 
@@ -256,7 +274,7 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 | Dialog size | min(60, W−8) cols × min(20, H−4) rows, fixed while open |
 | Keybar | `Size=wide` at W ≥ 100, else `Size=narrow` |
 | Density | H < 30 → compact: no card insets, 1 blank row between cards |
-| Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`). At 80×24 both columns sit under it, so it drops onto the keybar instead, leaving a blank row below the selected card. Menus and dialogs are whole rows: the border is drawn inside the padding. The popover is only as tall as its entries (root 6 rows, a group up to 8) and grows upward from a fixed bottom edge |
+| Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`). At 80×24 both columns sit under it, so it drops onto the keybar instead, leaving a blank row below the selected card. Menus and dialogs are whole rows: the border is drawn inside the padding. The popover is only as tall as its entries plus its 1-row borders (root 7 rows, a group up to 9) and grows upward from a fixed bottom edge |
 
 ## Keybind map
 
@@ -289,7 +307,7 @@ Dialogs: `j k` (or `↑↓` beside a live filter) move, `↵` confirm, `tab` nex
 ### Do:
 - **Do** start every new screen by duplicating the closest existing frame on its ticket page, or by placing 00 Foundations instances. Never from an empty frame with hand-drawn parts.
 - **Do** bind every colour to a Dusk variable and every text to a `Dusk/*` text style.
-- **Do** make every size whole cells (multiples of 8.4 px wide, 18 px tall).
+- **Do** make every size and position whole cells (multiples of 8.4 px wide, 18 px tall), including single-line text boxes (glyph count × 8.4 px). Only the shapes in **Shape → glyph rules** may sit on half cells.
 - **Do** ship the 80×24 variant whenever the layout changes, and check it against `02/breakpoint-rule`.
 - **Do** show a key hint for every action available on screen, in the Fixed Order.
 - **Do** run a consistency pass across all pages after changing a shared pattern: the same component, key and order everywhere.

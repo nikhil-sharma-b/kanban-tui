@@ -2,7 +2,7 @@
 
 Build the finished design in design.figcraft and DESIGN.md so the app matches every frame cell for cell. Work the frontier: any ticket whose blockers are all done.
 
-- [ ] [01 — Put the mockup on the cell grid](issues/01-cell-grid-mockup.md) · blocked by: none
+- [x] [01 — Put the mockup on the cell grid](issues/01-cell-grid-mockup.md) · blocked by: none
 - [ ] [02 — Frame-matching test and the empty board](issues/02-frame-matching-test-empty-board.md) · blocked by: 01 — Put the mockup on the cell grid
 - [ ] [03 — Board at 120×36](issues/03-board-120x36.md) · blocked by: 02 — Frame-matching test and the empty board
 - [ ] [04 — Narrow board at 80×24](issues/04-narrow-board-80x24.md) · blocked by: 03 — Board at 120×36
