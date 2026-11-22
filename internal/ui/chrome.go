@@ -268,6 +268,16 @@ func (m *model) appHeader() AppHeader {
 	if m.project != nil {
 		h.Project = m.project.Name
 	}
+	if m.onDailyBoard() && m.filter == "" {
+		// 11/daily: lowercase name and a count per column.
+		h.Project = strings.ToLower(m.project.Name)
+		var counts []string
+		for _, status := range m.board.Statuses() {
+			counts = append(counts, fmt.Sprintf("%d %s", len(m.board.Order[status]), status))
+		}
+		h.Counts = strings.Join(counts, " · ")
+		return h
+	}
 	open := 0
 	for _, status := range m.board.Statuses() {
 		if status == domain.StatusDone {

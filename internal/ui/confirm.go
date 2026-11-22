@@ -44,6 +44,7 @@ func typedName(title, body, name, verb, matched string, action func() (tea.Model
 func (m *model) askConfirm(c confirmation, prev mode) (tea.Model, tea.Cmd) {
 	m.confirm = c
 	m.confirmPrev = prev
+	m.lastStatus, m.lastErr = "", nil
 	m.mode = modeConfirm
 	m.confirmInput.SetValue("")
 	if c.typed() {

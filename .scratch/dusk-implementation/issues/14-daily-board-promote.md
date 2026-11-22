@@ -11,4 +11,3 @@
 - [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
 - [ ] Promote targets are the same set the app offers today, only grouped by project
 
-**Also:** move 09/clear-daily and 09/clear-daily-matched to enforced (their backdrop is the 11/daily board; scenario in framecheck already exists).

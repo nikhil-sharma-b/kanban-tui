@@ -145,7 +145,7 @@ func (m *model) taskCard(task *domain.Task, selected bool) Card {
 	case selected:
 		c.State = CardSelected
 		c.Desc = task.Description
-		c.Meta = cardMeta(task, m.clock())
+		c.Meta = cardMeta(task, m.clock(), m.onDailyBoard())
 	case task.Status == domain.StatusDone:
 		c.State = CardDone
 	}
@@ -153,13 +153,23 @@ func (m *model) taskCard(task *domain.Task, selected bool) Card {
 }
 
 // cardMeta is "short ID · relative age · ◇ whiteboard count", the count
-// hidden at 0.
-func cardMeta(task *domain.Task, now time.Time) string {
-	meta := shortID(task.ID) + " · " + relativeTime(now, task.UpdatedAt)
+// hidden at 0. The daily board says "today" for anything touched today (11/daily).
+func cardMeta(task *domain.Task, now time.Time, daily bool) string {
+	age := relativeTime(now, task.UpdatedAt)
+	if daily && sameDay(now, task.UpdatedAt) {
+		age = "today"
+	}
+	meta := shortID(task.ID) + " · " + age
 	if n := len(task.Whiteboards); n > 0 {
 		meta += fmt.Sprintf(" · ◇%d", n)
 	}
 	return meta
+}
+
+func sameDay(a, b time.Time) bool {
+	ay, am, ad := a.Local().Date()
+	by, bm, bd := b.Local().Date()
+	return ay == by && am == bm && ad == bd
 }
 
 // ─── Scroll hint ─────────────────────────────────────────────────────────────

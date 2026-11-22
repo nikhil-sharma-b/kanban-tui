@@ -100,7 +100,7 @@ func confirmScenario(ws func(time.Time) *domain.Workspace, w, h int, keys ...str
 
 // clearDailyScenario opens the daily board and asks to clear it.
 func clearDailyScenario(keys ...string) Scenario {
-	return Scenario{Workspace: sample.DailyBoard, W: 120, H: 36, Palette: dusk.Dark, Keys: append([]string{"space", "d", "d", "space", "d", "X"}, keys...)}
+	return Scenario{Workspace: sample.DailyBoard, W: 120, H: 36, Palette: dusk.Dark, Keys: append([]string{"space", "d", "d", "l", "j", "space", "d", "X"}, keys...)}
 }
 
 // deleteProjectScenario deletes “work” from the projects list, over the home board.

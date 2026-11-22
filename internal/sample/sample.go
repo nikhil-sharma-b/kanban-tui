@@ -65,7 +65,7 @@ func SearchFilter(now time.Time) *domain.Workspace {
 func DailyBoard(now time.Time) *domain.Workspace {
 	daily := dailyProject(now, map[domain.Status][]taskSpec{
 		domain.StatusWaiting: {{title: "Hear back from IT on laptop", age: 3 * time.Hour}, {title: "Design review sign-off", age: 2 * time.Hour}},
-		domain.StatusActive:  {{title: "Reply to standup thread", age: 90 * time.Minute}, {title: "Fix flaky CI test", desc: "Retries hide a race in the store", age: time.Hour}},
+		domain.StatusActive:  {{title: "Reply to standup thread", age: 90 * time.Minute}, {id: "d41e2b90c7a54f1e8b3d5a7c9e1f2468", title: "Fix flaky CI test", desc: "Retries hide a race in the store", age: time.Hour}},
 		domain.StatusNext:    {{title: "Book dentist", age: 30 * time.Minute}},
 	})
 	return workspace(project("home", now, homeTasks()), daily)

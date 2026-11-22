@@ -85,8 +85,8 @@ enforced 09/delete-project
 enforced 09/delete-project-matched
 enforced 09/delete-project-typing
 enforced 09/delete-whiteboard
-pending  09/clear-daily
-pending  09/clear-daily-matched
+enforced 09/clear-daily
+enforced 09/clear-daily-matched
 enforced 09/archive-task
 enforced 09/archive-old
 enforced 09/delete-task-80x24
