@@ -112,7 +112,14 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 	if c.State == CardSelected {
 		row++
 		if c.Desc != "" {
-			g.Text(x+2, row, truncateCell(c.Desc, textWidth), tokenFG(p, dusk.TextMuted, false))
+			desc := singleLine(c.Desc)
+			if c.Compact && strings.Contains(c.Desc, "\n") {
+				// Compact cards preview the first wrapped line of multiline descriptions.
+				if lines := wrapDialogText(c.Desc, textWidth); len(lines) > 0 {
+					desc = lines[0]
+				}
+			}
+			g.Text(x+2, row, truncateCell(desc, textWidth), tokenFG(p, dusk.TextMuted, false))
 			row++
 		}
 		row++ // one blank row before the meta
@@ -137,7 +144,7 @@ func (m *model) taskCard(task *domain.Task, selected bool) Card {
 	switch {
 	case selected:
 		c.State = CardSelected
-		c.Desc = singleLine(task.Description)
+		c.Desc = task.Description
 		c.Meta = cardMeta(task, m.clock())
 	case task.Status == domain.StatusDone:
 		c.State = CardDone

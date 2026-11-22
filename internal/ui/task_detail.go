@@ -53,6 +53,9 @@ func (m *model) scrollDetail(down bool) {
 }
 
 func (m *model) taskDetail() *termgrid.Grid {
+	if m.mode == modeCreate {
+		return m.taskCreate()
+	}
 	task := m.selectedTask()
 	editing := m.mode == modeDetailEdit
 	if task == nil {
@@ -85,7 +88,7 @@ func (m *model) taskDetail() *termgrid.Grid {
 		title, description = m.titleInput.Value(), m.descInput.Value()
 	}
 	if editing && !m.editDiscard && m.titleInput.Focused() {
-		m.drawEditTitle(g, titleWidth)
+		m.drawEditTitle(g, titleWidth, "")
 	} else {
 		drawIdleInput(g, p, 1, 1, titleWidth+2, []string{title}, IdleInputTitle, "")
 	}
@@ -101,7 +104,7 @@ func (m *model) taskDetail() *termgrid.Grid {
 	end := min(len(lines), start+l.descRows)
 	editRemaining := 0
 	if editing && !m.editDiscard && m.descInput.Focused() {
-		editRemaining = m.drawEditDescription(g, l, textWidth)
+		editRemaining = m.drawEditDescription(g, l, textWidth, true)
 	} else {
 		drawIdleInput(g, p, 1, detailDescRow, textWidth+2, lines[start:end], IdleInputBody, "")
 	}
@@ -135,14 +138,7 @@ func (m *model) taskDetail() *termgrid.Grid {
 	hints := []KeyHint{{"e", "edit"}, {"s", "status"}, {"esc", "close"}, {"?", "more"}}
 	switch {
 	case editing && m.editDiscard:
-		prompt := "discard unsaved changes?"
-		discardHints := []KeyHint{{"y", "yes"}, {"n", "no"}}
-		if hintWidth := dialogHintsWidth(discardHints) + 2; textWidth > hintWidth {
-			prompt = truncateCell(prompt, textWidth-hintWidth)
-			hintX := ansi.StringWidth(prompt) + 2
-			drawDialogHints(g, p, x+hintX, l.footer, textWidth-hintX, discardHints)
-		}
-		drawStatusMessage(g, p, x, l.footer, textWidth, StatusPrompt, prompt)
+		drawDiscardFooter(g, p, l.footer, textWidth)
 		return g
 	case m.detailStatus != "":
 		drawStatusMessage(g, p, x, l.footer, textWidth, m.detailStatusKind, m.detailStatus)
@@ -182,6 +178,18 @@ func (m *model) taskDetail() *termgrid.Grid {
 	}
 	drawDialogHints(g, p, x, l.footer, textWidth, hints)
 	return g
+}
+
+func drawDiscardFooter(g *termgrid.Grid, p dusk.Palette, row, width int) {
+	const x = 3
+	prompt := "discard unsaved changes?"
+	hints := []KeyHint{{"y", "yes"}, {"n", "no"}}
+	if hintWidth := dialogHintsWidth(hints) + 2; width > hintWidth {
+		prompt = truncateCell(prompt, width-hintWidth)
+		hintX := ansi.StringWidth(prompt) + 2
+		drawDialogHints(g, p, x+hintX, row, width-hintX, hints)
+	}
+	drawStatusMessage(g, p, x, row, width, StatusPrompt, prompt)
 }
 
 func (m *model) taskDeleteDialog() *termgrid.Grid {

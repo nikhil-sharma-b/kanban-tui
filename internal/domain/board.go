@@ -231,12 +231,6 @@ func (b *Board) Normalize() error {
 }
 
 func (b *Board) AddTask(title, description string) (*Task, error) {
-	if b.Tasks == nil {
-		b.Tasks = make(map[string]*Task)
-	}
-	if b.Order == nil {
-		b.Order = make(map[Status][]string)
-	}
 	if len(b.Columns) == 0 {
 		b.Columns = append([]Status{}, StatusOrder...)
 	}
@@ -246,10 +240,33 @@ func (b *Board) AddTask(title, description string) (*Task, error) {
 		return nil, err
 	}
 
-	task.Status = b.Columns[0]
+	if err := b.AppendTask(task, b.Columns[0]); err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
+// AppendTask places a newly constructed task at the end of an existing column.
+func (b *Board) AppendTask(task *Task, status Status) error {
+	if b.StatusIndex(status) < 0 {
+		return fmt.Errorf("column %q not found", status)
+	}
+	if task == nil || task.ID == "" || strings.TrimSpace(task.Title) == "" {
+		return fmt.Errorf("invalid new task")
+	}
+	if _, exists := b.Tasks[task.ID]; exists {
+		return fmt.Errorf("task %s already exists", task.ID)
+	}
+	if b.Tasks == nil {
+		b.Tasks = make(map[string]*Task)
+	}
+	if b.Order == nil {
+		b.Order = make(map[Status][]string)
+	}
+	task.Status = status
 	b.Tasks[task.ID] = task
 	b.Order[task.Status] = append(b.Order[task.Status], task.ID)
-	return task, nil
+	return nil
 }
 
 func (b *Board) UpdateTask(id, title, description string) (*Task, error) {

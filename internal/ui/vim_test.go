@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -202,22 +201,10 @@ func TestCreateVimWriteCommands(t *testing.T) {
 
 	enterVimCommand(m, ":w")
 	if m.mode != modeCreate {
-		t.Fatalf(":w mode = %v, want modeCreate", m.mode)
+		t.Fatalf(":w mode = %v, want modeCreate with draft intact", m.mode)
 	}
-	if m.editingTaskID == "" {
-		t.Fatal(":w did not retain created task for later updates")
-	}
-	if got := len(m.board.Tasks); got != 1 {
-		t.Fatalf("task count after :w = %d, want 1", got)
-	}
-
-	m.descInput.SetValue("Updated description")
-	enterVimCommand(m, ":w")
-	if got := len(m.board.Tasks); got != 1 {
-		t.Fatalf("task count after second :w = %d, want 1", got)
-	}
-	if got := m.board.Tasks[m.editingTaskID].Description; got != "Updated description" {
-		t.Fatalf("description after second :w = %q", got)
+	if got := len(m.board.Tasks); got != 0 {
+		t.Fatalf("task count after :w = %d, want 0", got)
 	}
 
 	enterVimCommand(m, ":wq")
@@ -228,13 +215,13 @@ func TestCreateVimWriteCommands(t *testing.T) {
 		t.Fatalf(":wq editingTaskID = %q, want empty", m.editingTaskID)
 	}
 
-	m = New(domain.NewWorkspace(), nil, "").(*model)
-	m.mode = modeCreate
-	m.vimNormal = true
-	m.titleInput.SetValue("New task")
-	enterVimCommand(m, ":wq")
-	if m.mode != modeBoard || len(m.board.Tasks) != 1 {
-		t.Fatalf("new task :wq mode = %v, task count = %d", m.mode, len(m.board.Tasks))
+	if len(m.board.Tasks) != 1 {
+		t.Fatalf(":wq task count = %d, want 1", len(m.board.Tasks))
+	}
+	for _, task := range m.board.Tasks {
+		if task.Title != "First title" || task.Description != "First description" {
+			t.Fatalf(":wq did not save the draft: %+v", task)
+		}
 	}
 }
 
@@ -265,17 +252,6 @@ func TestCreateVimVisualMode(t *testing.T) {
 	}
 	if got := m.titleInput.Value(); got != "foo " {
 		t.Fatalf("visual delete text = %q, want %q", got, "foo ")
-	}
-}
-
-func TestHighlightVisibleTextAcrossANSIStyles(t *testing.T) {
-	view := "\x1b[32mfo\x1b[0mo bar"
-	got := highlightVisibleText(view, "foo")
-	if !strings.Contains(got, "\x1b[7m") || !strings.Contains(got, "\x1b[27m") {
-		t.Fatalf("highlight missing from %q", got)
-	}
-	if plain := ansiStripRe.ReplaceAllString(got, ""); plain != "foo bar" {
-		t.Fatalf("highlight changed visible text to %q", plain)
 	}
 }
 

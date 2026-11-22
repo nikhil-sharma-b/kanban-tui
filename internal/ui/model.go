@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/cursor"
@@ -189,6 +188,11 @@ type model struct {
 	detailTaskID       string
 	detailStatusMenu   bool
 	detailStatusCursor int
+	createColumn       domain.Status
+	createProjectID    string
+	createFeedback     string
+	createSaving       bool
+	newTask            func(title, description string) (*domain.Task, error)
 	vimNormal          bool
 	vimVisual          *vimSelection
 	vim                vimEngine
@@ -322,6 +326,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		saveBarrier:        initialSaveBarrier,
 		palette:            dusk.Dark,
 		now:                time.Now,
+		newTask:            domain.NewTask,
 	}
 
 	if !project.Daily {
@@ -354,7 +359,7 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.syncResponsiveLayout()
 		m.syncAllScroll()
-		if m.mode == modeDetailEdit {
+		if m.mode == modeDetailEdit || m.mode == modeCreate {
 			m.resizeDetailEditor()
 		}
 		return m, nil
@@ -406,10 +411,19 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case editorFinishedMsg:
 		return m.handleEditorResult(msg)
+	case taskCreatedMsg:
+		return m.finishCreateTask(msg)
+	case cursor.BlinkMsg, tea.FocusMsg, tea.BlurMsg:
+		if m.mode == modeCreate && m.descInput.Focused() {
+			var cmd tea.Cmd
+			m.descInput.Cursor, cmd = m.descInput.Cursor.Update(msg)
+			return m, cmd
+		}
 	case tea.KeyMsg:
+		m.createFeedback = ""
 		switch m.mode {
 		case modeCreate:
-			return m.updateCreate(msg)
+			return m.updateNewTask(msg)
 		case modeDetailEdit:
 			return m.updateDetailEdit(msg)
 		case modeSearch:
@@ -451,7 +465,7 @@ func (m *model) View() string {
 
 	footerHeight := 2
 	board := m.duskBoard()
-	if m.mode == modeDetail || m.mode == modeDetailEdit {
+	if m.mode == modeDetail || m.mode == modeDetailEdit || m.mode == modeCreate {
 		return m.placeDialog(board, m.taskDetail())
 	}
 	if m.mode == modeConfirm && m.confirmTask != nil {
@@ -460,8 +474,6 @@ func (m *model) View() string {
 	view := renderGrid(board)
 
 	switch m.mode {
-	case modeCreate:
-		return m.placeOverlayCenter(view, m.renderCreateDialog())
 	case modeSearch:
 		return m.placeOverlayCenter(view, m.renderSearchDialog())
 	case modeAddColumn:
@@ -583,8 +595,14 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case actTaskReorderDown:
 		return m.reorderSelected(1)
 	case actTaskNew:
+		m.createColumn = statuses[m.activeColumn]
+		m.createProjectID = m.project.ID
 		m.editingTaskID = ""
 		m.mode = modeCreate
+		m.detailStatusMenu, m.editHelp, m.editDiscard = false, false, false
+		m.editDescTop, m.detailStatus = 0, ""
+		m.vimCommand, m.vimStatus = "", ""
+		m.resizeDetailEditor()
 		m.vimNormal = false
 		m.vimVisual = nil
 		m.vimReplace = false
@@ -742,17 +760,35 @@ func (m *model) handleEditorResult(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
 	defer os.Remove(msg.path)
 
 	if msg.err != nil {
+		if m.mode == modeCreate {
+			m.detailStatus = "editor: " + msg.err.Error()
+			return m, nil
+		}
 		m.lastErr = fmt.Errorf("editor: %w", msg.err)
 		return m, nil
 	}
 
 	content, err := os.ReadFile(msg.path)
 	if err != nil {
+		if m.mode == modeCreate {
+			m.detailStatus = "read file: " + err.Error()
+			return m, nil
+		}
 		m.lastErr = fmt.Errorf("read file: %w", err)
 		return m, nil
 	}
 
 	title, description := parseEditorContent(string(content))
+	if m.mode == modeCreate && m.editingTaskID == "" {
+		if title == "" {
+			m.closeCreatePanel()
+			return m, nil
+		}
+		m.titleInput.CharLimit = max(taskTitleCharLimit, len([]rune(title)))
+		m.titleInput.SetValue(title)
+		m.descInput.SetValue(description)
+		return m.createTask(title, description)
+	}
 	if title == "" {
 		if m.editingTaskID == "" {
 			m.lastStatus = "task creation cancelled"
@@ -782,22 +818,7 @@ func (m *model) handleEditorResult(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
 		return m, m.saveWorkspaceCmd()
 	}
 
-	task, err := m.board.AddTask(title, description)
-	if err != nil {
-		m.lastErr = err
-		return m, nil
-	}
-
-	m.lastStatus = fmt.Sprintf("created %s", shortID(task.ID))
-	m.lastErr = nil
-	m.filter = ""
-	m.searchInput.SetValue("")
-	m.activeColumn = 0
-	m.recalculateVisible()
-	m.selected[task.Status] = len(m.visible[task.Status]) - 1
-	m.syncScroll(task.Status)
-
-	return m, m.saveWorkspaceCmd()
+	return m, nil
 }
 
 func parseEditorContent(content string) (title, description string) {
@@ -830,7 +851,7 @@ func parseEditorContent(content string) (title, description string) {
 	return title, description
 }
 
-func (m *model) updateCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *model) updateEditorInput(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	model, cmd := m.updateCreateInner(msg)
 	return model, tea.Batch(cmd, m.syncVimCursor())
 }
@@ -839,6 +860,14 @@ func (m *model) updateCreateInner(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Always handle ctrl+e regardless of vim mode.
 	switch msg.String() {
 	case "ctrl+e":
+		if m.mode == modeCreate && m.editingTaskID == "" {
+			next, cmd := m.openEditorWithDraft()
+			if m.lastErr != nil {
+				m.detailStatus = m.lastErr.Error()
+				m.lastErr = nil
+			}
+			return next, cmd
+		}
 		if m.mode == modeDetailEdit {
 			m.titleInput.CharLimit = taskTitleCharLimit
 			m.syncResponsiveLayout()
@@ -869,6 +898,10 @@ func (m *model) updateCreateInner(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.vimNormal = true
 		return m, nil
+	case "enter":
+		if m.mode == modeCreate && m.titleInput.Focused() {
+			return m.createTask(m.titleInput.Value(), "")
+		}
 	case "tab", "shift+tab":
 		if m.titleInput.Focused() {
 			m.titleInput.Blur()
@@ -907,6 +940,10 @@ func (m *model) updateCreateVimNormal(msg tea.KeyMsg, key string) (tea.Model, te
 		m.vimCommand = ":"
 		m.vimStatus = m.vimCommand
 		return m, nil
+	case "enter":
+		if m.mode == modeCreate && m.titleInput.Focused() && !m.vim.pending() {
+			return m.createTask(m.titleInput.Value(), "")
+		}
 	case "esc":
 		if m.vim.pending() {
 			m.vim.reset()
@@ -915,11 +952,11 @@ func (m *model) updateCreateVimNormal(msg tea.KeyMsg, key string) (tea.Model, te
 		if m.mode == modeDetailEdit {
 			return m.requestDetailDiscard()
 		}
-		m.vimNormal = false
-		m.mode = modeBoard
-		m.titleInput.Blur()
-		m.descInput.Blur()
-		m.editingTaskID = ""
+		if m.titleInput.Value() != "" || m.descInput.Value() != "" {
+			m.editDiscard = true
+		} else {
+			m.closeCreatePanel()
+		}
 		return m, nil
 	case "v":
 		m.vim.reset()
@@ -1033,6 +1070,10 @@ func (m *model) updateCreateVimCommand(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.vimStatus = ""
 		switch command {
 		case ":w":
+			if m.mode == modeCreate {
+				m.detailStatus = "use :wq to create"
+				return m, nil
+			}
 			return m.saveTask(false)
 		case ":wq":
 			return m.saveTask(true)
@@ -1113,9 +1154,14 @@ func (m *model) syncVimCursor() tea.Cmd {
 	}
 	m.titleInput.Cursor.Style = style
 	m.descInput.Cursor.Style = style
+	titleCmd := m.titleInput.Cursor.SetMode(mode)
+	descCmd := m.descInput.Cursor.SetMode(mode)
+	if m.mode == modeCreate && m.descInput.Focused() && mode == cursor.CursorBlink {
+		descCmd = m.descInput.Cursor.BlinkCmd()
+	}
 	return tea.Batch(
-		m.titleInput.Cursor.SetMode(mode),
-		m.descInput.Cursor.SetMode(mode),
+		titleCmd,
+		descCmd,
 	)
 }
 
@@ -1158,31 +1204,12 @@ func (m *model) saveTask(closePanel bool) (tea.Model, tea.Cmd) {
 		return m, m.saveWorkspaceCmd()
 	}
 
-	task, err := m.board.AddTask(title, description)
-	if err != nil {
-		m.lastErr = err
-		return m, nil
-	}
-
-	m.lastStatus = fmt.Sprintf("created %s", shortID(task.ID))
-	m.lastErr = nil
-	m.editingTaskID = task.ID
-	m.filter = ""
-	m.searchInput.SetValue("")
-	m.activeColumn = 0
-	m.recalculateVisible()
-	m.selected[task.Status] = len(m.visible[task.Status]) - 1
-	m.syncScroll(task.Status)
-	if closePanel {
-		m.closeCreatePanel()
-	}
-
-	return m, m.saveWorkspaceCmd()
+	return m.createTask(title, description)
 }
 
 func (m *model) closeCreatePanel() {
+	m.titleInput.CharLimit = taskTitleCharLimit
 	if m.mode == modeDetailEdit {
-		m.titleInput.CharLimit = taskTitleCharLimit
 		m.syncResponsiveLayout()
 	}
 	m.mode = modeBoard
@@ -1191,6 +1218,7 @@ func (m *model) closeCreatePanel() {
 	m.vimVisual = nil
 	m.vimReplace = false
 	m.vimCommand = ""
+	m.editDiscard = false
 	m.titleInput.Blur()
 	m.descInput.Blur()
 }
@@ -2393,151 +2421,6 @@ func (m *model) selectedWhiteboard() *domain.Whiteboard {
 // ─── Footer ──────────────────────────────────────────────────────────────────
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
-
-func (m *model) renderCreateDialog() string {
-	isEditing := m.editingTaskID != ""
-	titleText := "New Task"
-	saveHint := "save"
-	if isEditing {
-		titleText = "Edit Task"
-		saveHint = "update"
-	}
-
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.Mauve).
-		Render(fmt.Sprintf("\u25c6  %s", titleText))
-	if isEditing {
-		title += lipgloss.NewStyle().
-			Foreground(theme.Overlay0).
-			Render("  " + m.editingTaskID)
-	}
-
-	titleLabel := lipgloss.NewStyle().
-		Foreground(theme.Overlay0).
-		Bold(true).
-		Render("TITLE")
-	descLabel := lipgloss.NewStyle().
-		Foreground(theme.Overlay0).
-		Bold(true).
-		Render("DESCRIPTION")
-	dialogWidth := m.dialogWidth(createDialogMaxWidth)
-	contentWidth := m.dialogContentWidth(dialogWidth, createDialogPadding)
-
-	separator := lipgloss.NewStyle().
-		Foreground(theme.Mauve).
-		Render(strings.Repeat("\u2501", contentWidth))
-
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	var modeHint string
-	switch {
-	case m.vimReplace:
-		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Red).Render("REPLACE") + "  "
-	case m.vimVisual != nil:
-		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Pink).Render("VISUAL") + "  "
-	case m.vimNormal && m.vim.pending():
-		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Yellow).Render("NORMAL·") + "  "
-	case m.vimNormal:
-		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Green).Render("NORMAL") + "  "
-	default:
-		modeHint = lipgloss.NewStyle().Bold(true).Foreground(theme.Blue).Render("INSERT") + "  "
-	}
-	var hint string
-	if m.vimStatus != "" {
-		// Transient feedback takes over the hint line (vim-style) so the
-		// dialog height never changes; hints return on next keypress.
-		hint = modeHint + lipgloss.NewStyle().Foreground(theme.Yellow).Render(m.vimStatus)
-	} else {
-		hint = modeHint +
-			keyStyle.Render("tab") + hintStyle.Render(" switch  ") +
-			keyStyle.Render(":w") + hintStyle.Render(" "+saveHint+"  ") +
-			keyStyle.Render(":wq") + hintStyle.Render(" "+saveHint+" & close  ") +
-			keyStyle.Render("ctrl+e") + hintStyle.Render(" editor  ") +
-			keyStyle.Render("esc") + hintStyle.Render(func() string {
-			if m.vimNormal {
-				return " close"
-			}
-			return " normal"
-		}())
-	}
-	hint = lipgloss.NewStyle().MaxWidth(contentWidth).Render(hint)
-
-	errView := ""
-	if m.lastErr != nil {
-		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
-	}
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		separator,
-		"",
-		titleLabel,
-		m.renderCreateInput(m.titleInput.View(), m.titleInput.Value(), m.titleInput.Focused()),
-		"",
-		descLabel,
-		m.renderCreateInput(m.descInput.View(), m.descInput.Value(), m.descInput.Focused()),
-	)
-	if errView != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
-	}
-	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
-
-	return lipgloss.NewStyle().
-		Width(dialogWidth).
-		Padding(1, 3).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Mauve).
-		Background(theme.Base).
-		Render(content)
-}
-
-func (m *model) renderCreateInput(view, value string, focused bool) string {
-	if m.vimVisual == nil || !focused {
-		return view
-	}
-	start, end := m.vimVisual.rangeBounds(len([]rune(value)))
-	selected := string([]rune(value)[start:end])
-	if selected == "" {
-		return view
-	}
-	return highlightVisibleText(view, selected)
-}
-
-func highlightVisibleText(view, selected string) string {
-	visible := ansiStripRe.ReplaceAllString(view, "")
-	start := strings.Index(visible, selected)
-	if start < 0 {
-		return view
-	}
-	end := start + len(selected)
-	var out strings.Builder
-	visibleByte := 0
-	for i := 0; i < len(view); {
-		if view[i] == '\x1b' {
-			if match := ansiStripRe.FindString(view[i:]); strings.HasPrefix(view[i:], match) {
-				out.WriteString(match)
-				i += len(match)
-				continue
-			}
-		}
-		if visibleByte == start {
-			out.WriteString("\x1b[7m")
-		}
-		if visibleByte == end {
-			out.WriteString("\x1b[27m")
-		}
-		_, size := utf8.DecodeRuneInString(view[i:])
-		out.WriteString(view[i : i+size])
-		i += size
-		visibleByte += size
-	}
-	if visibleByte == end {
-		out.WriteString("\x1b[27m")
-	}
-	return out.String()
-}
 
 func (m *model) renderSearchDialog() string {
 	title := lipgloss.NewStyle().

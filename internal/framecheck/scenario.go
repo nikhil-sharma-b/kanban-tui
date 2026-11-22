@@ -21,6 +21,8 @@ type Scenario struct {
 	Keys []string
 	// WriteClipboard stands in for the desktop clipboard when a key copies text.
 	WriteClipboard func(string) error
+	NewTask        func(string, string) (*domain.Task, error)
+	Blur           bool // capture the cursor's hidden phase after typing
 }
 
 // Scenarios maps a frame name to how to reach it. Frames without one are
@@ -53,6 +55,50 @@ var Scenarios = map[string]Scenario{
 	"03/status-picker":      {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "s", "j"}},
 	"03/command-line":       {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e", "tab", "esc", ":", "w", "q"}},
 	"03/command-line-80x24": {Workspace: sample.TaskDetail, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e", "tab", "esc", ":", "w", "q"}},
+	"04/empty":              {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "space", "t", "n"}},
+	"04/typing":             newTaskScenario(120, 36, newTaskTitle),
+	"04/typing-80x24":       narrowNewTaskScenario(newTaskTitle),
+	"04/empty-title":        newTaskScenario(120, 36, "enter"),
+	"04/description":        newTaskDescriptionScenario(),
+	"04/column-picker":      newTaskScenario(120, 36, newTaskTitle, "tab", newTaskLine1, "enter", newTaskLine2, "esc", "s", "j"),
+	"04/command-line":       newTaskScenario(120, 36, newTaskTitle, "tab", newTaskLine1, "enter", newTaskLine2, "esc", ":", "w", "q"),
+	"04/created":            newTaskCreatedScenario(120, 36),
+	"04/created-80x24":      newTaskCreatedScenario(80, 24),
+}
+
+const (
+	newTaskTitle = "Export board as CSV"
+	newTaskLine1 = "Same columns as the markdown export, one row per task."
+	newTaskLine2 = "Quote titles that contain commas."
+)
+
+func newTaskScenario(w, h int, keys ...string) Scenario {
+	return Scenario{Workspace: sample.Workspace, W: w, H: h, Palette: dusk.Dark, Keys: append([]string{"l", "space", "t", "n"}, keys...)}
+}
+
+func narrowNewTaskScenario(keys ...string) Scenario {
+	s := newTaskScenario(80, 24, keys...)
+	s.Keys = append([]string{"l", "j"}, s.Keys[1:]...)
+	return s
+}
+
+func newTaskDescriptionScenario() Scenario {
+	s := newTaskScenario(120, 36, newTaskTitle, "tab", newTaskLine1, "enter", newTaskLine2)
+	s.Blur = true
+	return s
+}
+
+func newTaskCreatedScenario(w, h int) Scenario {
+	s := newTaskScenario(w, h, newTaskTitle, "tab", newTaskLine1, "enter", newTaskLine2, "esc", ":", "w", "q", "enter")
+	s.NewTask = func(title, description string) (*domain.Task, error) {
+		task, err := domain.NewTask(title, description)
+		if err == nil {
+			task.ID = "7c2e0b1401234567"
+			task.CreatedAt, task.UpdatedAt = sample.Now, sample.Now
+		}
+		return task, err
+	}
+	return s
 }
 
 // Run renders the scenario through the app's normal update loop and returns
@@ -63,10 +109,14 @@ func (s Scenario) Run() string {
 		Palette:        &palette,
 		Now:            func() time.Time { return sample.Now },
 		WriteClipboard: s.WriteClipboard,
+		NewTask:        s.NewTask,
 	})
 	m, _ = m.Update(tea.WindowSizeMsg{Width: s.W, Height: s.H})
 	for _, k := range s.Keys {
 		m, _ = m.Update(keyMsg(k))
+	}
+	if s.Blur {
+		m, _ = m.Update(tea.BlurMsg{})
 	}
 	return m.View()
 }

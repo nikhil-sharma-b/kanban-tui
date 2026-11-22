@@ -22,6 +22,8 @@ type Options struct {
 	Now func() time.Time
 	// WriteClipboard copies text (default: the system clipboard).
 	WriteClipboard func(string) error
+	// NewTask constructs a new task before it is appended (default domain.NewTask).
+	NewTask func(title, description string) (*domain.Task, error)
 }
 
 // NewWithOptions is New with a theme and clock.
@@ -35,6 +37,9 @@ func NewWithOptions(workspace *domain.Workspace, boardStore store.WorkspaceStore
 	}
 	if opts.WriteClipboard != nil {
 		m.writeClipboard = opts.WriteClipboard
+	}
+	if opts.NewTask != nil {
+		m.newTask = opts.NewTask
 	}
 	return m
 }
@@ -314,12 +319,25 @@ func (m *model) boardHints(size KeybarSize) []KeyHint {
 	return hints
 }
 
-func (m *model) keybarStatus() KeybarStatus {
+func (m *model) keybarStatus(width int, size KeybarSize, hints []KeyHint) KeybarStatus {
 	switch {
 	case len(m.pendingKeys) > 0:
 		return KeybarStatus{Text: displayKeys(strings.Join(m.pendingKeys, " ")) + " …", Token: dusk.Accent}
 	case m.lastErr != nil:
 		return KeybarStatus{Text: "✗ " + m.lastErr.Error(), Token: dusk.Danger}
+	case m.createFeedback != "":
+		text := "✓ " + m.createFeedback
+		gap := keybarWideGap
+		if size == KeybarNarrow {
+			gap = keybarNarrowGap
+		}
+		for _, hint := range hints {
+			width -= hint.width() + gap
+		}
+		if size == KeybarNarrow || len([]rune(text)) > width {
+			text, _, _ = strings.Cut(text, " in ")
+		}
+		return KeybarStatus{Text: truncateCell(text, width), Token: dusk.Success}
 	case m.lastStatus != "":
 		return KeybarStatus{Text: "✓ " + m.lastStatus, Token: dusk.Success}
 	}
@@ -381,7 +399,7 @@ func (m *model) duskBoard() *termgrid.Grid {
 			if i == n-1 && first+n < len(statuses) && !rail {
 				g.Text(hx+1, 3, "›", tokenFG(p, dusk.TextDim, false))
 			}
-			m.drawColumnBody(g, x, 4, colWidth, m.duskBodyHeight(), status, active, active || !boardEmpty)
+			m.drawColumnBody(g, x, 4, colWidth, m.duskBodyHeight(), status, active && (m.mode != modeCreate || m.compact()), active || !boardEmpty)
 		}
 	}
 
@@ -402,6 +420,7 @@ func (m *model) duskBoard() *termgrid.Grid {
 	if m.width < keybarWideMin {
 		size = KeybarNarrow
 	}
-	drawKeybar(g, p, screenGutter, m.height-2, inner, size, m.boardHints(size), m.keybarStatus())
+	hints := m.boardHints(size)
+	drawKeybar(g, p, screenGutter, m.height-2, inner, size, hints, m.keybarStatus(inner, size, hints))
 	return g
 }

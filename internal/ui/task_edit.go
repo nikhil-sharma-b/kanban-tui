@@ -40,19 +40,24 @@ func (m *model) updateDetailEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
-	if m.descInput.Focused() && m.vimCommand == "" && m.vimVisual == nil && !m.vimReplace {
+	if t := m.board.Tasks[m.editingTaskID]; t != nil {
+		return m.updateTaskEditor(msg, m.detailLayout(len(t.Whiteboards)))
+	}
+	return m.updateEditorInput(msg)
+}
+
+func (m *model) updateTaskEditor(msg tea.KeyMsg, l detailLayout) (tea.Model, tea.Cmd) {
+	if l.descRows > 0 && m.descInput.Focused() && m.vimCommand == "" && m.vimVisual == nil && !m.vimReplace {
 		if delta := m.detailEditVerticalMotion(msg); delta != 0 {
-			m.moveDetailEditCursor(delta)
+			m.moveDetailEditCursor(l, delta)
 			return m, nil
 		}
 	}
-	next, cmd := m.updateCreate(msg)
-	if m.mode == modeDetailEdit && m.descInput.Focused() {
-		if t := m.board.Tasks[m.editingTaskID]; t != nil {
-			l := m.detailLayout(len(t.Whiteboards))
-			lines := wrapEditText(m.descInput.Value(), l.width-5)
-			m.followDetailEditCursor(lines, l.descRows)
-		}
+	previousMode := m.mode
+	next, cmd := m.updateEditorInput(msg)
+	if m.mode == previousMode && m.descInput.Focused() && l.descRows > 0 {
+		lines := wrapEditText(m.descInput.Value(), l.width-5)
+		m.followDetailEditCursor(lines, l.descRows)
 	}
 	return next, cmd
 }
@@ -80,12 +85,7 @@ func (m *model) detailEditVerticalMotion(msg tea.KeyMsg) int {
 	return 0
 }
 
-func (m *model) moveDetailEditCursor(delta int) {
-	task := m.selectedTask()
-	if task == nil {
-		return
-	}
-	l := m.detailLayout(len(task.Whiteboards))
+func (m *model) moveDetailEditCursor(l detailLayout, delta int) {
 	buf := descBuffer{m}
 	lines := wrapEditText(buf.Text(), l.width-5)
 	caret := editPosition(lines, buf.Cursor())
@@ -189,7 +189,7 @@ func drawEditSelection(g *termgrid.Grid, p dusk.Palette, x, y int, lines []editL
 	}
 }
 
-func (m *model) drawEditTitle(g *termgrid.Grid, width int) {
+func (m *model) drawEditTitle(g *termgrid.Grid, width int, placeholder string) {
 	value := m.titleInput.Value()
 	pos := m.titleInput.Position()
 	runes := []rune(value)
@@ -200,14 +200,18 @@ func (m *model) drawEditTitle(g *termgrid.Grid, width int) {
 	if m.vimCommand == "" {
 		caret = &inputPoint{col: before - left}
 	}
-	drawFocusedInput(g, m.palette, 1, 1, width+2, 1, []string{text}, IdleInputTitle, "", caret)
+	var lines []string
+	if value != "" {
+		lines = []string{text}
+	}
+	drawFocusedInput(g, m.palette, 1, 1, width+2, 1, lines, IdleInputTitle, placeholder, caret)
 	if m.vimVisual != nil {
 		offset := len([]rune(ansi.Cut(value, 0, left)))
 		drawEditSelection(g, m.palette, 3, 1, []editLine{{text, offset}}, m.vimVisual, len(runes))
 	}
 }
 
-func (m *model) drawEditDescription(g *termgrid.Grid, l detailLayout, width int) (remaining int) {
+func (m *model) drawEditDescription(g *termgrid.Grid, l detailLayout, width int, showCaret bool) (remaining int) {
 	value := m.descInput.Value()
 	lines := wrapEditText(value, width)
 	caret := editPosition(lines, descBuffer{m}.Cursor())
@@ -216,7 +220,7 @@ func (m *model) drawEditDescription(g *termgrid.Grid, l detailLayout, width int)
 	caret.row -= top
 	caret.col = min(caret.col, width-1)
 	var cursor *inputPoint
-	if m.vimCommand == "" {
+	if showCaret && m.vimCommand == "" {
 		cursor = &caret
 	}
 	var visible []string
@@ -267,6 +271,15 @@ func (m *model) updateDetailStatusMenu(key string) (tea.Model, tea.Cmd) {
 		m.detailStatusMenu = false
 		return m, nil
 	}
+	return m.updateStatusMenu(key, t.Status, func(cursor int) tea.Cmd {
+		m.board.MoveTask(t.ID, m.board.Statuses()[cursor], -1)
+		m.recalculateVisible()
+		m.selectTask(t.ID)
+		return m.saveWorkspaceCmd()
+	})
+}
+
+func (m *model) updateStatusMenu(key string, current domain.Status, set func(int) tea.Cmd) (tea.Model, tea.Cmd) {
 	statuses := m.board.Statuses()
 	switch key {
 	case "esc":
@@ -277,18 +290,15 @@ func (m *model) updateDetailStatusMenu(key string) (tea.Model, tea.Cmd) {
 			delta = -1
 		}
 		for i := m.detailStatusCursor + delta; i >= 0 && i < len(statuses); i += delta {
-			if statuses[i] != t.Status {
+			if statuses[i] != current {
 				m.detailStatusCursor = i
 				break
 			}
 		}
 	case "enter":
 		m.detailStatusMenu = false
-		if m.detailStatusCursor < len(statuses) && statuses[m.detailStatusCursor] != t.Status {
-			m.board.MoveTask(t.ID, statuses[m.detailStatusCursor], -1)
-			m.recalculateVisible()
-			m.selectTask(t.ID)
-			return m, m.saveWorkspaceCmd()
+		if i := m.detailStatusCursor; i >= 0 && i < len(statuses) && statuses[i] != current {
+			return m, set(i)
 		}
 	}
 	return m, nil
