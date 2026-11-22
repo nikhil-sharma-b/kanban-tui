@@ -123,12 +123,11 @@ func columnLabel(status domain.Status, count int) string {
 	return fmt.Sprintf("%s · %d", strings.ToLower(status.Title()), count)
 }
 
-func drawColumnHeader(g *termgrid.Grid, p dusk.Palette, x, y int, label string, active bool) {
+func drawColumnHeader(g *termgrid.Grid, p dusk.Palette, x, y int, label string, active bool) int {
 	if active {
-		g.Text(x, y, label, tokenFG(p, dusk.Accent, true))
-		return
+		return g.Text(x, y, label, tokenFG(p, dusk.Accent, true))
 	}
-	g.Text(x, y, label, tokenFG(p, dusk.TextDim, false))
+	return g.Text(x, y, label, tokenFG(p, dusk.TextDim, false))
 }
 
 // RenderColumnHeader draws the Column header component (State=normal or active).
@@ -213,6 +212,10 @@ func (m *model) appHeader() AppHeader {
 		open += len(m.board.Order[status])
 	}
 	h.Counts = fmt.Sprintf("%d open", open)
+	if first, n := m.boardWindow(); n < len(m.board.Statuses()) {
+		h.Counts = fmt.Sprintf("columns %d–%d of %d", first+1, first+n, len(m.board.Statuses()))
+		return h
+	}
 	if !m.onDailyBoard() && m.workspace != nil {
 		if daily := m.workspace.DailyProject(); daily != nil && daily.Board != nil {
 			if n := daily.Board.ActiveTaskCount(); n > 0 {
@@ -269,14 +272,19 @@ func (m *model) keybarStatus() KeybarStatus {
 }
 
 // boardWindow returns the first visible column and how many are shown:
-// N = clamp(floor(W/28), 1, 4), scrolled so the active column is visible.
+// N = clamp(floor(W/28), 1, 4). The window slides only as far as it must to
+// keep the active column visible, and remembers where it was.
 func (m *model) boardWindow() (int, int) {
 	total := len(m.board.Statuses())
 	n := min(total, max(1, min(duskMaxColumns, m.width/duskColumnPitch)))
-	first := 0
-	if m.activeColumn >= n {
+	first := max(0, min(m.windowFirst, total-n))
+	if m.activeColumn < first {
+		first = m.activeColumn
+	}
+	if m.activeColumn >= first+n {
 		first = m.activeColumn - n + 1
 	}
+	m.windowFirst = first
 	return first, n
 }
 
@@ -292,14 +300,28 @@ func (m *model) renderDuskBoard() string {
 	first, n := m.boardWindow()
 	if n > 0 {
 		colWidth := (inner - duskColumnGap*(n-1)) / n
-		bodyTop, bodyBottom := 4, m.height-3 // rows 5..H-3, 1-based
+		// An empty board shows the add hint in the active column only; once
+		// the board has tasks, every empty column shows it.
+		boardEmpty := true
+		for _, status := range statuses {
+			if len(m.visible[status]) > 0 {
+				boardEmpty = false
+			}
+		}
 		for i := 0; i < n; i++ {
 			idx := first + i
 			status := statuses[idx]
 			x := screenGutter + i*(colWidth+duskColumnGap)
 			active := idx == m.activeColumn
-			drawColumnHeader(g, p, x, 3, columnLabel(status, len(m.visible[status])), active)
-			m.drawColumnBody(g, x, bodyTop, colWidth, bodyBottom-bodyTop, status, active)
+			hx := x
+			if i == 0 && first > 0 {
+				hx = g.Text(x, 3, "‹", tokenFG(p, dusk.TextDim, false)) + 1
+			}
+			hx = drawColumnHeader(g, p, hx, 3, columnLabel(status, len(m.visible[status])), active)
+			if i == n-1 && first+n < len(statuses) {
+				g.Text(hx+1, 3, "›", tokenFG(p, dusk.TextDim, false))
+			}
+			m.drawColumnBody(g, x, 4, colWidth, m.duskBodyHeight(), status, active, active || !boardEmpty)
 		}
 	}
 
@@ -309,29 +331,4 @@ func (m *model) renderDuskBoard() string {
 	}
 	drawKeybar(g, p, screenGutter, m.height-2, inner, size, m.boardHints(size), m.keybarStatus())
 	return renderGrid(g)
-}
-
-func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status domain.Status, active bool) {
-	ids := m.visible[status]
-	if len(ids) == 0 {
-		if active {
-			drawKeyHint(g, m.palette, x, y+1, KeyHint{"SPC t n", "add a task"})
-		}
-		return
-	}
-	// Cards keep their pre-Dusk look until the board ticket redraws them.
-	row := y
-	for i := m.scroll[status]; i < len(ids) && row < y+height; i++ {
-		task := m.board.Tasks[ids[i]]
-		if task == nil {
-			continue
-		}
-		card := m.renderTaskCard(task, width, active && i == m.selected[status], theme.Mauve)
-		cg := termgrid.Parse(card, width, lipgloss.Height(card))
-		if row+cg.H > y+height {
-			break
-		}
-		g.Blit(x, row, cg)
-		row += cg.H
-	}
 }

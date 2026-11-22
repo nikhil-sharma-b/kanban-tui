@@ -154,6 +154,7 @@ type model struct {
 	width              int
 	height             int
 	activeColumn       int
+	windowFirst        int // first column of the Dusk board window
 	selected           map[domain.Status]int
 	scroll             map[domain.Status]int
 	visible            map[domain.Status][]string
@@ -327,6 +328,16 @@ func (m *model) Init() tea.Cmd {
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	// Slide the board window after every change of active column, so it
+	// follows the selection step by step rather than only when drawn.
+	if mm, ok := next.(*model); ok && mm.board != nil && mm.width > 0 {
+		mm.boardWindow()
+	}
+	return next, cmd
+}
+
+func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -2183,6 +2194,11 @@ func (m *model) cardColumnWidth(colIndex int) int {
 // visibleTaskCount returns how many task cards fit in the column body starting
 // from the given scroll offset, by measuring actual rendered card heights.
 func (m *model) visibleTaskCount(status domain.Status, scroll int) int {
+	if !m.useCompactBoardLayout() {
+		statuses := m.board.Statuses()
+		active := m.activeColumn < len(statuses) && statuses[m.activeColumn] == status
+		return max(1, fitCards(m.columnCards(status, active), scroll, m.duskBodyHeight()))
+	}
 	bodyHeight := max(1, m.columnHeight()-5)
 	ids := m.visible[status]
 	if len(ids) == 0 {
@@ -3312,6 +3328,11 @@ func (m *model) useCompactBoardLayout() bool {
 	availableWidth := max(0, m.width-4-(boardGap*(len(statuses)-1)))
 	if availableWidth <= 0 {
 		return true
+	}
+
+	// Wide enough for four Dusk columns: the board windows over the rest.
+	if m.width >= duskColumnPitch*duskMaxColumns {
+		return false
 	}
 
 	if availableWidth/len(statuses) < compactColumnWidth {

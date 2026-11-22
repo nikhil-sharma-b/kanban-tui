@@ -26,6 +26,12 @@ type Scenario struct {
 var Scenarios = map[string]Scenario{
 	"01/default":     {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j"}},
 	"01/empty-board": {Workspace: sample.EmptyBoard, W: 120, H: 36, Palette: dusk.Dark},
+	// The doing column is empty; todo stays active.
+	"01/empty-column": {Workspace: sample.EmptyColumn, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j"}},
+	// Selecting the 9th of 16 backlog tasks scrolls the column by 2.
+	"01/overflow-column": {Workspace: sample.OverflowColumn, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"j", "j", "j", "j", "j", "j", "j", "j"}},
+	// Out to done slides the window to columns 2–5; back to todo keeps it.
+	"01/more-columns": {Workspace: sample.MoreColumns, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "l", "l", "l", "h", "h", "j"}},
 }
 
 // Run renders the scenario through the app's normal update loop and returns

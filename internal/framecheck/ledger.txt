@@ -1,15 +1,15 @@
 # Frame ledger for the frame-matching check (make framecheck).
 # enforced: must match design.figcraft cell for cell. pending: reported, never fails.
 # Each Dusk ticket moves its frames to enforced.
-pending  01/default
+enforced 01/default
 pending  01/default-80x24
 pending  01/sync-error
 pending  01/sync-reloaded
 pending  01/filter-active
-pending  01/more-columns
-pending  01/overflow-column
+enforced 01/more-columns
+enforced 01/overflow-column
 enforced 01/empty-board
-pending  01/empty-column
+enforced 01/empty-column
 pending  02/dialog-80x24
 pending  02/move-right-80x24
 pending  02/board-80x24

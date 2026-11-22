@@ -152,6 +152,25 @@ func TestComponents(t *testing.T) {
 			func(p dusk.Palette, w int) string { return ui.RenderKeybar(p, ui.KeybarWide, w, keybarHints) }},
 		{"Key hint", "Components/Key hint", "Components · light preview/Chrome/Keybar#0/hints/Key hint#0",
 			func(p dusk.Palette, _ int) string { return ui.RenderKeyHint(p, ui.KeyHint{Key: "n", Label: "new"}) }},
+		{"Card State=default", "Components/Card/State=default, Density=regular", "Components · light preview/Card/Card#0",
+			func(p dusk.Palette, w int) string {
+				return ui.RenderCard(p, w, ui.Card{Title: "Archive search by date", State: ui.CardDefault})
+			}},
+		{"Card State=selected", "Components/Card/State=selected, Density=regular", "Components · light preview/Card/Card#1",
+			func(p dusk.Palette, w int) string {
+				return ui.RenderCard(p, w, ui.Card{Title: "Undo for move and delete", Desc: "Undo the last move or delete with u, from a toast",
+					Meta: "a3f91c07 · 2d ago · ◇2", State: ui.CardSelected})
+			}},
+		{"Card State=done", "Components/Card/State=done, Density=regular", "Components · light preview/Card/Card#2",
+			func(p dusk.Palette, w int) string {
+				return ui.RenderCard(p, w, ui.Card{Title: "Copy task ID keybind", State: ui.CardDone})
+			}},
+		{"Scroll hint Dir=up", "Components/Scroll hint/Dir=up", "Components · light preview/Toast + Scroll hint/Scroll hint#0",
+			func(p dusk.Palette, _ int) string { return ui.RenderScrollHint(p, ui.ScrollUp, 2) }},
+		{"Scroll hint Dir=down", "Components/Scroll hint/Dir=down", "Components · light preview/Toast + Scroll hint/Scroll hint#1",
+			func(p dusk.Palette, _ int) string { return ui.RenderScrollHint(p, ui.ScrollDown, 3) }},
+		{"Badge", "Components/Badge", "Components · light preview/Status/Badge#0",
+			func(p dusk.Palette, _ int) string { return ui.RenderBadge(p, "daily") }},
 	}
 	for _, c := range cases {
 		for _, variant := range []struct{ mode, path string }{{"dark", c.dark}, {"light", c.light}} {
