@@ -149,6 +149,8 @@ func TestComponents(t *testing.T) {
 			func(p dusk.Palette, _ int) string { return ui.RenderColumnHeader(p, "todo · 3", false) }},
 		{"Column header State=active", "Components/Column header/State=active", "Components · light preview/Column header/Column header#1",
 			func(p dusk.Palette, _ int) string { return ui.RenderColumnHeader(p, "doing · 2", true) }},
+		{"Column header State=editing", "Components/Column header/State=editing", "Components · light preview/Column header/Column header#2",
+			func(p dusk.Palette, _ int) string { return ui.RenderColumnHeaderEditing(p, "ready", 3) }},
 		{"Keybar Size=wide", "Components/Keybar/Size=wide", "Components · light preview/Chrome/Keybar#0",
 			func(p dusk.Palette, w int) string { return ui.RenderKeybar(p, ui.KeybarWide, w, keybarHints) }},
 		{"Keybar Size=narrow", "Components/Keybar/Size=narrow", "Components · light preview/Chrome/Keybar#1",

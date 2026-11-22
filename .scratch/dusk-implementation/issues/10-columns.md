@@ -4,9 +4,9 @@
 
 **Blocked by:** 09 — Confirm pattern
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 06/add, 06/rename-in-place, 06/delete-non-empty, 06/duplicate-name, 06/add-80x24, 06/rename-in-place-80x24, 06/delete-non-empty-80x24, 06/duplicate-name-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Column header (editing) matches its 00 Foundations variant in dark and in the light preview
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 06/add, 06/rename-in-place, 06/delete-non-empty, 06/duplicate-name, 06/add-80x24, 06/rename-in-place-80x24, 06/delete-non-empty-80x24, 06/duplicate-name-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Column header (editing) matches its 00 Foundations variant in dark and in the light preview

@@ -160,6 +160,7 @@ type model struct {
 	projectInput       textinput.Model
 	mode               mode
 	columnRename       domain.Status
+	columnErr          error // duplicate or empty name, shown with the draft
 	projectDraft       string
 	projectCursor      int
 	projectFilterInput textinput.Model
@@ -475,13 +476,12 @@ func (m *model) View() string {
 	if m.mode == modeSearch {
 		return m.placeDialog(board, m.searchDialog())
 	}
+	if m.mode == modeAddColumn {
+		return m.placeAddColumnDialog(board)
+	}
 	view := renderGrid(board)
 
 	switch m.mode {
-	case modeAddColumn:
-		return m.placeOverlayCenter(view, m.renderAddColumnDialog())
-	case modeRenameColumn:
-		return m.placeOverlayCenter(view, m.renderAddColumnDialog())
 	case modeProjects:
 		return m.placeOverlayCenter(view, m.renderProjectsDialog())
 	case modeProjectEdit:
@@ -623,6 +623,7 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.beginEditSelected()
 	case actColumnNew:
 		m.mode = modeAddColumn
+		m.columnErr = nil
 		m.columnInput.SetValue("")
 		m.columnInput.Focus()
 		m.lastErr = nil
@@ -1204,62 +1205,6 @@ func (m *model) closeCreatePanel() {
 	m.descInput.Blur()
 }
 
-func (m *model) updateColumnDialog(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.mode = modeBoard
-		m.columnInput.Blur()
-		m.lastErr = nil
-		m.columnRename = ""
-		return m, nil
-	case "enter":
-		if m.mode == modeRenameColumn {
-			if m.columnRename == "" {
-				m.lastErr = fmt.Errorf("column target missing")
-				return m, nil
-			}
-
-			renamed, err := m.board.RenameColumn(string(m.columnRename), m.columnInput.Value())
-			if err != nil {
-				m.lastErr = err
-				return m, nil
-			}
-
-			m.mode = modeBoard
-			m.columnInput.Blur()
-			m.lastErr = nil
-			m.lastStatus = fmt.Sprintf("renamed %s", renamed.Title())
-			m.columnRename = ""
-			m.activeColumn = m.board.StatusIndex(renamed)
-			m.ensureColumnState()
-			m.recalculateVisible()
-			m.syncAllScroll()
-			return m, m.saveWorkspaceCmd()
-		}
-
-		status, err := m.board.AddColumn(m.columnInput.Value())
-		if err != nil {
-			m.lastErr = err
-			return m, nil
-		}
-
-		m.mode = modeBoard
-		m.columnInput.Blur()
-		m.lastErr = nil
-		m.lastStatus = fmt.Sprintf("added %s", status.Title())
-		m.ensureColumnState()
-		m.activeColumn = m.board.StatusIndex(status)
-		m.recalculateVisible()
-		m.syncAllScroll()
-
-		return m, m.saveWorkspaceCmd()
-	}
-
-	var cmd tea.Cmd
-	m.columnInput, cmd = m.columnInput.Update(msg)
-	return m, cmd
-}
-
 // fuzzyMatch reports whether every rune of query appears in target in order
 // (case-insensitive subsequence match).
 func fuzzyMatch(query, target string) bool {
@@ -1503,6 +1448,7 @@ func (m *model) beginRenameColumn() (tea.Model, tea.Cmd) {
 
 	status := statuses[m.activeColumn]
 	m.columnRename = status
+	m.columnErr = nil
 	m.mode = modeRenameColumn
 	m.columnInput.SetValue(string(status))
 	m.columnInput.Focus()
@@ -2447,64 +2393,6 @@ func (m *model) renderWhiteboardRenameDialog() string {
 		keyStyle.Render("esc") + hintStyle.Render(" cancel")
 
 	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", label, m.whiteboardInput.View())
-	if errView != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
-	}
-	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
-
-	return lipgloss.NewStyle().
-		Width(dialogWidth).
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Mauve).
-		Background(theme.Base).
-		Render(content)
-}
-
-func (m *model) renderAddColumnDialog() string {
-	isRename := m.mode == modeRenameColumn
-
-	titleText := "New Column"
-	saveHint := "save"
-	if isRename {
-		titleText = "Rename Column"
-		saveHint = "rename"
-	}
-
-	title := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.Mauve).
-		Render("\u25c6  " + titleText)
-
-	label := lipgloss.NewStyle().
-		Foreground(theme.Overlay0).
-		Bold(true).
-		Render("NAME")
-	dialogWidth := m.dialogWidth(columnDialogMaxWidth)
-	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
-
-	separator := lipgloss.NewStyle().
-		Foreground(theme.Mauve).
-		Render(strings.Repeat("\u2501", contentWidth))
-
-	errView := ""
-	if m.lastErr != nil {
-		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
-	}
-
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hint := keyStyle.Render("enter") + hintStyle.Render(" "+saveHint+"  ") +
-		keyStyle.Render("esc") + hintStyle.Render(" cancel")
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		separator,
-		"",
-		label,
-		m.columnInput.View(),
-	)
 	if errView != "" {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
 	}

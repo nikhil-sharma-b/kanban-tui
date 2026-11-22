@@ -423,7 +423,11 @@ func (m *model) duskBoard() *termgrid.Grid {
 			if m.filter != "" {
 				label = fmt.Sprintf("%s/%d", label, len(m.board.Order[status]))
 			}
-			hx = drawColumnHeader(g, p, hx, 3, label, active)
+			if active && m.mode == modeRenameColumn {
+				drawColumnHeaderEditing(g, p, hx, 3, m.columnInput.Value(), m.columnInput.Position(), len(m.visible[status]))
+			} else {
+				hx = drawColumnHeader(g, p, hx, 3, label, active)
+			}
 			if i == n-1 && first+n < len(statuses) && !rail {
 				g.Text(hx+1, 3, "›", tokenFG(p, dusk.TextDim, false))
 			}
@@ -449,6 +453,15 @@ func (m *model) duskBoard() *termgrid.Grid {
 		size = KeybarNarrow
 	}
 	hints := m.boardHints(size)
-	drawKeybar(g, p, screenGutter, m.height-2, inner, size, hints, m.keybarStatus(inner, size, hints))
+	status := m.keybarStatus(inner, size, hints)
+	if m.mode == modeRenameColumn {
+		// Rename edits the header in place; the keybar carries its keys
+		// and a duplicate name (06/rename-in-place).
+		hints, status = renameColumnHints, KeybarStatus{}
+		if m.columnErr != nil {
+			status = KeybarStatus{Text: "✗ " + m.columnErr.Error(), Token: dusk.Danger}
+		}
+	}
+	drawKeybar(g, p, screenGutter, m.height-2, inner, size, hints, status)
 	return g
 }

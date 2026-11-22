@@ -631,7 +631,7 @@ func (b *Board) AddColumn(name string) (Status, error) {
 
 	for _, existing := range b.Columns {
 		if existing == status {
-			return status, fmt.Errorf("column %s already exists", status)
+			return status, fmt.Errorf("column “%s” already exists", status)
 		}
 	}
 
@@ -680,7 +680,7 @@ func (b *Board) RenameColumn(oldName, newName string) (Status, error) {
 
 	for _, status := range b.Columns {
 		if status == newStatus {
-			return oldStatus, fmt.Errorf("column %s already exists", newStatus)
+			return oldStatus, fmt.Errorf("column “%s” already exists", newStatus)
 		}
 	}
 

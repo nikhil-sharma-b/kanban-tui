@@ -11,7 +11,7 @@ Build the finished design in design.figcraft and DESIGN.md so the app matches ev
 - [ ] [07 — New task](issues/07-new-task.md) · blocked by: 06 — Task editing
 - [ ] [08 — Search and filter](issues/08-search-filter.md) · blocked by: 06 — Task editing
 - [x] [09 — Confirm pattern](issues/09-confirm-pattern.md) · blocked by: 06 — Task editing
-- [ ] [10 — Columns](issues/10-columns.md) · blocked by: 09 — Confirm pattern
+- [x] [10 — Columns](issues/10-columns.md) · blocked by: 09 — Confirm pattern
 - [ ] [11 — Projects](issues/11-projects.md) · blocked by: 09 — Confirm pattern
 - [ ] [12 — Whiteboards](issues/12-whiteboards.md) · blocked by: 09 — Confirm pattern
 - [ ] [13 — Archive](issues/13-archive.md) · blocked by: 09 — Confirm pattern
