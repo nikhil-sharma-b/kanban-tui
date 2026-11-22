@@ -11,4 +11,4 @@
 - [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
 - [x] Tests cover: ↵ is inert in tier 1; tier 2 acts only after an exact match; esc keeps in both tiers
 
-**Open:** 12 of 14 frames enforced. 09/clear-daily and 09/clear-daily-matched draw the home board behind the dialog under a “daily” header; the real daily board can't match that, so only their dialog is enforced (TestClearDailyDialog) and they stay pending until the design is fixed.
+**Open:** 12 of 14 frames enforced. 09/clear-daily and 09/clear-daily-matched now show the 11/daily board behind the dialog, so they match the app once ticket 14 brings the daily board in line with 11/daily. Until then only their dialog is enforced (TestClearDailyDialog); ticket 14 should move them to enforced.

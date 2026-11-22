@@ -61,6 +61,16 @@ func SearchFilter(now time.Time) *domain.Workspace {
 	return workspace(project("home", now, tasks), dailyWithTasks(now))
 }
 
+// DailyBoard is the home workspace with the daily board 11/daily shows.
+func DailyBoard(now time.Time) *domain.Workspace {
+	daily := dailyProject(now, map[domain.Status][]taskSpec{
+		domain.StatusWaiting: {{title: "Hear back from IT on laptop", age: 3 * time.Hour}, {title: "Design review sign-off", age: 2 * time.Hour}},
+		domain.StatusActive:  {{title: "Reply to standup thread", age: 90 * time.Minute}, {title: "Fix flaky CI test", desc: "Retries hide a race in the store", age: time.Hour}},
+		domain.StatusNext:    {{title: "Book dentist", age: 30 * time.Minute}},
+	})
+	return workspace(project("home", now, homeTasks()), daily)
+}
+
 // ArchiveOld is the home board with every done task untouched for over 30
 // days, as 09/archive-old counts them.
 func ArchiveOld(now time.Time) *domain.Workspace {
