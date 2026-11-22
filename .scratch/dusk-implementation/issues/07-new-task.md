@@ -4,9 +4,9 @@
 
 **Blocked by:** 06 — Task editing
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 04/empty, 04/typing, 04/description, 04/column-picker, 04/command-line, 04/empty-title, 04/created, 04/typing-80x24, 04/created-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Creating a task stores only title, description and status
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 04/empty, 04/typing, 04/description, 04/column-picker, 04/command-line, 04/empty-title, 04/created, 04/typing-80x24, 04/created-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Creating a task stores only title, description and status
