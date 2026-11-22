@@ -4,12 +4,12 @@
 
 **Blocked by:** 01 — Put the mockup on the cell grid
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] One command runs the check and writes, for each failing frame, a readable report: expected rows, actual rows and the list of differing cells with what each expected
-- [ ] The ledger lists every screen frame on pages 01–18 (not 02/breakpoint-rule or DEV NOTE frames), all pending except 01/empty-board
-- [ ] 01/empty-board is enforced with zero cell differences at 120×36 in Dusk dark
-- [ ] App header (Sync=live), Column header (normal, active), Keybar (wide) and Key hint match their 00 Foundations variants in dark and in the light preview
-- [ ] Colours come from the Dusk palette everywhere this ticket touches; no raw colour values in rendering code
-- [ ] A deliberate one-cell change to the render makes the check fail with a report naming that cell
-- [ ] Existing tests still pass; board.db / board.json format unchanged
+- [x] One command runs the check and writes, for each failing frame, a readable report: expected rows, actual rows and the list of differing cells with what each expected
+- [x] The ledger lists every screen frame on pages 01–18 (not 02/breakpoint-rule or DEV NOTE frames), all pending except 01/empty-board
+- [x] 01/empty-board is enforced with zero cell differences at 120×36 in Dusk dark
+- [x] App header (Sync=live), Column header (normal, active), Keybar (wide) and Key hint match their 00 Foundations variants in dark and in the light preview
+- [x] Colours come from the Dusk palette everywhere this ticket touches; no raw colour values in rendering code
+- [x] A deliberate one-cell change to the render makes the check fail with a report naming that cell
+- [x] Existing tests still pass; board.db / board.json format unchanged
