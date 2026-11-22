@@ -22,25 +22,19 @@ import (
 	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
 )
 
-const cardSlotHeight = 4
-
 const (
-	compactBoardBreakpoint = 100
-	boardGap               = 2
-	createDialogMaxWidth   = 92
-	searchDialogMaxWidth   = 50
-	detailDialogMaxWidth   = 72
-	columnDialogMaxWidth   = 56
-	projectDialogMaxWidth  = 60
-	defaultDialogPadding   = 2
-	searchDialogPadding    = 2
-	createDialogPadding    = 3
-	maxCreateInputWidth    = 84
-	maxModalInputWidth     = 42
-	maxDescriptionHeight   = 14
-	minDescriptionHeight   = 4
-	columnMinWidth         = 18
-	compactColumnWidth     = 24
+	createDialogMaxWidth  = 92
+	searchDialogMaxWidth  = 50
+	detailDialogMaxWidth  = 72
+	columnDialogMaxWidth  = 56
+	projectDialogMaxWidth = 60
+	defaultDialogPadding  = 2
+	searchDialogPadding   = 2
+	createDialogPadding   = 3
+	maxCreateInputWidth   = 84
+	maxModalInputWidth    = 42
+	maxDescriptionHeight  = 14
+	minDescriptionHeight  = 4
 )
 
 // leftAccentBorder defines a border with only a left accent bar for modern card styling.
@@ -2162,28 +2156,6 @@ func (m *model) ensureColumnState() {
 	}
 }
 
-// cardColumnWidth returns the width parameter passed to renderColumn for the
-// given column index. It mirrors the width calculation in renderBoard.
-func (m *model) cardColumnWidth(colIndex int) int {
-	statuses := m.board.Statuses()
-	if len(statuses) == 0 {
-		return max(1, m.width-4)
-	}
-	if m.useCompactBoardLayout() {
-		return max(1, m.width-4)
-	}
-	availableWidth := max(0, m.width-4-(boardGap*(len(statuses)-1)))
-	if availableWidth <= 0 {
-		return max(1, m.width-4)
-	}
-	columnWidth := max(1, availableWidth/len(statuses))
-	extraWidth := max(0, availableWidth-(columnWidth*len(statuses)))
-	if colIndex < extraWidth {
-		columnWidth++
-	}
-	return columnWidth
-}
-
 // visibleTaskCount returns how many task cards fit in the column body starting
 // from the given scroll offset, by measuring actual rendered card heights.
 func (m *model) visibleTaskCount(status domain.Status, scroll int) int {
@@ -2270,336 +2242,9 @@ func (m *model) selectedWhiteboard() *domain.Whiteboard {
 
 // ─── Header ──────────────────────────────────────────────────────────────────
 
-func (m *model) renderHeader() string {
-	logo := lipgloss.NewStyle().Bold(true).Foreground(theme.Mauve).Render("\u25c6")
-	titleText := " kanban"
-	if m.project != nil {
-		titleText += " / " + m.project.Name
-	}
-	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Render(titleText)
-	compact := m.useCompactBoardLayout()
-
-	total := m.board.ActiveTaskCount()
-	done := m.board.Count(domain.StatusDone)
-	inProgress := m.board.Count(domain.StatusInProgress)
-	if m.onDailyBoard() {
-		inProgress = m.board.Count(domain.StatusActive)
-		done = 0
-	}
-
-	// Visual progress bar
-	barWidth := min(20, max(4, m.width/4))
-	var progressBar string
-	if total > 0 {
-		doneW := (done * barWidth) / total
-		activeW := (inProgress * barWidth) / total
-		if done > 0 && doneW == 0 {
-			doneW = 1
-		}
-		if inProgress > 0 && activeW == 0 {
-			activeW = 1
-		}
-		if doneW+activeW > barWidth {
-			activeW = barWidth - doneW
-		}
-		remainW := barWidth - doneW - activeW
-		progressBar = lipgloss.NewStyle().Foreground(theme.Green).Render(strings.Repeat("\u2501", doneW)) +
-			lipgloss.NewStyle().Foreground(theme.Peach).Render(strings.Repeat("\u2501", activeW)) +
-			lipgloss.NewStyle().Foreground(theme.Surface1).Render(strings.Repeat("\u2501", remainW))
-	} else {
-		progressBar = lipgloss.NewStyle().Foreground(theme.Surface1).Render(strings.Repeat("\u2501", barWidth))
-	}
-
-	// Compact stats
-	var stats string
-	if m.onDailyBoard() && total > 0 {
-		dot := lipgloss.NewStyle().Foreground(theme.Surface2).Render(" · ")
-		stats = lipgloss.NewStyle().Foreground(theme.Blue).Render(fmt.Sprintf("%d waiting", m.board.Count(domain.StatusWaiting))) + dot +
-			lipgloss.NewStyle().Foreground(theme.Peach).Render(fmt.Sprintf("%d active", m.board.Count(domain.StatusActive))) + dot +
-			lipgloss.NewStyle().Foreground(theme.Mauve).Render(fmt.Sprintf("%d next", m.board.Count(domain.StatusNext)))
-	} else if total > 0 {
-		stats = lipgloss.NewStyle().Foreground(theme.Peach).Render(fmt.Sprintf("%d active", inProgress)) +
-			lipgloss.NewStyle().Foreground(theme.Surface2).Render(" \u00b7 ") +
-			lipgloss.NewStyle().Foreground(theme.Green).Render(fmt.Sprintf("%d done", done)) +
-			lipgloss.NewStyle().Foreground(theme.Surface2).Render(" \u00b7 ") +
-			lipgloss.NewStyle().Foreground(theme.Subtext0).Render(fmt.Sprintf("%d total", total))
-	}
-	if compact {
-		stats = lipgloss.NewStyle().Foreground(theme.Peach).Render(m.compactColumnIndicator())
-	}
-
-	// Right side: filter + status
-	var rightParts []string
-	if m.filter != "" {
-		rightParts = append(rightParts,
-			lipgloss.NewStyle().Foreground(theme.Blue).Render("\u2315 "+m.filter))
-	}
-	switch {
-	case m.lastErr != nil:
-		rightParts = append(rightParts,
-			lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 "+m.lastErr.Error()))
-	case m.lastStatus != "":
-		rightParts = append(rightParts,
-			lipgloss.NewStyle().Foreground(theme.Green).Render("\u2713 "+m.lastStatus))
-	}
-
-	left := lipgloss.JoinHorizontal(lipgloss.Center, logo, title)
-	if total > 0 {
-		left = lipgloss.JoinHorizontal(lipgloss.Center, left, "  ", progressBar, "  ", stats)
-	}
-
-	right := strings.Join(rightParts, "  ")
-	gap := max(2, m.width-lipgloss.Width(left)-lipgloss.Width(right)-6)
-
-	headerBar := lipgloss.JoinHorizontal(lipgloss.Center, left, spacer(gap), right)
-
-	// Thin separator line
-	sepWidth := max(0, m.width-4)
-	sep := lipgloss.NewStyle().Foreground(theme.Surface0).Render(strings.Repeat("\u2500", sepWidth))
-	content := headerBar + "\n" + sep
-
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Padding(0, 2).
-		PaddingTop(1).
-		Background(theme.Mantle).
-		Foreground(theme.Text).
-		Render(content)
-}
-
 // ─── Board ───────────────────────────────────────────────────────────────────
 
-func (m *model) renderBoard() string {
-	gap := boardGap
-	statuses := m.board.Statuses()
-	if len(statuses) == 0 {
-		return ""
-	}
-
-	if m.useCompactBoardLayout() {
-		if m.activeColumn < 0 || m.activeColumn >= len(statuses) {
-			m.activeColumn = 0
-		}
-		width := max(1, m.width-4)
-		return lipgloss.NewStyle().
-			Padding(1, 2, 0, 2).
-			Render(m.renderColumn(statuses[m.activeColumn], true, width))
-	}
-
-	availableWidth := max(0, m.width-4-(gap*(len(statuses)-1)))
-	if availableWidth <= 0 {
-		width := max(1, m.width-4)
-		return lipgloss.NewStyle().
-			Padding(1, 2, 0, 2).
-			Render(m.renderColumn(statuses[m.activeColumn], true, width))
-	}
-
-	columnWidth := max(1, availableWidth/len(statuses))
-	extraWidth := max(0, availableWidth-(columnWidth*len(statuses)))
-	columns := make([]string, 0, len(statuses))
-
-	for i, status := range statuses {
-		width := columnWidth
-		if extraWidth > 0 {
-			width++
-			extraWidth--
-		}
-		columns = append(columns, m.renderColumn(status, i == m.activeColumn, width))
-	}
-
-	return lipgloss.NewStyle().
-		Padding(1, 2, 0, 2).
-		Render(joinHorizontal(columns, gap))
-}
-
-func (m *model) renderColumn(status domain.Status, active bool, width int) string {
-	ids := m.visible[status]
-	accent := statusAccent(status)
-	innerWidth := max(1, width-4)
-
-	colHeight := m.columnHeight()
-	columnStyle := lipgloss.NewStyle().
-		Width(innerWidth).
-		Height(colHeight).
-		Padding(0, 1).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Surface0)
-
-	if active {
-		columnStyle = columnStyle.BorderForeground(accent)
-	}
-
-	// Column header: icon + title + pill badge
-	icon := statusIcon(status)
-	label := lipgloss.NewStyle().Bold(true).Foreground(accent).Render(icon + " " + status.Title())
-
-	countBadge := lipgloss.NewStyle().
-		Foreground(theme.Text).
-		Background(theme.Surface0).
-		PaddingLeft(1).
-		PaddingRight(1).
-		Render(fmt.Sprintf("%d", len(ids)))
-	header := lipgloss.JoinHorizontal(lipgloss.Center, label, " ", countBadge)
-
-	// Accent separator tracks the header width so it stays tidy on narrow columns.
-	separatorWidth := min(innerWidth, lipgloss.Width(header))
-	if separatorWidth < 1 {
-		separatorWidth = 1
-	}
-	sepChar := "\u2500"
-	sepColor := theme.Surface1
-	if active {
-		sepChar = "\u2501"
-		sepColor = accent
-	}
-	separator := lipgloss.NewStyle().
-		Foreground(sepColor).
-		Render(strings.Repeat(sepChar, separatorWidth))
-
-	// Task body
-	bodyHeight := colHeight - 5
-	scroll := m.scroll[status]
-
-	body := make([]string, 0)
-	usedHeight := 0
-
-	if scroll > 0 {
-		indicator := lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(innerWidth).Render("\u25b2 more")
-		body = append(body, indicator)
-		usedHeight += lipgloss.Height(indicator)
-	}
-
-	if len(ids) == 0 {
-		emptyMsg := statusEmptyMessage(status)
-		body = append(body,
-			lipgloss.NewStyle().
-				Foreground(theme.Surface2).
-				Italic(true).
-				Align(lipgloss.Center).
-				Width(innerWidth).
-				PaddingTop(2).
-				Render(emptyMsg),
-		)
-	}
-
-	end := scroll
-	for i := scroll; i < len(ids); i++ {
-		task := m.board.Tasks[ids[i]]
-		if task == nil {
-			end = i + 1
-			continue
-		}
-		card := m.renderTaskCard(task, innerWidth, active && i == m.selected[status], accent)
-		cardH := lipgloss.Height(card)
-		// Reserve 1 line for "▼ N more" if there are more tasks after this one.
-		reserve := 0
-		if i+1 < len(ids) {
-			reserve = 1
-		}
-		if usedHeight+cardH+reserve > bodyHeight && end > scroll {
-			break
-		}
-		body = append(body, card)
-		usedHeight += cardH
-		end = i + 1
-	}
-
-	if hidden := len(ids) - end; hidden > 0 {
-		body = append(body,
-			lipgloss.NewStyle().Foreground(theme.Overlay0).Align(lipgloss.Center).Width(innerWidth).Render(fmt.Sprintf("\u25bc %d more", hidden)),
-		)
-	}
-
-	bodyView := lipgloss.NewStyle().MaxHeight(bodyHeight).Render(strings.Join(body, "\n"))
-	return columnStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, separator, bodyView))
-}
-
-func (m *model) renderTaskCard(task *domain.Task, width int, selected bool, accent lipgloss.TerminalColor) string {
-	cardWidth := width
-	if cardWidth < 1 {
-		cardWidth = 1
-	}
-	innerWidth := cardWidth - 4
-	if innerWidth < 1 {
-		innerWidth = 1
-	}
-
-	title := truncate(task.Title, innerWidth)
-	desc := truncate(singleLine(task.Description), innerWidth)
-
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(theme.Text).Width(innerWidth)
-	descStyle := lipgloss.NewStyle().Foreground(theme.Subtext0).Width(innerWidth)
-	metaStyle := lipgloss.NewStyle().Foreground(theme.Overlay0).Width(innerWidth)
-
-	var cardParts []string
-	cardParts = append(cardParts, titleStyle.Render(title))
-	if desc != "" {
-		cardParts = append(cardParts, descStyle.Render(desc))
-	}
-	cardParts = append(cardParts, metaStyle.Render(
-		shortID(task.ID)+" \u00b7 "+relativeTime(m.clock(), task.UpdatedAt),
-	))
-
-	card := lipgloss.JoinVertical(lipgloss.Left, cardParts...)
-
-	borderColor := theme.Surface1
-	if selected {
-		borderColor = theme.Mauve
-	}
-
-	style := lipgloss.NewStyle().
-		Width(innerWidth).
-		Padding(0, 1).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(borderColor)
-
-	return style.Render(card)
-}
-
 // ─── Footer ──────────────────────────────────────────────────────────────────
-
-func (m *model) renderFooter() string {
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext1).Bold(true)
-	descStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
-	sep := lipgloss.NewStyle().Foreground(theme.Surface1).Render("  \u2502  ")
-
-	colHint := " navigate"
-	if m.useCompactBoardLayout() {
-		colHint = " column"
-	}
-	hints := []string{
-		keyStyle.Render("h/l") + descStyle.Render(colHint),
-		keyStyle.Render("j/k") + descStyle.Render(" task"),
-	}
-	if m.onDailyBoard() {
-		hints = append(hints,
-			keyStyle.Render("SPC d m")+descStyle.Render(" done"),
-			keyStyle.Render("SPC d p")+descStyle.Render(" promote"),
-			keyStyle.Render("SPC d d")+descStyle.Render(" back"),
-		)
-	} else {
-		hints = append(hints,
-			keyStyle.Render("/")+descStyle.Render(" search"),
-			keyStyle.Render("\u23ce")+descStyle.Render(" open"),
-		)
-	}
-	hints = append(hints,
-		keyStyle.Render("SPC")+descStyle.Render(" leader"),
-		keyStyle.Render("?")+descStyle.Render(" help"),
-		keyStyle.Render("q")+descStyle.Render(" quit"),
-	)
-	content := strings.Join(hints, sep)
-	if len(m.pendingKeys) > 0 {
-		content = lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true).
-			Render(displayKeys(strings.Join(m.pendingKeys, " "))+" \u2026") + sep + content
-	}
-
-	return lipgloss.NewStyle().
-		Width(m.width).
-		Padding(0, 2, 1, 2).
-		Foreground(theme.Subtext0).
-		Render(content)
-}
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
 
@@ -3280,33 +2925,6 @@ func (m *model) syncResponsiveLayout() {
 	}
 }
 
-func (m *model) useCompactBoardLayout() bool {
-	statuses := m.board.Statuses()
-	if len(statuses) <= 1 || m.width <= 0 {
-		return false
-	}
-
-	availableWidth := max(0, m.width-4-(boardGap*(len(statuses)-1)))
-	if availableWidth <= 0 {
-		return true
-	}
-
-	// Wide enough for four Dusk columns: the board windows over the rest.
-	if m.width >= duskColumnPitch*duskMaxColumns {
-		return false
-	}
-
-	if availableWidth/len(statuses) < compactColumnWidth {
-		return true
-	}
-
-	if m.width < compactBoardBreakpoint {
-		return true
-	}
-
-	return false
-}
-
 func (m *model) dialogWidth(maxWidth int) int {
 	if m.width <= 0 {
 		return maxWidth
@@ -3325,30 +2943,6 @@ func (m *model) dialogContentWidth(dialogWidth, padding int) int {
 		return 1
 	}
 	return content
-}
-
-func (m *model) columnHeight() int {
-	return max(6, m.height-10)
-}
-
-func (m *model) compactColumnIndicator() string {
-	statuses := m.board.Statuses()
-	if len(statuses) == 0 {
-		return "0/0"
-	}
-	if m.activeColumn < 0 || m.activeColumn >= len(statuses) {
-		m.activeColumn = 0
-	}
-	return fmt.Sprintf("%d/%d %s", m.activeColumn+1, len(statuses), statuses[m.activeColumn].Title())
-}
-
-func (m *model) taskRows() int {
-	bodyHeight := max(1, m.columnHeight()-5)
-	rows := bodyHeight / cardSlotHeight
-	if rows < 1 {
-		return 1
-	}
-	return rows
 }
 
 func (m *model) placeOverlayCenter(base string, overlay string) string {
@@ -3672,22 +3266,6 @@ func spacer(width int) string {
 	return strings.Repeat(" ", width)
 }
 
-func joinHorizontal(parts []string, gap int) string {
-	if len(parts) == 0 {
-		return ""
-	}
-
-	withGaps := make([]string, 0, len(parts)*2-1)
-	for i, part := range parts {
-		if i > 0 {
-			withGaps = append(withGaps, spacer(gap))
-		}
-		withGaps = append(withGaps, part)
-	}
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, withGaps...)
-}
-
 func statusAccent(status domain.Status) lipgloss.TerminalColor {
 	switch status {
 	case domain.StatusBacklog:
@@ -3723,25 +3301,6 @@ func statusIcon(status domain.Status) string {
 		return "\u25d1" // ◑
 	default:
 		return "\u25cb"
-	}
-}
-
-func statusEmptyMessage(status domain.Status) string {
-	switch status {
-	case domain.StatusBacklog:
-		return "Press n to add a task"
-	case domain.StatusInProgress:
-		return "Move tasks here with SPC t l"
-	case domain.StatusDone:
-		return "Completed tasks appear here"
-	case domain.StatusWaiting:
-		return "Press n to capture something"
-	case domain.StatusActive:
-		return "What you are on right now"
-	case domain.StatusNext:
-		return "Queue up what comes after"
-	default:
-		return "No tasks"
 	}
 }
 
