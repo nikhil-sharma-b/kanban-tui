@@ -63,3 +63,24 @@ func TestRenameColumnEscCancels(t *testing.T) {
 		t.Fatal("esc should cancel the rename")
 	}
 }
+
+func TestRenameDuplicateShowsErrorInKeybar(t *testing.T) {
+	m := confirmModel(t)
+	m = pressKeys(t, m, typed("l cr")...)
+	m = pressKeys(t, m, backspaceKey, backspaceKey, backspaceKey, backspaceKey)
+	m = pressKeys(t, m, typed("doing")...)
+	m = pressKeys(t, m, enterKey)
+	if m.mode != modeRenameColumn || m.columnInput.Value() != "doing" {
+		t.Fatalf("mode %v draft %q: duplicate should keep the draft editable", m.mode, m.columnInput.Value())
+	}
+	if m.board.StatusIndex(domain.Status("todo")) != 1 {
+		t.Fatal("duplicate rename changed the board")
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "✗ column “doing” already exists") {
+		t.Fatal("duplicate error not shown in the keybar")
+	}
+	m = pressKeys(t, m, backspaceKey)
+	if strings.Contains(ansi.Strip(m.View()), "already exists") {
+		t.Fatal("editing the draft should clear the error")
+	}
+}
