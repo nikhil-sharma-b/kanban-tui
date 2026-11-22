@@ -4,10 +4,10 @@
 
 **Blocked by:** 04 — Narrow board at 80×24
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 03/view, 03/no-whiteboards, 03/whiteboards, 03/copied, 03/view-80x24, 02/dialog-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Dialog, Scrim, List row (default, selected, disabled), Text input (idle states), Status message (all kinds) and Toast (all kinds) match their 00 Foundations variants in dark and in the light preview
-- [ ] The dialog never changes size while it is open, whatever the description length
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 03/view, 03/no-whiteboards, 03/whiteboards, 03/copied, 03/view-80x24, 02/dialog-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Dialog, Scrim, List row (default, selected, disabled), Text input (idle states), Status message (all kinds) and Toast (all kinds) match their 00 Foundations variants in dark and in the light preview
+- [x] The dialog never changes size while it is open, whatever the description length

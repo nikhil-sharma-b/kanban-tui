@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"github.com/atotto/clipboard"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -192,6 +192,13 @@ type model struct {
 	confirmMsg         string
 	confirmPrev        mode
 	confirmAction      func() (tea.Model, tea.Cmd)
+	confirmTask        *domain.Task
+	detailScroll       int
+	detailWhiteboards  bool
+	detailHelp         bool
+	detailStatus       string
+	detailStatusKind   StatusKind
+	writeClipboard     func(string) error
 	// prevProjectID is the project to return to when leaving the daily board.
 	prevProjectID string
 	palette       dusk.Palette
@@ -429,15 +436,20 @@ func (m *model) View() string {
 	}
 
 	footerHeight := 2
-	view := m.renderDuskBoard()
+	board := m.duskBoard()
+	if m.mode == modeDetail {
+		return m.placeDialog(board, m.taskDetail())
+	}
+	if m.mode == modeConfirm && m.confirmTask != nil {
+		return m.placeDialog(board, m.taskDeleteDialog())
+	}
+	view := renderGrid(board)
 
 	switch m.mode {
 	case modeCreate:
 		return m.placeOverlayCenter(view, m.renderCreateDialog())
 	case modeSearch:
 		return m.placeOverlayCenter(view, m.renderSearchDialog())
-	case modeDetail:
-		return m.placeOverlayCenter(view, m.renderDetailDialog())
 	case modeAddColumn:
 		return m.placeOverlayCenter(view, m.renderAddColumnDialog())
 	case modeRenameColumn:
@@ -609,19 +621,14 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case actOpen:
 		if m.selectedTask() != nil {
 			m.mode = modeDetail
+			m.detailScroll, m.detailWhiteboards, m.detailHelp, m.detailStatus = 0, false, false, ""
 		}
 	case actTaskDelete:
 		task := m.selectedTask()
 		if task != nil {
-			title := task.Title
-			if len(title) > 20 {
-				title = title[:20] + "…"
-			}
-			return m.askConfirm(
-				fmt.Sprintf("Delete task %q?", title),
-				modeBoard,
-				func() (tea.Model, tea.Cmd) { return m.deleteSelected() },
-			)
+			m.askConfirm("", modeBoard, func() (tea.Model, tea.Cmd) { return m.deleteTask(task) })
+			m.confirmTask = task
+			return m, nil
 		}
 	case actTaskArchive:
 		task := m.selectedTask()
@@ -1517,13 +1524,44 @@ func (m *model) deleteColumn() (tea.Model, tea.Cmd) {
 }
 
 func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.detailStatus = ""
+	if msg.String() == "?" {
+		m.detailHelp = !m.detailHelp
+		return m, nil
+	}
+	if m.detailHelp && msg.String() == "esc" {
+		m.detailHelp = false
+		return m, nil
+	}
+	m.detailHelp = false
+	if m.detailWhiteboards {
+		switch msg.String() {
+		case "esc", "q":
+			m.detailWhiteboards = false
+		case "up", "k":
+			m.whiteboardCursor = max(0, m.whiteboardCursor-1)
+		case "down", "j":
+			if task := m.selectedTask(); task != nil && m.whiteboardCursor+1 < len(task.Whiteboards) {
+				m.whiteboardCursor++
+			}
+		case "enter", "o":
+			return m.openSelectedWhiteboard()
+		}
+		return m, nil
+	}
 	switch msg.String() {
 	case "esc", "enter", "q":
 		m.mode = modeBoard
 	case "e":
 		return m.beginEditSelected()
 	case "w":
-		return m.openWhiteboards()
+		if task := m.selectedTask(); task != nil && m.detailLayout(len(task.Whiteboards)).listRows > 0 {
+			m.detailWhiteboards, m.whiteboardCursor = true, 0
+		} else {
+			return m.openWhiteboards()
+		}
+	case "J", "K":
+		m.scrollDetail(msg.String() == "J")
 	case "y":
 		return m.copySelectedTaskID()
 	}
@@ -1538,8 +1576,20 @@ func (m *model) copySelectedTaskID() (tea.Model, tea.Cmd) {
 	if task == nil {
 		return m, nil
 	}
-	if err := clipboard.WriteAll(task.ID); err != nil {
+	write := m.writeClipboard
+	if write == nil {
+		write = clipboard.WriteAll
+	}
+	if err := write(task.ID); err != nil {
+		if m.mode == modeDetail {
+			m.detailStatusKind, m.detailStatus = StatusDanger, "could not copy ID"
+			return m, nil
+		}
 		m.lastErr = fmt.Errorf("copy ID: %w", err)
+		return m, nil
+	}
+	if m.mode == modeDetail {
+		m.detailStatusKind, m.detailStatus = StatusSuccess, "copied "+shortID(task.ID)
 		return m, nil
 	}
 	m.lastErr = nil
@@ -1665,7 +1715,15 @@ func (m *model) openSelectedWhiteboard() (tea.Model, tea.Cmd) {
 	path := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, whiteboard.Name, whiteboard.Extension())
 	whiteboard.Path = path
 	if err := launchWhiteboard(path); err != nil {
+		if m.mode == modeDetail {
+			m.detailStatusKind, m.detailStatus = StatusDanger, "could not open whiteboard"
+			return m, nil
+		}
 		m.lastErr = fmt.Errorf("launch whiteboard: %w", err)
+		return m, nil
+	}
+	if m.mode == modeDetail {
+		m.detailStatusKind, m.detailStatus = StatusSuccess, "opened "+whiteboard.Name
 		return m, nil
 	}
 	m.lastErr = nil
@@ -1808,9 +1866,11 @@ func (m *model) reorderSelected(delta int) (tea.Model, tea.Cmd) {
 	return m, m.saveWorkspaceCmd()
 }
 
-func (m *model) deleteSelected() (tea.Model, tea.Cmd) {
-	task := m.selectedTask()
-	if task == nil {
+func (m *model) deleteTask(task *domain.Task) (tea.Model, tea.Cmd) {
+	m.mode = modeBoard
+	// A reload already in flight can replace the board while the dialog is open.
+	if m.board.Tasks[task.ID] != task {
+		m.lastErr = fmt.Errorf("task changed; reopen the confirmation")
 		return m, nil
 	}
 
@@ -1818,7 +1878,6 @@ func (m *model) deleteSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.mode = modeBoard
 	m.lastStatus = fmt.Sprintf("deleted %s", shortID(task.ID))
 	m.lastErr = nil
 	m.recalculateVisible()
@@ -1995,6 +2054,7 @@ func (m *model) updateArchiveDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) askConfirm(msg string, prev mode, action func() (tea.Model, tea.Cmd)) (tea.Model, tea.Cmd) {
+	m.confirmTask = nil
 	m.confirmMsg = msg
 	m.confirmPrev = prev
 	m.confirmAction = action
@@ -2003,6 +2063,17 @@ func (m *model) askConfirm(msg string, prev mode, action func() (tea.Model, tea.
 }
 
 func (m *model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.confirmTask != nil {
+		switch msg.String() {
+		case "y":
+			m.confirmTask = nil
+			return m.confirmAction()
+		case "esc":
+			m.confirmTask = nil
+			m.mode = m.confirmPrev
+		}
+		return m, nil
+	}
 	switch msg.String() {
 	case "y", "Y", "enter":
 		return m.confirmAction()
@@ -2436,10 +2507,6 @@ func (m *model) renderSearchDialog() string {
 		BorderForeground(theme.Blue).
 		Background(theme.Base).
 		Render(content)
-}
-
-func (m *model) renderDetailDialog() string {
-	return m.renderTaskDetail(m.selectedTask(), false)
 }
 
 // renderTaskDetail renders the detail dialog for an explicit task so archived

@@ -16,6 +16,9 @@ var Now = time.Date(2026, time.November, 20, 10, 0, 0, 0, time.UTC)
 // Columns of the "home" project in every frame.
 var Columns = []domain.Status{"backlog", "todo", "doing", "done"}
 
+// DetailTaskID identifies the sample task featured in the detail frames.
+const DetailTaskID = "a3f91c07e2b84d6f9a1c3e5b7d902468"
+
 type taskSpec struct {
 	id, title, desc string
 	age             time.Duration
@@ -26,6 +29,27 @@ type taskSpec struct {
 // tasks over four columns, and a daily board holding 3 tasks.
 func Workspace(now time.Time) *domain.Workspace {
 	return workspace(project("home", now, homeTasks()), dailyWithTasks(now))
+}
+
+// TaskDetail is the home board with the full task description and whiteboard
+// metadata shown in the detail frames.
+func TaskDetail(now time.Time) *domain.Workspace {
+	w := Workspace(now)
+	t := w.ActiveProject().Board.Tasks[DetailTaskID]
+	t.Description = "Undo the last move or delete with u. Keep a short history in memory only, so a mistaken H/L or delete can be reverted without touching the store format. Limit to the last 20 actions; older ones drop off. Show what was undone in the status line, e.g. “undid move → doing”. Redo with ctrl+r while the history is intact. Clear it on project switch and on live reload so undo never runs against a board that changed underneath. Nothing about the stack is written to disk; quitting drops it. If the target task no longer exists, skip the entry and say so in the status line instead of failing silently."
+	t.Whiteboards[0].Name = "undo-flow"
+	t.Whiteboards[0].UpdatedAt = now.Add(-72 * time.Hour)
+	t.Whiteboards[1].Name = "history-stack"
+	t.Whiteboards[1].Format = "rnote"
+	date := now.UTC().AddDate(0, 0, -8)
+	t.Whiteboards[1].UpdatedAt = time.Date(date.Year(), date.Month(), date.Day(), 12, 0, 0, 0, time.Local)
+	return w
+}
+
+func TaskDetailWithoutWhiteboards(now time.Time) *domain.Workspace {
+	w := TaskDetail(now)
+	w.ActiveProject().Board.Tasks[DetailTaskID].Whiteboards = nil
+	return w
 }
 
 func homeTasks() map[domain.Status][]taskSpec {
@@ -39,7 +63,7 @@ func homeTasks() map[domain.Status][]taskSpec {
 		},
 		"todo": {
 			{title: "Archive search by date", age: 4 * 24 * time.Hour},
-			{id: "a3f91c07e2b84d6f9a1c3e5b7d902468", title: "Undo for move and delete", desc: "Undo the last move or delete", age: 2 * 24 * time.Hour, whiteboards: 2},
+			{id: DetailTaskID, title: "Undo for move and delete", desc: "Undo the last move or delete", age: 2 * 24 * time.Hour, whiteboards: 2},
 			{title: "Column WIP limits", age: 3 * 24 * time.Hour},
 		},
 		"doing": {

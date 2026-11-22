@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/nikhilsharma/kanban-tui/internal/termgrid"
 	"github.com/nikhilsharma/kanban-tui/internal/ui"
 	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
 )
@@ -201,6 +202,100 @@ func TestComponents(t *testing.T) {
 					t.Fatalf("%s is in mode %q, want %q", variant.path, want.Mode, variant.mode)
 				}
 				got := ReadScreen(c.render(p, want.Grid.W), want.Grid.W, want.Grid.H, p)
+				if path, diffs := checkGrid(t, "component "+c.name+" "+variant.mode, want, got); path != "" {
+					t.Errorf("%s: %d cells differ, %d design problems; report: %s\n%s",
+						variant.path, len(diffs), len(want.Problems), path, summary(diffs))
+				}
+			})
+		}
+	}
+}
+
+func TestComponentsDialogs(t *testing.T) {
+	type fixture struct {
+		name, dark, light string
+		render            func(dusk.Palette, int, int) string
+	}
+	keepDelete := []ui.KeyHint{{Key: "esc", Label: "keep"}, {Key: "y", Label: "delete"}}
+	cases := []fixture{
+		{"Dialog", "Dialog", "Dialog", func(p dusk.Palette, w, h int) string {
+			return ui.RenderDialog(p, w, h, "Delete column “backlog”?", "5 tasks will move to the archive. You can restore them later.", false, keepDelete)
+		}},
+		{"Scrim", "Scrim", "Scrim", func(p dusk.Palette, w, h int) string {
+			g := termgrid.New(w, h, "")
+			if p.Name == "light" {
+				g.Blit(0, 0, termgrid.Parse(ui.RenderCard(p, 26, ui.Card{Title: "Archive search by date"}), 26, 3))
+				g.Blit(0, 3, termgrid.Parse(ui.RenderCard(p, 26, ui.Card{Title: "Copy task ID keybind", State: ui.CardDone}), 26, 3))
+			}
+			ui.ApplyScrim(g, p)
+			return g.Render(termenv.TrueColor)
+		}},
+	}
+	for i, row := range []struct {
+		name, label, hint string
+		state             ui.ListRowState
+	}{
+		{"default", "Move to done", "SPC t d", ui.ListRowDefault},
+		{"selected", "Move to doing", "L", ui.ListRowSelected},
+		{"disabled", "Restore from archive", "not archived", ui.ListRowDisabled},
+	} {
+		cases = append(cases, fixture{"List row " + row.name, "List row/State=" + row.name, fmt.Sprintf("List row + Menu/List row#%d", i),
+			func(p dusk.Palette, w, _ int) string { return ui.RenderListRow(p, w, row.label, row.hint, row.state) }})
+	}
+	for _, input := range []struct {
+		name, variant, value, placeholder string
+		kind                              ui.IdleInputKind
+		index                             int
+	}{
+		{"field", "idle", "Undo for move", "", ui.IdleInputField, 1},
+		{"title", "idle", "Undo for move", "", ui.IdleInputTitle, 4},
+		{"body", "idle", "Undo for move", "", ui.IdleInputBody, 7},
+		{"body", "placeholder", "", "description (optional)", ui.IdleInputBody, 9},
+	} {
+		cases = append(cases, fixture{"Text input " + input.name + " " + input.variant, "Text input/Kind=" + input.name + ", State=" + input.variant,
+			fmt.Sprintf("Text input/Text input#%d", input.index), func(p dusk.Palette, w, _ int) string {
+				return ui.RenderIdleInput(p, w, input.value, input.kind, input.placeholder)
+			}})
+	}
+	for i, status := range []struct {
+		name, status, toast string
+		kind                ui.StatusKind
+	}{
+		{"success", "created 7c2e0b14 in todo", "Copied k3f9", ui.StatusSuccess},
+		{"danger", "title can't be empty", "Could not save — retrying", ui.StatusDanger},
+		{"info", "board reloaded · changed by CLI", "Board reloaded · changed by CLI", ui.StatusInfo},
+		{"prompt", "discard unsaved changes?", "", ui.StatusPrompt},
+	} {
+		cases = append(cases, fixture{"Status message " + status.name, "Status message/Kind=" + status.name, fmt.Sprintf("Status/Status message#%d", i),
+			func(p dusk.Palette, w, _ int) string { return ui.RenderStatusMessage(p, w, status.kind, status.status) }})
+		if status.toast != "" {
+			cases = append(cases, fixture{"Toast " + status.name, "Toast/Kind=" + status.name, fmt.Sprintf("Toast + Scroll hint/Toast#%d", i),
+				func(p dusk.Palette, _, _ int) string {
+					return ui.RenderToast(p, status.kind, status.toast, ui.KeyHint{})
+				}})
+		}
+	}
+	cases = append(cases, fixture{"Toast with hint", "", "Toast + Scroll hint/Toast#3", func(p dusk.Palette, _, _ int) string {
+		return ui.RenderToast(p, ui.StatusInfo, "Archived “Theme config file”", ui.KeyHint{Key: "u", Label: "undo"})
+	}})
+	for _, c := range cases {
+		for _, variant := range []struct{ mode, prefix, path string }{
+			{"dark", "Components/", c.dark},
+			{"light", "Components · light preview/", c.light},
+		} {
+			if variant.path == "" {
+				continue
+			}
+			t.Run(c.name+"/"+variant.mode, func(t *testing.T) {
+				want, err := design.Expect(variant.prefix + variant.path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				p, ok := dusk.ByMode(want.Mode)
+				if !ok || want.Mode != variant.mode {
+					t.Fatalf("%s is in mode %q, want %q", variant.path, want.Mode, variant.mode)
+				}
+				got := ReadScreen(c.render(p, want.Grid.W, want.Grid.H), want.Grid.W, want.Grid.H, p)
 				if path, diffs := checkGrid(t, "component "+c.name+" "+variant.mode, want, got); path != "" {
 					t.Errorf("%s: %d cells differ, %d design problems; report: %s\n%s",
 						variant.path, len(diffs), len(want.Problems), path, summary(diffs))

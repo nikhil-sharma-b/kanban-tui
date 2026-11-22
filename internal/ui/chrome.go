@@ -20,6 +20,8 @@ type Options struct {
 	Palette *dusk.Palette
 	// Now is the clock used for relative times (default time.Now).
 	Now func() time.Time
+	// WriteClipboard copies text (default: the system clipboard).
+	WriteClipboard func(string) error
 }
 
 // NewWithOptions is New with a theme and clock.
@@ -30,6 +32,9 @@ func NewWithOptions(workspace *domain.Workspace, boardStore store.WorkspaceStore
 	}
 	if opts.Now != nil {
 		m.now = opts.Now
+	}
+	if opts.WriteClipboard != nil {
+		m.writeClipboard = opts.WriteClipboard
 	}
 	return m
 }
@@ -339,7 +344,7 @@ func (m *model) boardWindow() (int, int) {
 }
 
 // renderDuskBoard draws the whole board screen on the cell grid.
-func (m *model) renderDuskBoard() string {
+func (m *model) duskBoard() *termgrid.Grid {
 	p := m.palette
 	g := termgrid.New(m.width, m.height, tokenBG(p, dusk.Bg))
 	inner := m.width - 2*screenGutter
@@ -398,5 +403,5 @@ func (m *model) renderDuskBoard() string {
 		size = KeybarNarrow
 	}
 	drawKeybar(g, p, screenGutter, m.height-2, inner, size, m.boardHints(size), m.keybarStatus())
-	return renderGrid(g)
+	return g
 }

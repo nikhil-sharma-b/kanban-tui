@@ -1,0 +1,170 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/nikhilsharma/kanban-tui/internal/termgrid"
+	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
+)
+
+const (
+	dialogMaxWidth  = 60
+	dialogMaxHeight = 20
+	detailDescRow   = 3
+)
+
+func (m *model) dialogSize(maxHeight int) (int, int) {
+	return min(dialogMaxWidth, m.width-8), min(maxHeight, m.height-4)
+}
+
+type detailLayout struct {
+	width, height, descRows, listRows, footer int
+}
+
+func (m *model) detailLayout(whiteboards int) detailLayout {
+	w, h := m.dialogSize(dialogMaxHeight)
+	l := detailLayout{width: w, height: h, footer: h - 2}
+	if m.height < compactBelowRows {
+		l.footer--
+	}
+	l.descRows = max(0, l.footer-detailDescRow-2)
+	if whiteboards > 0 && l.descRows >= 4 {
+		l.listRows = min(3, l.descRows-3)
+		l.descRows -= l.listRows + 2 // label and blank row
+	}
+	return l
+}
+
+func (m *model) scrollDetail(down bool) {
+	task := m.selectedTask()
+	if task == nil {
+		return
+	}
+	l := m.detailLayout(len(task.Whiteboards))
+	lines := wrapDialogText(task.Description, l.width-5)
+	if down {
+		m.detailScroll = min(max(0, len(lines)-l.descRows), m.detailScroll+1)
+	} else {
+		m.detailScroll = max(0, m.detailScroll-1)
+	}
+}
+
+func (m *model) taskDetail() *termgrid.Grid {
+	task := m.selectedTask()
+	if task == nil {
+		return nil
+	}
+	p := m.palette
+	l := m.detailLayout(len(task.Whiteboards))
+	if l.width < 6 || l.height < 5 || l.footer < 2 {
+		return nil
+	}
+	g := newDialog(p, l.width, l.height)
+	const x = 3
+	right := l.width - 2 // exclusive right edge of content
+	textWidth := right - x
+	status := strings.ToLower(task.Status.Title()) + " · " + relativeTime(m.clock(), task.UpdatedAt)
+	titleWidth := textWidth
+	if status = truncateCell(status, textWidth/2); status != "" {
+		titleWidth -= ansi.StringWidth(status) + 1
+		g.Text(right-ansi.StringWidth(status), 1, status, tokenFG(p, dusk.TextDim, false))
+	}
+	drawIdleInput(g, p, 1, 1, titleWidth+2, []string{task.Title}, IdleInputTitle, "")
+
+	lines := wrapDialogText(task.Description, textWidth)
+	start := min(m.detailScroll, max(0, len(lines)-l.descRows))
+	end := min(len(lines), start+l.descRows)
+	drawIdleInput(g, p, 1, detailDescRow, textWidth+2, lines[start:end], IdleInputBody, "")
+
+	if l.listRows > 0 {
+		y := detailDescRow + l.descRows + 1
+		label := dusk.TextDim
+		if m.detailWhiteboards {
+			label = dusk.Accent
+		}
+		g.Text(x, y, truncateCell(fmt.Sprintf("whiteboards · %d", len(task.Whiteboards)), textWidth), tokenFG(p, label, false))
+		first := 0
+		if m.detailWhiteboards {
+			first = max(0, m.whiteboardCursor-l.listRows+1)
+		}
+		for i := first; i < min(len(task.Whiteboards), first+l.listRows); i++ {
+			w := task.Whiteboards[i]
+			state := ListRowDefault
+			if m.detailWhiteboards && i == m.whiteboardCursor {
+				state = ListRowSelected
+			}
+			format := w.Format
+			if format == "" {
+				format = strings.TrimPrefix(w.Extension(), ".")
+			}
+			hint := format + " · " + relativeTime(m.clock(), w.UpdatedAt)
+			drawListRow(g, p, 1, y+1+i-first, right-1, "◇ "+w.Name, hint, state)
+		}
+	}
+
+	hints := []KeyHint{{"e", "edit"}, {"s", "status"}, {"esc", "close"}, {"?", "more"}}
+	switch {
+	case m.detailStatus != "":
+		drawStatusMessage(g, p, x, l.footer, textWidth, m.detailStatusKind, m.detailStatus)
+		return g
+	case m.detailWhiteboards && m.detailHelp:
+		hints = []KeyHint{{"j k", "move"}, {"o", "open"}, {"esc", "back"}, {"?", "less"}}
+	case m.detailWhiteboards:
+		hints = []KeyHint{{"j k", "move"}, {"o", "open"}, {"esc", "back"}, {"?", "more"}}
+	case m.detailHelp:
+		hints = []KeyHint{{"J K", "scroll"}, {"y", "copy ID"}, {"w", "whiteboards"}, {"esc", "back"}, {"?", "less"}}
+	}
+	if end < len(lines) && l.descRows > 0 && !m.detailWhiteboards && !m.detailHelp {
+		text := fmt.Sprintf("↓ %d more line", len(lines)-end)
+		if len(lines)-end != 1 {
+			text += "s"
+		}
+		// Keep the painted frames' 18-cell slot at full dialog width.
+		slot := ansi.StringWidth(text) + 2
+		if l.width == dialogMaxWidth {
+			slot = max(slot, 18)
+		}
+		if slot <= textWidth {
+			g.Text(right-slot, l.footer, text, tokenFG(p, dusk.TextFaint, false))
+			textWidth -= slot
+			// Prefer keeping Close and More visible when actions don't fit.
+			for len(hints) > 2 && dialogHintsWidth(hints) > textWidth {
+				hints = hints[1:]
+			}
+		}
+	}
+	drawDialogHints(g, p, x, l.footer, textWidth, hints)
+	return g
+}
+
+func (m *model) taskDeleteDialog() *termgrid.Grid {
+	// 02/dialog-80x24 specifies a shorter confirmation, not a detail view.
+	w, h := m.dialogSize(10)
+	if w < 2 || h < 2 {
+		return nil
+	}
+	task := m.confirmTask
+	title := fmt.Sprintf("Delete task “%s”?", task.Title)
+	body := shortID(task.ID)
+	var losses []string
+	if strings.TrimSpace(task.Description) != "" {
+		losses = append(losses, "its description")
+	}
+	if n := len(task.Whiteboards); n > 0 {
+		link := "links"
+		if n == 1 {
+			link = "link"
+		}
+		losses = append(losses, fmt.Sprintf("its %d whiteboard %s", n, link))
+	}
+	if len(losses) == 2 {
+		body += ", " + strings.Join(losses, " and ")
+	} else if len(losses) == 1 {
+		body += " and " + losses[0]
+	}
+	body += " will be permanently deleted."
+	return confirmationDialog(m.palette, w, h, title, body, true, []KeyHint{{"esc", "keep"}, {"y", "delete"}})
+}

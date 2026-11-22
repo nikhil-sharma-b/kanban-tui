@@ -19,6 +19,8 @@ type Scenario struct {
 	// Keys are pressed in order after the first resize, spelled as
 	// tea.KeyMsg.String() spells them ("space", "enter", "esc", "j").
 	Keys []string
+	// WriteClipboard stands in for the desktop clipboard when a key copies text.
+	WriteClipboard func(string) error
 }
 
 // Scenarios maps a frame name to how to reach it. Frames without one are
@@ -37,6 +39,12 @@ var Scenarios = map[string]Scenario{
 	"02/board-80x24":   {Workspace: sample.Workspace, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j"}},
 	// Out to doing slides the window one column right.
 	"02/move-right-80x24": {Workspace: sample.Workspace, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j", "l"}},
+	"03/view":             {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter"}},
+	"02/dialog-80x24":     {Workspace: sample.Workspace, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j", "space", "t", "x"}},
+	"03/no-whiteboards":   {Workspace: sample.TaskDetailWithoutWhiteboards, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter"}},
+	"03/whiteboards":      {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "w"}},
+	"03/copied":           {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "y"}, WriteClipboard: func(string) error { return nil }},
+	"03/view-80x24":       {Workspace: sample.TaskDetail, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j", "enter"}},
 }
 
 // Run renders the scenario through the app's normal update loop and returns
@@ -44,8 +52,9 @@ var Scenarios = map[string]Scenario{
 func (s Scenario) Run() string {
 	palette := s.Palette
 	m := ui.NewWithOptions(s.Workspace(sample.Now), nil, "", ui.Options{
-		Palette: &palette,
-		Now:     func() time.Time { return sample.Now },
+		Palette:        &palette,
+		Now:            func() time.Time { return sample.Now },
+		WriteClipboard: s.WriteClipboard,
 	})
 	m, _ = m.Update(tea.WindowSizeMsg{Width: s.W, Height: s.H})
 	for _, k := range s.Keys {

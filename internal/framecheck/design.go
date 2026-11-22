@@ -10,6 +10,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 const (
@@ -86,6 +88,7 @@ type node struct {
 	Width      float64           `json:"width"`
 	Height     float64           `json:"height"`
 	Visible    *bool             `json:"visible"`
+	Clip       bool              `json:"clip"`
 	Fills      []paint           `json:"fills"`
 	Strokes    []paint           `json:"strokes"`
 	Bound      map[string]string `json:"bound"`
@@ -322,7 +325,7 @@ func (d *Design) Expect(path string) (*Expected, error) {
 	}
 	e.Grid = newGrid(w, h, d.behind(id, e))
 	r := &renderer{d: d, e: e}
-	r.paint(id, 0, 0, true)
+	r.paint(id, 0, 0, true, cellArea{right: w, bottom: h})
 	return e, nil
 }
 
@@ -379,12 +382,14 @@ type renderer struct {
 	e *Expected
 }
 
+type cellArea struct{ left, top, right, bottom int }
+
 func (r *renderer) problem(n *node, format string, args ...any) {
 	r.e.Problems = append(r.e.Problems, fmt.Sprintf("node %d %q: ", n.ID, n.Name)+fmt.Sprintf(format, args...))
 }
 
 // paint draws node id whose parent sits at (px, py) pixels from the root.
-func (r *renderer) paint(id int, px, py float64, isRoot bool) {
+func (r *renderer) paint(id int, px, py float64, isRoot bool, clip cellArea) {
 	n := r.d.nodes[id]
 	if n == nil || !n.shown() {
 		return
@@ -399,27 +404,38 @@ func (r *renderer) paint(id int, px, py float64, isRoot bool) {
 
 	switch n.Type {
 	case "text":
-		r.text(n, cx, cy)
+		r.text(n, cx, cy, cw, clip)
 	default:
 		if f, ok := n.fill(); ok && !isRoot {
 			r.fill(n, f, cx, cy, cw, ch)
 		} else if ok && isRoot {
 			// The root's own fill is the background of every cell.
 			tok := r.d.token(n, "fill", f, r.e)
-			for i := range r.e.Grid.Cells {
-				r.e.Grid.Cells[i] = Cell{Ch: ' ', BG: tok}
+			if tok != "scrim" {
+				for i := range r.e.Grid.Cells {
+					r.e.Grid.Cells[i] = Cell{Ch: ' ', BG: tok}
+				}
 			}
 		}
 		if s, ok := n.stroke(); ok && n.Type != "componentSet" {
 			r.box(n, s, cx, cy, cw, ch)
 		}
 	}
+	if n.Clip {
+		left, okL := whole(cx)
+		top, okT := whole(cy)
+		right, okR := whole(cx + cw)
+		bottom, okB := whole(cy + ch)
+		if okL && okT && okR && okB {
+			clip = cellArea{max(clip.left, left), max(clip.top, top), min(clip.right, right), min(clip.bottom, bottom)}
+		}
+	}
 	for _, c := range n.Children {
-		r.paint(c, x, y, false)
+		r.paint(c, x, y, false, clip)
 	}
 }
 
-func (r *renderer) text(n *node, cx, cy float64) {
+func (r *renderer) text(n *node, cx, cy, cw float64, clip cellArea) {
 	x, okX := whole(cx)
 	y, okY := whole(cy)
 	if !okX || !okY {
@@ -439,10 +455,18 @@ func (r *renderer) text(n *node, cx, cy float64) {
 		fg = r.d.token(n, "fill", f, r.e)
 	}
 	col := x
-	for _, ch := range n.Characters {
+	text := n.Characters
+	if w, ok := whole(cw); ok && w > 0 {
+		text = ansi.Wrap(text, w, "")
+	}
+	for _, ch := range text {
 		if ch == '\n' {
 			y++
 			col = x
+			continue
+		}
+		if col < clip.left || col >= clip.right || y < clip.top || y >= clip.bottom {
+			col++
 			continue
 		}
 		bg := r.e.Grid.At(col, y).BG
@@ -463,6 +487,21 @@ func (r *renderer) fill(n *node, f paint, cx, cy, cw, ch float64) {
 	w, okW := whole(cw)
 	h, okH := whole(ch)
 
+	// The FigCraft overlay stands for a repaint, not a terminal fill.
+	if tok == "scrim" && okX && okY && okW && okH {
+		bg := r.d.behind(n.ID, r.e)
+		for row := y; row < y+h; row++ {
+			for col := x; col < x+w; col++ {
+				c := r.e.Grid.At(col, row)
+				c.BG = bg
+				if c.Ch != ' ' && c.Ch != 0 {
+					c.FG = "text-faint"
+				}
+				r.e.Grid.set(col, row, c)
+			}
+		}
+		return
+	}
 	// Accent bar: half a cell wide at col 0 → ▌ on every row it spans.
 	if okX && okY && okH && math.Abs(cw-0.5) < eps {
 		for row := y; row < y+h; row++ {
