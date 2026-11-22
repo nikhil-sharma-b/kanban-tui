@@ -41,22 +41,36 @@ type Card struct {
 	Desc  string
 	Meta  string
 	State CardState
+	// Compact is Density=compact: no inset rows, square full-height surface.
+	Compact bool
 }
 
-// cardHeight is the card's height in rows at regular density: an inset row,
-// its text rows, an inset row.
+// cardHeight is the card's height in rows: its text rows, plus an inset row
+// above and below at regular density.
 func cardHeight(c Card) int {
-	if c.State != CardSelected {
-		return 3
+	rows := 1
+	if c.State == CardSelected {
+		rows = 3 // title, blank, meta
+		if c.Desc != "" {
+			rows++
+		}
 	}
-	rows := 3 // title, blank, meta
-	if c.Desc != "" {
-		rows++
+	if c.Compact {
+		return rows
 	}
 	return rows + 2
 }
 
-// drawCard draws a regular-density card with its top-left corner at x, y and
+// cardSlot is the rows a card takes in a column: compact cards sit one blank
+// row below the header or the card above.
+func cardSlot(c Card) int {
+	if c.Compact {
+		return cardHeight(c) + 1
+	}
+	return cardHeight(c)
+}
+
+// drawCard draws a card with its top-left corner at x, y and
 // returns its height.
 func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 	surface, title := dusk.Surface, tokenFG(p, dusk.TextCard, false)
@@ -83,11 +97,17 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 			g.Set(x+col, row, termgrid.Cell{Ch: ch, FG: fg.FG, Faint: fg.Faint, BG: g.At(x+col, row).BG})
 		}
 	}
-	inset(y, '▗', '▄', '▖')
-	inset(y+h-1, '▝', '▀', '▘')
-	g.Fill(x, y+1, width, h-2, bg)
+	top := y + 1
+	if c.Compact {
+		g.Fill(x, y, width, h, bg)
+		top = y
+	} else {
+		inset(y, '▗', '▄', '▖')
+		inset(y+h-1, '▝', '▀', '▘')
+		g.Fill(x, y+1, width, h-2, bg)
+	}
 
-	row := y + 1
+	row := top
 	g.Text(x+2, row, truncateCell(c.Title, textWidth), title)
 	if c.State == CardSelected {
 		row++
@@ -97,7 +117,7 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 		}
 		row++ // one blank row before the meta
 		g.Text(x+2, row, truncateCell(c.Meta, textWidth), tokenFG(p, dusk.TextDim, false))
-		for r := y + 1; r <= row; r++ {
+		for r := top; r <= row; r++ {
 			g.Text(x, r, "▌", tokenFG(p, dusk.Accent, false))
 		}
 	}
@@ -113,7 +133,7 @@ func RenderCard(p dusk.Palette, width int, c Card) string {
 
 // taskCard is the card a task shows on the board.
 func (m *model) taskCard(task *domain.Task, selected bool) Card {
-	c := Card{Title: singleLine(task.Title)}
+	c := Card{Title: singleLine(task.Title), Compact: m.compact()}
 	switch {
 	case selected:
 		c.State = CardSelected
@@ -188,8 +208,17 @@ func RenderBadge(p dusk.Palette, label string) string {
 // hint, a blank row, so it reads like a card.
 const scrollUpRows = 3
 
-// duskBodyHeight is the card area: rows 5 to H−3 (1-based).
-func (m *model) duskBodyHeight() int { return max(1, m.height-7) }
+// compact is Density=compact, used below 30 rows.
+func (m *model) compact() bool { return m.height < compactBelowRows }
+
+// duskBodyHeight is the card area: rows 5 to H−3 (1-based), ending above the
+// Column rail and its blank row when the rail shows.
+func (m *model) duskBodyHeight() int {
+	if m.showRail() {
+		return max(1, m.height-9)
+	}
+	return max(1, m.height-7)
+}
 
 // columnCards returns the cards of a column with the selection marked.
 func (m *model) columnCards(status domain.Status, active bool) []Card {
@@ -215,7 +244,7 @@ func fitCards(cards []Card, scroll, height int) int {
 	}
 	count := 0
 	for i := scroll; i < len(cards); i++ {
-		h := cardHeight(cards[i])
+		h := cardSlot(cards[i])
 		reserve := 0
 		if i+1 < len(cards) {
 			reserve = 1
@@ -246,7 +275,8 @@ func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status
 	}
 	end := scroll + fitCards(cards, scroll, height)
 	for i := scroll; i < end; i++ {
-		row += drawCard(g, p, x, row, width, cards[i])
+		drawCard(g, p, x, row+cardSlot(cards[i])-cardHeight(cards[i]), width, cards[i])
+		row += cardSlot(cards[i])
 	}
 	if hidden := len(cards) - end; hidden > 0 {
 		drawScrollHint(g, p, x, row, ScrollDown, hidden)

@@ -4,10 +4,10 @@
 
 **Blocked by:** 03 — Board at 120×36
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 01/default-80x24, 02/board-80x24, 02/move-right-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Column rail and Keybar (narrow) match their 00 Foundations variants in dark and in the light preview
-- [ ] Resizing the terminal between 80×24 and 120×36 switches layout with no stale rows, and the selected task stays selected
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 01/default-80x24, 02/board-80x24, 02/move-right-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Column rail and Keybar (narrow) match their 00 Foundations variants in dark and in the light preview
+- [x] Resizing the terminal between 80×24 and 120×36 switches layout with no stale rows, and the selected task stays selected

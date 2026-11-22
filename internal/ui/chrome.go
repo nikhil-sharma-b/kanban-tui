@@ -43,6 +43,12 @@ const (
 	keybarWideGap   = 3
 	keybarNarrowGap = 2
 	keybarWideMin   = 100
+	// Below narrowBelowCols the board is narrow: columns 2 cols apart and no
+	// daily count in the header (80×24).
+	narrowBelowCols = keybarWideMin
+	narrowColumnGap = 2
+	// Below compactBelowRows cards use Density=compact.
+	compactBelowRows = 30
 )
 
 // clock is the model's now, defaulting to time.Now for hand-built models.
@@ -197,6 +203,49 @@ func RenderKeybar(p dusk.Palette, size KeybarSize, width int, hints []KeyHint) s
 	return renderGrid(g)
 }
 
+// ─── Column rail ─────────────────────────────────────────────────────────────
+
+// railSide names the hidden columns on one side, nearest to the window first
+// in reading order: "a · b", or with 3+ "doing +2" (right) / "+2 todo" (left).
+func railSide(names []string, left bool) string {
+	switch {
+	case len(names) == 0:
+		return ""
+	case len(names) <= 2:
+		return strings.Join(names, " · ")
+	case left:
+		return fmt.Sprintf("+%d %s", len(names)-1, names[len(names)-1])
+	default:
+		return fmt.Sprintf("%s +%d", names[0], len(names)-1)
+	}
+}
+
+func drawColumnRail(g *termgrid.Grid, p dusk.Palette, x, y, width int, left, right []string) {
+	st := tokenFG(p, dusk.TextDim, false)
+	if s := railSide(left, true); s != "" {
+		g.Text(x, y, "‹ "+s, st)
+	}
+	if s := railSide(right, false); s != "" {
+		s += " ›"
+		g.Text(x+width-len([]rune(s)), y, s, st)
+	}
+}
+
+// RenderColumnRail draws the Column rail component: hidden columns left and
+// right of the window, width cells wide.
+func RenderColumnRail(p dusk.Palette, width int, left, right []string) string {
+	g := termgrid.New(width, 1, tokenBG(p, dusk.Bg))
+	drawColumnRail(g, p, 0, 0, width, left, right)
+	return renderGrid(g)
+}
+
+// showRail reports whether hidden columns go in the Column rail. At four
+// visible columns they are marked on the column headers instead (01/more-columns).
+func (m *model) showRail() bool {
+	_, n := m.boardWindow()
+	return n < len(m.board.Statuses()) && n < duskMaxColumns
+}
+
 // ─── Board ───────────────────────────────────────────────────────────────────
 
 func (m *model) appHeader() AppHeader {
@@ -212,11 +261,12 @@ func (m *model) appHeader() AppHeader {
 		open += len(m.board.Order[status])
 	}
 	h.Counts = fmt.Sprintf("%d open", open)
-	if first, n := m.boardWindow(); n < len(m.board.Statuses()) {
+	if first, n := m.boardWindow(); n < len(m.board.Statuses()) && !m.showRail() {
 		h.Counts = fmt.Sprintf("columns %d–%d of %d", first+1, first+n, len(m.board.Statuses()))
 		return h
 	}
-	if !m.onDailyBoard() && m.workspace != nil {
+	// The daily count is left out at narrow widths (01/default-80x24).
+	if !m.onDailyBoard() && m.workspace != nil && m.width >= narrowBelowCols {
 		if daily := m.workspace.DailyProject(); daily != nil && daily.Board != nil {
 			if n := daily.Board.ActiveTaskCount(); n > 0 {
 				h.Counts += fmt.Sprintf(" · %d on daily", n)
@@ -298,8 +348,13 @@ func (m *model) renderDuskBoard() string {
 
 	statuses := m.board.Statuses()
 	first, n := m.boardWindow()
+	rail := m.showRail()
+	gap := duskColumnGap
+	if m.width < narrowBelowCols {
+		gap = narrowColumnGap
+	}
 	if n > 0 {
-		colWidth := (inner - duskColumnGap*(n-1)) / n
+		colWidth := (inner - gap*(n-1)) / n
 		// An empty board shows the add hint in the active column only; once
 		// the board has tasks, every empty column shows it.
 		boardEmpty := true
@@ -311,18 +366,31 @@ func (m *model) renderDuskBoard() string {
 		for i := 0; i < n; i++ {
 			idx := first + i
 			status := statuses[idx]
-			x := screenGutter + i*(colWidth+duskColumnGap)
+			x := screenGutter + i*(colWidth+gap)
 			active := idx == m.activeColumn
 			hx := x
-			if i == 0 && first > 0 {
+			if i == 0 && first > 0 && !rail {
 				hx = g.Text(x, 3, "‹", tokenFG(p, dusk.TextDim, false)) + 1
 			}
 			hx = drawColumnHeader(g, p, hx, 3, columnLabel(status, len(m.visible[status])), active)
-			if i == n-1 && first+n < len(statuses) {
+			if i == n-1 && first+n < len(statuses) && !rail {
 				g.Text(hx+1, 3, "›", tokenFG(p, dusk.TextDim, false))
 			}
 			m.drawColumnBody(g, x, 4, colWidth, m.duskBodyHeight(), status, active, active || !boardEmpty)
 		}
+	}
+
+	if rail {
+		var left, right []string
+		for i, status := range statuses {
+			name := strings.ToLower(status.Title())
+			if i < first {
+				left = append(left, name)
+			} else if i >= first+n {
+				right = append(right, name)
+			}
+		}
+		drawColumnRail(g, p, screenGutter, m.height-4, inner, left, right)
 	}
 
 	size := KeybarWide

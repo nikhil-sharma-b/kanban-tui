@@ -2,7 +2,7 @@
 # enforced: must match design.figcraft cell for cell. pending: reported, never fails.
 # Each Dusk ticket moves its frames to enforced.
 enforced 01/default
-pending  01/default-80x24
+enforced 01/default-80x24
 pending  01/sync-error
 pending  01/sync-reloaded
 pending  01/filter-active
@@ -11,8 +11,8 @@ enforced 01/overflow-column
 enforced 01/empty-board
 enforced 01/empty-column
 pending  02/dialog-80x24
-pending  02/move-right-80x24
-pending  02/board-80x24
+enforced 02/move-right-80x24
+enforced 02/board-80x24
 pending  03/view
 pending  03/no-whiteboards
 pending  03/empty-title

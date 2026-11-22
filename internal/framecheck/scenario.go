@@ -32,6 +32,11 @@ var Scenarios = map[string]Scenario{
 	"01/overflow-column": {Workspace: sample.OverflowColumn, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"j", "j", "j", "j", "j", "j", "j", "j"}},
 	// Out to done slides the window to columns 2–5; back to todo keeps it.
 	"01/more-columns": {Workspace: sample.MoreColumns, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "l", "l", "l", "h", "h", "j"}},
+	// 80×24: two columns, compact cards, the rest named in the Column rail.
+	"01/default-80x24": {Workspace: sample.Workspace, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j"}},
+	"02/board-80x24":   {Workspace: sample.Workspace, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j"}},
+	// Out to doing slides the window one column right.
+	"02/move-right-80x24": {Workspace: sample.Workspace, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j", "l"}},
 }
 
 // Run renders the scenario through the app's normal update loop and returns

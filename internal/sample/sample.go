@@ -39,11 +39,11 @@ func homeTasks() map[domain.Status][]taskSpec {
 		},
 		"todo": {
 			{title: "Archive search by date", age: 4 * 24 * time.Hour},
-			{id: "a3f91c07e2b84d6f9a1c3e5b7d902468", title: "Undo for move and delete", desc: "Undo the last move or delete with u, from a toast", age: 2 * 24 * time.Hour, whiteboards: 2},
+			{id: "a3f91c07e2b84d6f9a1c3e5b7d902468", title: "Undo for move and delete", desc: "Undo the last move or delete", age: 2 * 24 * time.Hour, whiteboards: 2},
 			{title: "Column WIP limits", age: 3 * 24 * time.Hour},
 		},
 		"doing": {
-			{title: "Live reload from CLI writes", age: 3 * time.Hour},
+			{id: "7be20d14c6a94f0e8b3d5a7c9e1f2468", title: "Live reload from CLI writes", desc: "Watch board.db and refresh", age: 5 * time.Hour},
 			{title: "Revamp the TUI", age: 1 * time.Hour},
 		},
 		"done": {

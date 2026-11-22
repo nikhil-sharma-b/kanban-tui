@@ -150,6 +150,10 @@ func TestComponents(t *testing.T) {
 			func(p dusk.Palette, _ int) string { return ui.RenderColumnHeader(p, "doing · 2", true) }},
 		{"Keybar Size=wide", "Components/Keybar/Size=wide", "Components · light preview/Chrome/Keybar#0",
 			func(p dusk.Palette, w int) string { return ui.RenderKeybar(p, ui.KeybarWide, w, keybarHints) }},
+		{"Keybar Size=narrow", "Components/Keybar/Size=narrow", "Components · light preview/Chrome/Keybar#1",
+			func(p dusk.Palette, w int) string { return ui.RenderKeybar(p, ui.KeybarNarrow, w, keybarHints) }},
+		{"Column rail", "Components/Column rail", "Components · light preview/Chrome/Column rail#0",
+			func(p dusk.Palette, w int) string { return ui.RenderColumnRail(p, w, nil, []string{"doing", "done"}) }},
 		{"Key hint", "Components/Key hint", "Components · light preview/Chrome/Keybar#0/hints/Key hint#0",
 			func(p dusk.Palette, _ int) string { return ui.RenderKeyHint(p, ui.KeyHint{Key: "n", Label: "new"}) }},
 		{"Card State=default", "Components/Card/State=default, Density=regular", "Components · light preview/Card/Card#0",
@@ -164,6 +168,19 @@ func TestComponents(t *testing.T) {
 		{"Card State=done", "Components/Card/State=done, Density=regular", "Components · light preview/Card/Card#2",
 			func(p dusk.Palette, w int) string {
 				return ui.RenderCard(p, w, ui.Card{Title: "Copy task ID keybind", State: ui.CardDone})
+			}},
+		{"Card State=default compact", "Components/Card/State=default, Density=compact", "Components · light preview/Card/Card#3",
+			func(p dusk.Palette, w int) string {
+				return ui.RenderCard(p, w, ui.Card{Title: "Archive search by date", State: ui.CardDefault, Compact: true})
+			}},
+		{"Card State=selected compact", "Components/Card/State=selected, Density=compact", "Components · light preview/Card/Card#4",
+			func(p dusk.Palette, w int) string {
+				return ui.RenderCard(p, w, ui.Card{Title: "Undo for move and delete", Desc: "Undo the last move or delete with u, from a toast",
+					Meta: "a3f91c07 · 2d ago · ◇2", State: ui.CardSelected, Compact: true})
+			}},
+		{"Card State=done compact", "Components/Card/State=done, Density=compact", "Components · light preview/Card/Card#5",
+			func(p dusk.Palette, w int) string {
+				return ui.RenderCard(p, w, ui.Card{Title: "Copy task ID keybind", State: ui.CardDone, Compact: true})
 			}},
 		{"Scroll hint Dir=up", "Components/Scroll hint/Dir=up", "Components · light preview/Toast + Scroll hint/Scroll hint#0",
 			func(p dusk.Palette, _ int) string { return ui.RenderScrollHint(p, ui.ScrollUp, 2) }},

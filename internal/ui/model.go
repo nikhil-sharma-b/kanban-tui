@@ -434,15 +434,8 @@ func (m *model) View() string {
 		return ""
 	}
 
-	var view string
 	footerHeight := 2
-	if m.useCompactBoardLayout() {
-		footer := m.renderFooter()
-		footerHeight = lipgloss.Height(footer)
-		view = lipgloss.JoinVertical(lipgloss.Left, m.renderHeader(), m.renderBoard(), footer)
-	} else {
-		view = m.renderDuskBoard()
-	}
+	view := m.renderDuskBoard()
 
 	switch m.mode {
 	case modeCreate:
@@ -2194,41 +2187,9 @@ func (m *model) cardColumnWidth(colIndex int) int {
 // visibleTaskCount returns how many task cards fit in the column body starting
 // from the given scroll offset, by measuring actual rendered card heights.
 func (m *model) visibleTaskCount(status domain.Status, scroll int) int {
-	if !m.useCompactBoardLayout() {
-		statuses := m.board.Statuses()
-		active := m.activeColumn < len(statuses) && statuses[m.activeColumn] == status
-		return max(1, fitCards(m.columnCards(status, active), scroll, m.duskBodyHeight()))
-	}
-	bodyHeight := max(1, m.columnHeight()-5)
-	ids := m.visible[status]
-	if len(ids) == 0 {
-		return 1
-	}
-	available := bodyHeight
-	if scroll > 0 {
-		available-- // "▲ more" indicator
-	}
-	innerWidth := max(1, m.cardColumnWidth(m.activeColumn)-4)
-	count := 0
-	for i := scroll; i < len(ids); i++ {
-		task := m.board.Tasks[ids[i]]
-		if task == nil {
-			continue
-		}
-		card := m.renderTaskCard(task, innerWidth, false, theme.Mauve)
-		h := lipgloss.Height(card)
-		// Reserve 1 line for "▼ N more" if there are more tasks after this.
-		reserve := 0
-		if i+1 < len(ids) {
-			reserve = 1
-		}
-		if available-h-reserve < 0 && count > 0 {
-			break
-		}
-		available -= h
-		count++
-	}
-	return max(1, count)
+	statuses := m.board.Statuses()
+	active := m.activeColumn < len(statuses) && statuses[m.activeColumn] == status
+	return max(1, fitCards(m.columnCards(status, active), scroll, m.duskBodyHeight()))
 }
 
 func (m *model) syncScroll(status domain.Status) {
