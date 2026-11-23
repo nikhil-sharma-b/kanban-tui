@@ -93,19 +93,11 @@ type node struct {
 	Strokes    []paint           `json:"strokes"`
 	Bound      map[string]string `json:"bound"`
 	Characters string            `json:"characters"`
-	Corners    struct {
-		Radii []float64 `json:"radii"`
-	} `json:"corners"`
-	Style struct {
+	Style      struct {
 		StyleID string `json:"style_id"`
 	} `json:"style"`
 	Children []int             `json:"children"`
 	VarModes map[string]string `json:"var_modes"`
-}
-
-// rounded is a panel frame with rounded corners (Dialog, Menu).
-func (n *node) rounded() bool {
-	return n.Type != "rectangle" && len(n.Corners.Radii) > 0 && n.Corners.Radii[0] > 0
 }
 
 func (n *node) shown() bool { return n.Visible == nil || *n.Visible }
@@ -414,7 +406,7 @@ func (r *renderer) paint(id int, px, py float64, isRoot bool, clip cellArea) {
 	case "text":
 		r.text(n, cx, cy, cw, clip)
 	default:
-		if f, ok := n.fill(); ok && (!isRoot || (n.rounded() && n.Type != "frame")) {
+		if f, ok := n.fill(); ok && (!isRoot || (n.Type != "frame" && r.panel(n, f))) {
 			r.fill(n, f, cx, cy, cw, ch)
 		} else if ok && isRoot {
 			// The root's own fill is the background of every cell.
@@ -488,6 +480,16 @@ func (r *renderer) text(n *node, cx, cy, cw float64, clip cellArea) {
 }
 
 // fill applies a filled frame or rectangle, including the shape → glyph rules.
+// panel is a frame filled with a surface colour (Dialog, Menu); cards draw
+// their surface as a rectangle, so only panels are frames.
+func (r *renderer) panel(n *node, f paint) bool {
+	if n.Type == "rectangle" {
+		return false
+	}
+	tok := r.d.token(n, "fill", f, r.e)
+	return tok == "surface" || tok == "surface-selected"
+}
+
 func (r *renderer) fill(n *node, f paint, cx, cy, cw, ch float64) {
 	tok := r.d.token(n, "fill", f, r.e)
 	x, okX := whole(cx)
@@ -495,9 +497,9 @@ func (r *renderer) fill(n *node, f paint, cx, cy, cw, ch float64) {
 	w, okW := whole(cw)
 	h, okH := whole(ch)
 
-	// A rounded panel (Dialog, Menu): the fill stops half a cell inside its
+	// A panel (Dialog, Menu): the fill stops half a cell inside its
 	// outer ring, whose half blocks in the fill colour draw the edge.
-	if n.rounded() && okX && okY && okW && okH && w >= 2 && h >= 2 {
+	if r.panel(n, f) && okX && okY && okW && okH && w >= 2 && h >= 2 {
 		for row := y; row < y+h; row++ {
 			for col := x; col < x+w; col++ {
 				var ch rune

@@ -61,7 +61,7 @@ type MenuItem struct {
 }
 
 func menuGrid(p dusk.Palette, width int, items []MenuItem) *termgrid.Grid {
-	g := roundedBox(p, width, len(items)+2, dusk.Surface)
+	g := panelBox(p, width, len(items)+2, dusk.Surface)
 	for i, item := range items {
 		drawListRow(g, p, 1, i+1, width-2, item.Label, item.Hint, item.State)
 	}

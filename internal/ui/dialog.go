@@ -11,13 +11,13 @@ import (
 
 // newDialog draws the Foundations shell. Callers lay out content inside it.
 func newDialog(p dusk.Palette, w, h int) *termgrid.Grid {
-	return roundedBox(p, w, h, dusk.SurfaceSelected)
+	return panelBox(p, w, h, dusk.SurfaceSelected)
 }
 
-// roundedBox is a panel whose fill stops half a cell inside its outer ring:
+// panelBox is a panel whose fill stops half a cell inside its outer ring:
 // half blocks in the surface colour draw the edge, so there is no stroke and
 // the ring's other half shows whatever the box is blitted onto.
-func roundedBox(p dusk.Palette, w, h int, surface dusk.Token) *termgrid.Grid {
+func panelBox(p dusk.Palette, w, h int, surface dusk.Token) *termgrid.Grid {
 	g := termgrid.New(w, h, tokenBG(p, surface))
 	if w < 2 || h < 2 {
 		return g

@@ -152,7 +152,7 @@ func (m *model) drawWhichKey(g *termgrid.Grid) {
 
 func whichKeyGrid(p dusk.Palette, w int, entries []whichKeyEntry, nested bool) *termgrid.Grid {
 	rows := (len(entries) + 1) / 2
-	g := roundedBox(p, w, rows+4, dusk.Surface)
+	g := panelBox(p, w, rows+4, dusk.Surface)
 	colWidth := (w - 4) / 2
 	for i, e := range entries {
 		x := 3 + (i%2)*colWidth
