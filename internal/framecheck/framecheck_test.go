@@ -362,8 +362,11 @@ func TestBoardHelpUsesActivePalette(t *testing.T) {
 			dark := ReadScreen(h.Run(), h.W, h.H, h.Palette)
 			h.Palette = dusk.Light
 			light := ReadScreen(h.Run(), h.W, h.H, h.Palette)
-			if !strings.Contains(strings.Join(light.Rows(), "\n"), "promote to project") {
-				t.Fatal("help did not show the full daily action")
+			rows := strings.Join(light.Rows(), "\n")
+			for _, binding := range []string{"SPC d p   promote to project", "SPC c l   move right"} {
+				if !strings.Contains(rows, binding) {
+					t.Fatalf("help did not show %q", binding)
+				}
 			}
 			for i, c := range light.Cells {
 				if strings.HasPrefix(c.FG, "raw:") || strings.HasPrefix(c.BG, "raw:") {

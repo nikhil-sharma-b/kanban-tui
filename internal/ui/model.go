@@ -2201,14 +2201,15 @@ func statusIcon(status domain.Status) string {
 }
 
 func relativeTime(now, t time.Time) string {
-	if age := now.Sub(t); age >= 24*time.Hour && age < 48*time.Hour {
-		return "yesterday"
-	}
-	return elapsedTime(now, t)
+	return formatAge(now, t, "yesterday")
 }
 
 // elapsedTime uses compact numeric ages, including "1d ago" in Focus.
 func elapsedTime(now, t time.Time) string {
+	return formatAge(now, t, "1d ago")
+}
+
+func formatAge(now, t time.Time, oneDay string) string {
 	d := now.Sub(t)
 	switch {
 	case d < time.Minute:
@@ -2227,6 +2228,9 @@ func elapsedTime(now, t time.Time) string {
 		return fmt.Sprintf("%dh ago", hours)
 	case d < 7*24*time.Hour:
 		days := int(d.Hours() / 24)
+		if days == 1 {
+			return oneDay
+		}
 		return fmt.Sprintf("%dd ago", days)
 	default:
 		return t.Local().Format("2 Jan")

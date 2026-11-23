@@ -272,11 +272,15 @@ func (m *model) helpOverlay() *termgrid.Grid {
 		g.Text(x, y, truncateCell(s, g.W-1-x), tokenFG(p, token, bold))
 	}
 	draw(pad, 2, "Keys", dusk.Text, true)
+	bodyTop, footer := 4, g.H-3
+	if g.H < bodyH+8 {
+		bodyTop, footer = 3, g.H-2
+	}
 	x := pad
 	for i, rows := range columns {
 		for j, r := range rows {
-			y := 4 + j
-			if y >= g.H-3 {
+			y := bodyTop + j
+			if y >= footer {
 				break
 			}
 			if r.key == "" {
@@ -288,7 +292,7 @@ func (m *model) helpOverlay() *termgrid.Grid {
 		}
 		x += widths[i] + gap
 	}
-	drawDialogHints(g, p, pad, g.H-3, g.W-pad-1, []KeyHint{{"esc / ?", "close"}})
+	drawDialogHints(g, p, pad, footer, g.W-pad-1, []KeyHint{{"esc / ?", "close"}})
 	return g
 }
 
