@@ -175,7 +175,18 @@ type model struct {
 	archiveFiltering   bool
 	promotion
 	promotionPending   bool
-	toast              string // success toast above the keybar until the next key
+	toast              toast // bottom-right above the keybar until the next key or its timer
+	toastSeq           uint64
+	undo               *undoEntry // offered by the showing toast only
+	saveFailing        bool       // a save failed; retrying until one succeeds
+	retryPending       bool
+	savedToast         string // short ID to toast once the edit save lands
+	reloaded           bool   // header reads “reloaded” after an external write
+	reloadedSeq        uint64
+	toastDuration      time.Duration
+	saveRetryInterval  time.Duration
+	reloadedDuration   time.Duration
+	externalInterval   time.Duration
 	reloading          bool
 	saveBarrier        <-chan struct{}
 	saveSequence       uint64
@@ -337,6 +348,10 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		palette:            dusk.Dark,
 		now:                time.Now,
 		newTask:            domain.NewTask,
+		toastDuration:      defaultToastDuration,
+		saveRetryInterval:  defaultSaveRetryInterval,
+		reloadedDuration:   defaultReloadedDuration,
+		externalInterval:   externalCheckInterval,
 	}
 
 	if !project.Daily {
@@ -392,11 +407,17 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, m.reloadWorkspaceCmd(true)
 		}
-		m.lastErr = msg.err
-		if msg.err != nil {
-			m.lastStatus = "save failed"
-		} else if m.lastStatus == "" {
-			m.lastStatus = "saved"
+		return m.handleSaveFinished(msg.err)
+	case saveRetryMsg:
+		return m.handleSaveRetry()
+	case toastExpiredMsg:
+		if msg.seq == m.toastSeq {
+			m.clearToast()
+		}
+		return m, nil
+	case reloadedExpiredMsg:
+		if msg.seq == m.reloadedSeq {
+			m.reloaded = false
 		}
 		return m, nil
 	case dailyPromotionFinishedMsg:
@@ -420,8 +441,7 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectTask(msg.selectID)
 		m.mode = modeBoard
 		m.lastErr = msg.warning
-		m.toast = fmt.Sprintf("promoted “%s” to %s / %s", singleLine(msg.title), msg.targetName, msg.status)
-		return m, nil
+		return m, m.showToast(StatusSuccess, fmt.Sprintf("promoted “%s” to %s / %s", singleLine(msg.title), msg.targetName, msg.status), KeyHint{})
 	case editorFinishedMsg:
 		return m.handleEditorResult(msg)
 	case taskCreatedMsg:
@@ -433,7 +453,12 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	case tea.KeyMsg:
-		m.createFeedback, m.lastInfo, m.toast = "", "", ""
+		undo := m.undo
+		m.createFeedback, m.lastInfo = "", ""
+		m.clearToast()
+		if undo != nil && m.mode == modeBoard && len(m.pendingKeys) == 0 && msg.String() == "u" {
+			return m.applyUndo(*undo)
+		}
 		switch m.mode {
 		case modeCreate:
 			return m.updateNewTask(msg)
@@ -799,7 +824,7 @@ func (m *model) handleEditorResult(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
 		}
 
 		m.mode = modeBoard
-		m.lastStatus = fmt.Sprintf("updated %s", shortID(task.ID))
+		m.savedToast = shortID(task.ID)
 		m.lastErr = nil
 		m.recalculateVisible()
 		m.selectTask(task.ID)
@@ -1175,7 +1200,7 @@ func (m *model) saveTask(closePanel bool) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		m.lastStatus = fmt.Sprintf("updated %s", shortID(task.ID))
+		m.savedToast = shortID(task.ID)
 		m.lastErr = nil
 		m.recalculateVisible()
 		m.selectTask(task.ID)
@@ -1406,16 +1431,14 @@ func (m *model) copySelectedTaskID() (tea.Model, tea.Cmd) {
 			m.detailStatusKind, m.detailStatus = StatusDanger, "could not copy ID"
 			return m, nil
 		}
-		m.lastErr = fmt.Errorf("copy ID: %w", err)
-		return m, nil
+		return m, m.showToast(StatusDanger, "Could not copy ID", KeyHint{})
 	}
 	if m.mode == modeDetail {
 		m.detailStatusKind, m.detailStatus = StatusSuccess, "copied "+shortID(task.ID)
 		return m, nil
 	}
 	m.lastErr = nil
-	m.lastStatus = fmt.Sprintf("copied ID %s", shortID(task.ID))
-	return m, nil
+	return m, m.showToast(StatusSuccess, "Copied "+shortID(task.ID), KeyHint{})
 }
 
 func (m *model) updateWhiteboards(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1647,14 +1670,14 @@ func (m *model) shiftSelected(delta int) (tea.Model, tea.Cmd) {
 	if task == nil {
 		return m, nil
 	}
+	spot := m.undoSpot(task)
 	if !m.board.ShiftTask(task.ID, delta) {
 		return m, nil
 	}
 
-	m.lastStatus = fmt.Sprintf("moved %s \u2192 %s", shortID(task.ID), task.Status.Title())
 	m.recalculateVisible()
 	m.selectTask(task.ID)
-	return m, m.saveWorkspaceCmd()
+	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusSuccess, "Moved to "+columnName(task.Status), spot))
 }
 
 func (m *model) reorderSelected(delta int) (tea.Model, tea.Cmd) {
@@ -1706,6 +1729,8 @@ func (m *model) archiveSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	spot := m.undoSpot(task)
+	spot.archived = true
 	if _, err := m.board.ArchiveTask(task.ID); err != nil {
 		m.mode = modeBoard
 		m.lastErr = err
@@ -1713,10 +1738,9 @@ func (m *model) archiveSelected() (tea.Model, tea.Cmd) {
 	}
 
 	m.mode = modeBoard
-	m.lastStatus = "archived task"
 	m.lastErr = nil
 	m.recalculateVisible()
-	return m, m.saveWorkspaceCmd()
+	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusInfo, m.quotedToast("Archived ", task.Title, undoHint), spot))
 }
 
 func (m *model) moveSelection(delta int) {

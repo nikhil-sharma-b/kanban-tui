@@ -3,8 +3,8 @@
 # Each Dusk ticket moves its frames to enforced.
 enforced 01/default
 enforced 01/default-80x24
-pending  01/sync-error
-pending  01/sync-reloaded
+enforced 01/sync-error
+enforced 01/sync-reloaded
 enforced 01/filter-active
 enforced 01/more-columns
 enforced 01/overflow-column
@@ -135,15 +135,15 @@ pending  14/group-task
 pending  14/group-task-80x24
 pending  14/root-80x24
 pending  14/placement-flip
-pending  15/saved
-pending  15/archived-undo
-pending  15/moved
-pending  15/copied-id
-pending  15/archived-undo-80x24
-pending  15/store-unreadable-80x24
-pending  15/save-error
-pending  15/external-reload
-pending  15/store-unreadable
+enforced 15/saved
+enforced 15/archived-undo
+enforced 15/moved
+enforced 15/copied-id
+enforced 15/archived-undo-80x24
+enforced 15/store-unreadable-80x24
+enforced 15/save-error
+enforced 15/external-reload
+enforced 15/store-unreadable
 pending  16/board
 pending  16/board-80x24
 pending  16/task-detail

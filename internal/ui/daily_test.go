@@ -319,8 +319,8 @@ func TestDailyPromoteMovesTaskToChosenProjectColumn(t *testing.T) {
 	if promoted == nil || promoted.Status != domain.StatusInProgress || promoted.Title != task.Title || promoted.Description != task.Description {
 		t.Fatalf("task not promoted to target column: %+v", promoted)
 	}
-	if want := "promoted “Ship release” to Work / " + string(domain.StatusInProgress); m.toast != want {
-		t.Fatalf("toast = %q, want %q", m.toast, want)
+	if want := "promoted “Ship release” to Work / " + string(domain.StatusInProgress); m.toast.text != want {
+		t.Fatalf("toast = %q, want %q", m.toast.text, want)
 	}
 	if got := m.boardSelectedTask(); got == nil || got.ID != after.ID {
 		t.Fatalf("selection = %v, want the next card %q", got, after.Title)

@@ -280,8 +280,13 @@ func (b *Board) UpdateTask(id, title, description string) (*Task, error) {
 		return nil, fmt.Errorf("task %s not found", id)
 	}
 
+	description = strings.TrimSpace(description)
+	if task.Title == title && task.Description == description {
+		// Saving an unchanged task is not an update.
+		return task, nil
+	}
 	task.Title = title
-	task.Description = strings.TrimSpace(description)
+	task.Description = description
 	task.Touch()
 
 	return task, nil

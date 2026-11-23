@@ -137,7 +137,9 @@ func TestNewTaskDoesNotSaveWhileEarlierWriteIsUnresolved(t *testing.T) {
 	m, cmd := m.Update(keyMsg("enter"))
 	// A rejected attempt may start a cursor command, but must not queue a save.
 	// Resolve the earlier command before draining the rejected attempt.
-	m, _ = m.Update(earlierSave())
+	for _, msg := range runCmd(earlierSave) {
+		m, _ = m.Update(msg)
+	}
 	m = applyCreationCommand(m, cmd)
 	rows := ReadScreen(m.View(), 120, 36, dusk.Dark).Rows()
 	if footer := rows[26]; !strings.Contains(footer, "board is still saving; retry") {

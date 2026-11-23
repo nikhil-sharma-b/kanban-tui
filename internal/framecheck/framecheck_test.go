@@ -145,6 +145,14 @@ func TestComponents(t *testing.T) {
 			func(p dusk.Palette, w int) string {
 				return ui.RenderAppHeader(p, w, ui.AppHeader{Project: "home", Counts: counts, Sync: ui.SyncLive})
 			}},
+		{"App header Sync=error", "Components/App header/Sync=error", "Components · light preview/Chrome/App header#1",
+			func(p dusk.Palette, w int) string {
+				return ui.RenderAppHeader(p, w, ui.AppHeader{Project: "home", Counts: counts, Sync: ui.SyncError})
+			}},
+		{"App header Sync=reloaded", "Components/App header/Sync=reloaded", "Components · light preview/Chrome/App header#2",
+			func(p dusk.Palette, w int) string {
+				return ui.RenderAppHeader(p, w, ui.AppHeader{Project: "home", Counts: counts, Sync: ui.SyncReloaded})
+			}},
 		{"Column header State=normal", "Components/Column header/State=normal", "Components · light preview/Column header/Column header#0",
 			func(p dusk.Palette, _ int) string { return ui.RenderColumnHeader(p, "todo · 3", false) }},
 		{"Column header State=active", "Components/Column header/State=active", "Components · light preview/Column header/Column header#1",

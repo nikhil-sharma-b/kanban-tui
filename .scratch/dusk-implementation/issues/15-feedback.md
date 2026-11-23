@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 15/saved, 15/archived-undo, 15/moved, 15/copied-id, 15/archived-undo-80x24, 15/store-unreadable-80x24, 15/save-error, 15/external-reload, 15/store-unreadable, 01/sync-error, 01/sync-reloaded
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] App header (Sync=error, Sync=reloaded) and Toast with its key hint match their 00 Foundations variants in dark and in the light preview
-- [ ] Tests cover undo of a move and of an archive, undo being unavailable once the toast is gone, save retry until success, and that an unreadable store is never written
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 15/saved, 15/archived-undo, 15/moved, 15/copied-id, 15/archived-undo-80x24, 15/store-unreadable-80x24, 15/save-error, 15/external-reload, 15/store-unreadable, 01/sync-error, 01/sync-reloaded
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] App header (Sync=error, Sync=reloaded) and Toast with its key hint match their 00 Foundations variants in dark and in the light preview
+- [x] Tests cover undo of a move and of an archive, undo being unavailable once the toast is gone, save retry until success, and that an unreadable store is never written

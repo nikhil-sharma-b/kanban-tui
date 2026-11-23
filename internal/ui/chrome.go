@@ -26,6 +26,13 @@ type Options struct {
 	NewTask func(title, description string) (*domain.Task, error)
 	// LaunchWhiteboard opens a whiteboard file (default: the external editor).
 	LaunchWhiteboard func(path string) error
+	// ToastDuration is how long a toast shows (default 3 s).
+	ToastDuration time.Duration
+	// SaveRetryInterval is the wait before retrying a failed save (default 2 s).
+	SaveRetryInterval time.Duration
+	// ExternalCheckInterval is how often to look for writes by another
+	// process (default 1 s).
+	ExternalCheckInterval time.Duration
 }
 
 // NewWithOptions is New with a theme and clock.
@@ -45,6 +52,15 @@ func NewWithOptions(workspace *domain.Workspace, boardStore store.WorkspaceStore
 	}
 	if opts.LaunchWhiteboard != nil {
 		m.launchWhiteboard = opts.LaunchWhiteboard
+	}
+	if opts.ToastDuration > 0 {
+		m.toastDuration = opts.ToastDuration
+	}
+	if opts.SaveRetryInterval > 0 {
+		m.saveRetryInterval = opts.SaveRetryInterval
+	}
+	if opts.ExternalCheckInterval > 0 {
+		m.externalInterval = opts.ExternalCheckInterval
 	}
 	return m
 }
@@ -102,6 +118,8 @@ const (
 	SyncLive Sync = iota
 	SyncError
 	SyncReloaded
+	// SyncUnreadable is the store-unreadable screen's header (page 15).
+	SyncUnreadable
 )
 
 // AppHeader is the content of the App header component.
@@ -115,8 +133,10 @@ type AppHeader struct {
 
 func drawAppHeader(g *termgrid.Grid, p dusk.Palette, x, y, width int, h AppHeader) {
 	col := g.Text(x, y, "kanban-tui", tokenFG(p, dusk.Text, true))
-	col = g.Text(col+1, y, "›", tokenFG(p, dusk.TextFaint, false))
-	col = g.Text(col+1, y, h.Project, tokenFG(p, dusk.Accent, false))
+	if h.Project != "" {
+		col = g.Text(col+1, y, "›", tokenFG(p, dusk.TextFaint, false))
+		col = g.Text(col+1, y, h.Project, tokenFG(p, dusk.Accent, false))
+	}
 	if h.Filter != "" {
 		drawBadge(g, p, col+1, y, "/ "+h.Filter)
 	}
@@ -127,13 +147,20 @@ func drawAppHeader(g *termgrid.Grid, p dusk.Palette, x, y, width int, h AppHeade
 		dot, text, label = dusk.Danger, dusk.Danger, "save failed · retrying"
 	case SyncReloaded:
 		dot, text, label = dusk.Accent, dusk.TextDim, "reloaded · changed by CLI"
+	case SyncUnreadable:
+		dot, text, label = dusk.Danger, dusk.Danger, "can't read board"
 	}
-	rightWidth := 2 + len([]rune(label)) + 3 + len([]rune(h.Counts))
+	rightWidth := 2 + len([]rune(label))
+	if h.Counts != "" {
+		rightWidth += 3 + len([]rune(h.Counts))
+	}
 	col = x + width - rightWidth
 	col = g.Text(col, y, "●", tokenFG(p, dot, false))
 	col = g.Text(col+1, y, label, tokenFG(p, text, false))
-	col = g.Text(col+1, y, "·", tokenFG(p, dusk.TextDim, false))
-	g.Text(col+1, y, h.Counts, tokenFG(p, dusk.TextDim, false))
+	if h.Counts != "" {
+		col = g.Text(col+1, y, "·", tokenFG(p, dusk.TextDim, false))
+		g.Text(col+1, y, h.Counts, tokenFG(p, dusk.TextDim, false))
+	}
 }
 
 // RenderAppHeader draws the App header component on its own, width cells wide.
@@ -276,7 +303,7 @@ func (m *model) showRail() bool {
 // ─── Board ───────────────────────────────────────────────────────────────────
 
 func (m *model) appHeader() AppHeader {
-	h := AppHeader{Sync: SyncLive}
+	h := AppHeader{Sync: m.syncState()}
 	if m.project != nil {
 		h.Project = m.project.Name
 	}
@@ -482,10 +509,15 @@ func (m *model) duskBoard() *termgrid.Grid {
 			status = KeybarStatus{Text: "✗ " + m.columnErr.Error(), Token: dusk.Danger}
 		}
 	}
-	if m.toast != "" {
-		// A success toast sits right-aligned one row above the keybar (11/promoted).
-		toast := toastGrid(p, StatusSuccess, truncateCell(m.toast, inner-6), KeyHint{})
-		g.Blit(screenGutter+inner-toast.W, m.height-4, toast)
+	if m.toast.text != "" {
+		// The toast sits right-aligned one blank row above the keybar, and
+		// above the Column rail when it shows (page 15).
+		y := m.height - 4
+		if rail {
+			y--
+		}
+		toast := toastGrid(p, m.toast.kind, truncateCell(m.toast.text, inner-6), m.toast.hint)
+		g.Blit(screenGutter+inner-toast.W, y, toast)
 	}
 	drawKeybar(g, p, screenGutter, m.height-2, inner, size, hints, status)
 	return g

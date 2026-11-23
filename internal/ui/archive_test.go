@@ -62,8 +62,8 @@ func TestConfirmArchivesSelectedTaskAndSaves(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected save cmd after archive")
 	}
-	if got.lastStatus != "archived task" {
-		t.Fatalf("unexpected status: %q", got.lastStatus)
+	if want := "Archived “Ship feature”"; got.toast.text != want || got.undo == nil {
+		t.Fatalf("toast = %q (undo %v), want %q with undo", got.toast.text, got.undo != nil, want)
 	}
 }
 

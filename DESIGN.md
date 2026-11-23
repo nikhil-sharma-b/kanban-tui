@@ -298,7 +298,7 @@ Board keys. Rows marked *planned* come from the designs and are not yet in `inte
 | `SPC p` `p n r x` | project: switch, new, rename, delete |
 | `SPC a` `v o` | archive: view, archive old done |
 | `SPC d` `d m p X` | daily: back (toggle), done, promote, clear |
-| `u` | undo (offered in toasts, page 15, *planned*) |
+| `u` | undo the last move or archive, only while its toast shows (page 15) |
 
 Dialogs: `j k` (or `↑↓` beside a live filter) move, `↵` confirm, `tab` next field, `ctrl+e` $EDITOR, `:wq` save, `y` confirm (Safe-Key-First Rule), `esc` back.
 

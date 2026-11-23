@@ -1,6 +1,7 @@
 package framecheck
 
 import (
+	"errors"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -30,6 +31,14 @@ type Scenario struct {
 	// Loaded changes the workspace after the app has loaded it, for states
 	// loading would repair.
 	Loaded func(*domain.Workspace)
+	// Store replaces the store that discards writes, e.g. one that fails.
+	Store store.WorkspaceStore
+	// Reload lets the app notice an external write and reload the board.
+	Reload bool
+	// After are keys pressed once saves and reloads have settled.
+	After []string
+	// Unreadable opens the store-unreadable screen with this error.
+	Unreadable error
 }
 
 // Scenarios maps a frame name to how to reach it. Frames without one are
@@ -154,6 +163,17 @@ var Scenarios = map[string]Scenario{
 	"11/promote-column-80x24":   dailyScenario(sample.DailyPromote, 80, 24, "space", "d", "p", "enter", "j"),
 	"11/no-columns-fallback":    noColumnsScenario(),
 	"11/promoted":               promotedScenario(),
+	"15/saved":                  savedScenario(nil),
+	"15/save-error":             savedScenario(failingStore{}),
+	"01/sync-error":             withAfter(savedScenario(failingStore{}), "esc"),
+	"15/moved":                  {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "space", "t", "l"}},
+	"15/archived-undo":          confirmScenario(sample.Workspace, 120, 36, "space", "t", "a", "y"),
+	"15/archived-undo-80x24":    confirmScenario(sample.Workspace, 80, 24, "space", "t", "a", "y"),
+	"15/copied-id":              {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "space", "t", "y"}, WriteClipboard: func(string) error { return nil }},
+	"15/external-reload":        {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j"}, Reload: true},
+	"01/sync-reloaded":          {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j"}, Reload: true, After: []string{"esc"}},
+	"15/store-unreadable":       {W: 120, H: 36, Palette: dusk.Dark, Unreadable: errors.New("file is not a database")},
+	"15/store-unreadable-80x24": {W: 80, H: 24, Palette: dusk.Dark, Unreadable: errors.New("file is not a database")},
 	"09/delete-project":         deleteProjectScenario(120, 36),
 	"09/delete-project-80x24":   deleteProjectScenario(80, 24),
 	"09/delete-project-typing":  deleteProjectScenario(120, 36, "w", "o", "r"),
@@ -193,6 +213,18 @@ func noColumnsScenario() Scenario {
 func promotedScenario() Scenario {
 	s := dailyScenario(sample.DailyPromote, 120, 36, "space", "d", "p", "enter", "j", "enter")
 	s.Settle = true
+	return s
+}
+
+// savedScenario edits “Undo for move and delete”, saves it with :wq and lets
+// the save land in st (nil: a store that discards writes).
+func savedScenario(st store.WorkspaceStore) Scenario {
+	return Scenario{Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark,
+		Keys: []string{"l", "j", "space", "t", "e", "esc", ":", "w", "q", "enter"}, Settle: true, Store: st}
+}
+
+func withAfter(s Scenario, keys ...string) Scenario {
+	s.After = keys
 	return s
 }
 
@@ -259,16 +291,28 @@ func newTaskCreatedScenario(w, h int) Scenario {
 // the final screen as ANSI.
 func (s Scenario) Run() string {
 	palette := s.Palette
+	if s.Unreadable != nil {
+		m := ui.NewUnreadable("", unreadablePath, s.Unreadable, nil, ui.Options{Palette: &palette})
+		m, _ = m.Update(tea.WindowSizeMsg{Width: s.W, Height: s.H})
+		return m.View()
+	}
 	var st store.WorkspaceStore
 	if s.Settle {
 		st = noopStore{}
 	}
+	if s.Store != nil {
+		st = s.Store
+	}
+	if s.Reload {
+		st = reloadStore{}
+	}
 	workspace := s.Workspace(sample.Now)
 	m := ui.NewWithOptions(workspace, st, "", ui.Options{
-		Palette:        &palette,
-		Now:            func() time.Time { return sample.Now },
-		WriteClipboard: s.WriteClipboard,
-		NewTask:        s.NewTask,
+		Palette:               &palette,
+		Now:                   func() time.Time { return sample.Now },
+		WriteClipboard:        s.WriteClipboard,
+		ExternalCheckInterval: time.Nanosecond,
+		NewTask:               s.NewTask,
 		// Frames never launch a real editor.
 		LaunchWhiteboard: func(string) error { return nil },
 	})
@@ -281,7 +325,25 @@ func (s Scenario) Run() string {
 		m, cmd = m.Update(keyMsg(k))
 	}
 	if s.Settle && cmd != nil {
-		m, _ = m.Update(cmd())
+		for _, msg := range runCmd(cmd) {
+			m, _ = m.Update(msg)
+		}
+	}
+	if s.Reload {
+		// Init's poll notices the write, checks, then reloads: three hops.
+		cmd := m.Init()
+		for hop := 0; hop < 3 && cmd != nil; hop++ {
+			var next []tea.Cmd
+			for _, msg := range runCmd(cmd) {
+				var c tea.Cmd
+				m, c = m.Update(msg)
+				next = append(next, c)
+			}
+			cmd = tea.Batch(next...)
+		}
+	}
+	for _, k := range s.After {
+		m, _ = m.Update(keyMsg(k))
 	}
 	if s.Blur {
 		m, _ = m.Update(tea.BlurMsg{})
@@ -303,6 +365,48 @@ func keyMsg(k string) tea.KeyMsg {
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 }
+
+// unreadablePath is the board path page 15 shows.
+const unreadablePath = "~/Library/Application Support/kanban-tui/board.db"
+
+// runCmd runs cmd and any batch inside it, keeping the messages that arrive
+// promptly; timers still waiting are dropped.
+func runCmd(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	ch := make(chan tea.Msg, 1)
+	go func() { ch <- cmd() }()
+	var msg tea.Msg
+	select {
+	case msg = <-ch:
+	case <-time.After(100 * time.Millisecond):
+		return nil
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var out []tea.Msg
+		for _, c := range batch {
+			out = append(out, runCmd(c)...)
+		}
+		return out
+	}
+	if msg == nil {
+		return nil
+	}
+	return []tea.Msg{msg}
+}
+
+type failingStore struct{}
+
+func (failingStore) Load() (*domain.Workspace, error) { return nil, errors.New("disk full") }
+func (failingStore) Save(*domain.Workspace) error     { return errors.New("disk full") }
+
+// reloadStore reports one external write, of the same board.
+type reloadStore struct{}
+
+func (reloadStore) Load() (*domain.Workspace, error) { return sample.Workspace(sample.Now), nil }
+func (reloadStore) Save(*domain.Workspace) error     { return nil }
+func (reloadStore) Changed() (bool, error)           { return true, nil }
 
 type noopStore struct{}
 

@@ -267,7 +267,7 @@ func homeTasks() map[domain.Status][]taskSpec {
 		"todo": {
 			{title: "Archive search by date", age: 4 * 24 * time.Hour},
 			{id: DetailTaskID, title: "Undo for move and delete", desc: "Undo the last move or delete", age: 2 * 24 * time.Hour, whiteboards: 2},
-			{title: "Column WIP limits", age: 3 * 24 * time.Hour},
+			{id: "7be20d14c6a94f0e8b3d5a7c9e1f2470", title: "Column WIP limits", desc: "Warn when a column passes its cap", age: 5 * 24 * time.Hour},
 		},
 		"doing": {
 			{id: "7be20d14c6a94f0e8b3d5a7c9e1f2468", title: "Live reload from CLI writes", desc: "Watch board.db and refresh", age: 5 * time.Hour},

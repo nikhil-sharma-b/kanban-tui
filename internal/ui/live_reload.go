@@ -40,7 +40,7 @@ func (m *model) scheduleExternalCheck() tea.Cmd {
 	if _, ok := m.store.(changeWatcher); !ok {
 		return nil
 	}
-	return tea.Tick(externalCheckInterval, func(time.Time) tea.Msg { return externalCheckMsg{} })
+	return tea.Tick(m.externalInterval, func(time.Time) tea.Msg { return externalCheckMsg{} })
 }
 
 func (m *model) checkExternalChange() tea.Cmd {
@@ -86,6 +86,7 @@ func (m *model) handleExternalChange(msg externalChangeMsg) (tea.Model, tea.Cmd)
 
 func (m *model) handleWorkspaceReloaded(msg workspaceReloadedMsg) (tea.Model, tea.Cmd) {
 	m.reloading = false
+	var shown tea.Cmd
 	if msg.err != nil {
 		m.lastErr = fmt.Errorf("reload workspace: %w", msg.err)
 	} else {
@@ -93,14 +94,14 @@ func (m *model) handleWorkspaceReloaded(msg workspaceReloadedMsg) (tea.Model, te
 		if msg.conflict {
 			m.lastErr = errors.New("board changed elsewhere; reloaded and dropped your last change")
 		} else {
-			m.lastStatus = "reloaded external changes"
+			shown = m.showReloaded()
 		}
 	}
 	if msg.conflict {
 		// The conflict path does not own the polling loop.
 		return m, nil
 	}
-	return m, m.scheduleExternalCheck()
+	return m, tea.Batch(m.scheduleExternalCheck(), shown)
 }
 
 // isSaveConflict reports whether a save failed because another process wrote
@@ -116,6 +117,10 @@ func (m *model) replaceWorkspace(workspace *domain.Workspace) {
 		return
 	}
 	assignWorkspaceWhiteboardPaths(workspace, m.dataPath)
+	selectedID := ""
+	if task := m.boardSelectedTask(); task != nil {
+		selectedID = task.ID
+	}
 
 	projectID := ""
 	if m.project != nil {
@@ -143,4 +148,9 @@ func (m *model) replaceWorkspace(workspace *domain.Workspace) {
 	m.ensureColumnState()
 	m.recalculateVisible()
 	m.syncAllScroll()
+	// Keep the selection on the same task; if it is gone, the column and
+	// row stay as they were.
+	if selectedID != "" {
+		m.selectTask(selectedID)
+	}
 }

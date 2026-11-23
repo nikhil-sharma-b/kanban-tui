@@ -89,8 +89,8 @@ func TestTUIReloadsExternalChanges(t *testing.T) {
 	if m.project.ID != projectID {
 		t.Fatalf("expected to stay on project %s, got %s", projectID, m.project.ID)
 	}
-	if m.lastStatus != "reloaded external changes" {
-		t.Fatalf("unexpected status %q", m.lastStatus)
+	if m.toast.text != "Board reloaded · changed by CLI" || m.syncState() != SyncReloaded {
+		t.Fatalf("toast = %q, sync = %v; want the reloaded toast and header", m.toast.text, m.syncState())
 	}
 }
 
