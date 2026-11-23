@@ -4,10 +4,10 @@
 
 **Blocked by:** 06 — Task editing
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 12/empty, 12/second-step, 12/no-match, 12/typing, 12/from-dialog, 12/empty-80x24, 12/second-step-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] A binding added to the leader table appears in the palette with no other change
-- [ ] While a detail field is being edited, : stays the vim command line
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 12/empty, 12/second-step, 12/no-match, 12/typing, 12/from-dialog, 12/empty-80x24, 12/second-step-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] A binding added to the leader table appears in the palette with no other change
+- [x] While a detail field is being edited, : stays the vim command line

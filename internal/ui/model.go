@@ -107,6 +107,7 @@ const (
 	modeArchive
 	modeArchiveDetail
 	modeDailyPromote
+	modePalette
 )
 
 // bulkArchiveDays is the fixed v1 threshold for archiving old Done tasks.
@@ -198,7 +199,7 @@ type model struct {
 	whichKeyShown      bool     // the popover is up for pendingKeys
 	whichKeySeq        uint64
 	whichKeyDelay      time.Duration
-	projectEditPrev    mode     // where the project name dialog returns on cancel/rename
+	projectEditPrev    mode // where the project name dialog returns on cancel/rename
 	editingTaskID      string
 	editReturn         mode
 	editDiscard        bool
@@ -239,6 +240,7 @@ type model struct {
 	prevProjectID string
 	palette       dusk.Palette
 	now           func() time.Time
+	pal           paletteState
 }
 
 // ansiStripRe matches ANSI escape sequences for the dim/blur effect.
@@ -497,6 +499,8 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateArchiveDetail(msg)
 		case modeDailyPromote:
 			return m.updateDailyPromote(msg)
+		case modePalette:
+			return m.updatePalette(msg)
 		default:
 			return m.updateBoard(msg)
 		}
@@ -543,6 +547,9 @@ func (m *model) View() string {
 	}
 	if m.mode == modeDailyPromote {
 		return m.placeDialog(board, m.promoteDialog())
+	}
+	if m.mode == modePalette {
+		return m.placeDialog(board, m.paletteDialog())
 	}
 	view := renderGrid(board)
 
@@ -595,9 +602,21 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Moving while filtered keeps the new place when the filter clears.
 		m.filterOrigin = nil
 	}
+	return m.runBoardAction(action)
+}
+
+// runBoardAction does what a board binding does; the keys and the command
+// palette both come through here.
+func (m *model) runBoardAction(action boardAction) (tea.Model, tea.Cmd) {
+	statuses := m.board.Statuses()
+	if len(statuses) == 0 {
+		return m, nil
+	}
 	switch action {
 	case actQuit:
 		return m, tea.Quit
+	case actPalette:
+		return m.openPalette(false)
 	case actDailyToggle:
 		return m.toggleDaily()
 	case actDailyDone:
@@ -1406,6 +1425,9 @@ func (m *model) updateDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "enter", "q":
 		m.mode = modeBoard
+	case ":":
+		// View mode only: while a field is edited, : is the vim command line.
+		return m.openPalette(true)
 	case "e":
 		return m.beginEditSelected()
 	case "s":
@@ -1921,6 +1943,7 @@ func (m *model) selectedTask() *domain.Task {
 	case m.mode == modeDetailEdit:
 		return m.board.Tasks[m.editingTaskID]
 	case m.mode == modeDetail || m.mode == modeWhiteboards || m.mode == modeWhiteboardRename ||
+		(m.mode == modePalette && m.pal.fromDetail) ||
 		(m.mode == modeConfirm && m.confirmPrev == modeWhiteboards):
 		if m.detailTaskID != "" {
 			return m.board.Tasks[m.detailTaskID]

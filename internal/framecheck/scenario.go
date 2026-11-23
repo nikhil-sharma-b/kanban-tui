@@ -42,6 +42,8 @@ type Scenario struct {
 	WaitWhichKey bool
 	// Unreadable opens the store-unreadable screen with this error.
 	Unreadable error
+	// PaletteRecent seeds the command palette's recent actions.
+	PaletteRecent []string
 }
 
 // Scenarios maps a frame name to how to reach it. Frames without one are
@@ -184,6 +186,13 @@ var Scenarios = map[string]Scenario{
 	"14/group-task-80x24":       whichKeyScenario(sample.Workspace, 80, 24, true, "l", "j", "space", "t"),
 	"14/unbound":                whichKeyScenario(sample.Workspace, 120, 36, false, "l", "j", "space", "t", "q"),
 	"14/placement-flip":         whichKeyScenario(sample.PlacementFlip, 120, 36, true, "l", "l", "l", "j", "j", "j", "j", "j", "j", "j", "j", "j", "j", "space"),
+	"12/empty":                  paletteScenario(sample.Workspace, 120, 36, true),
+	"12/empty-80x24":            paletteScenario(sample.Workspace, 80, 24, true),
+	"12/typing":                 paletteScenario(sample.Workspace, 120, 36, false, "a", "r", "c", "h"),
+	"12/no-match":               paletteScenario(sample.Workspace, 120, 36, false, "u", "n", "d", "o"),
+	"12/second-step":            paletteScenario(sample.FourProjects, 120, 36, false, "s", "w", "i", "t", "c", "h", "enter"),
+	"12/second-step-80x24":      paletteScenario(sample.FourProjects, 80, 24, false, "s", "w", "i", "t", "c", "h", "enter"),
+	"12/from-dialog":            {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", ":"}},
 	"09/delete-project":         deleteProjectScenario(120, 36),
 	"09/delete-project-80x24":   deleteProjectScenario(80, 24),
 	"09/delete-project-typing":  deleteProjectScenario(120, 36, "w", "o", "r"),
@@ -194,6 +203,16 @@ var Scenarios = map[string]Scenario{
 // last one, so the popover shows.
 func whichKeyScenario(ws func(time.Time) *domain.Workspace, w, h int, wait bool, keys ...string) Scenario {
 	return Scenario{Workspace: ws, W: w, H: h, Palette: dusk.Dark, Keys: keys, WaitWhichKey: wait}
+}
+
+// paletteScenario opens the palette on “Undo for move and delete” in todo,
+// then types keys. recent seeds the actions 12/empty lists as recent.
+func paletteScenario(ws func(time.Time) *domain.Workspace, w, h int, recent bool, keys ...string) Scenario {
+	s := Scenario{Workspace: ws, W: w, H: h, Palette: dusk.Dark, Keys: append([]string{"l", "j", ":"}, keys...)}
+	if recent {
+		s.PaletteRecent = []string{"space t l", "space t y", "space t w"}
+	}
+	return s
 }
 
 // confirmScenario selects “Undo for move and delete” in todo (the board every
@@ -332,6 +351,7 @@ func (s Scenario) Run() string {
 		// Frames never launch a real editor.
 		LaunchWhiteboard: func(string) error { return nil },
 		WhichKeyDelay:    time.Millisecond,
+		PaletteRecent:    s.PaletteRecent,
 	})
 	if s.Loaded != nil {
 		s.Loaded(workspace)

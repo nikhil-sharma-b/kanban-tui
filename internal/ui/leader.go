@@ -28,6 +28,7 @@ const (
 	actTaskBottom
 	actSearch
 	actOpen
+	actPalette
 
 	actTaskNew
 	actTaskEdit
@@ -66,54 +67,58 @@ type boardBinding struct {
 	keys   string // space-separated tokens, e.g. "space t n"
 	action boardAction
 	desc   string
+	// label names the action in the command palette, where it is read
+	// without its group; empty falls back to desc.
+	label string
 }
 
 var boardBindings = []boardBinding{
-	{"h", actColumnLeft, "column left"},
-	{"l", actColumnRight, "column right"},
-	{"k", actTaskUp, "prev task"},
-	{"j", actTaskDown, "next task"},
-	{"left", actColumnLeft, "column left"},
-	{"right", actColumnRight, "column right"},
-	{"up", actTaskUp, "prev task"},
-	{"down", actTaskDown, "next task"},
-	{"g g", actTaskTop, "first task"},
-	{"G", actTaskBottom, "last task"},
-	{"/", actSearch, "search"},
-	{"enter", actOpen, "details"},
-	{"?", actHelp, "help"},
-	{"q", actQuit, "quit"},
-	{"ctrl+c", actQuit, "quit"},
+	{"h", actColumnLeft, "column left", "select column left"},
+	{"l", actColumnRight, "column right", "select column right"},
+	{"k", actTaskUp, "prev task", "select previous task"},
+	{"j", actTaskDown, "next task", "select next task"},
+	{"left", actColumnLeft, "column left", "select column left"},
+	{"right", actColumnRight, "column right", "select column right"},
+	{"up", actTaskUp, "prev task", "select previous task"},
+	{"down", actTaskDown, "next task", "select next task"},
+	{"g g", actTaskTop, "first task", ""},
+	{"G", actTaskBottom, "last task", ""},
+	{"/", actSearch, "search", "search tasks"},
+	{"enter", actOpen, "details", "open details"},
+	{":", actPalette, "command palette", ""},
+	{"?", actHelp, "help", ""},
+	{"q", actQuit, "quit", ""},
+	{"ctrl+c", actQuit, "quit", ""},
 
-	{"space t n", actTaskNew, "new"},
-	{"space t e", actTaskEdit, "edit"},
-	{"space t x", actTaskDelete, "delete"},
-	{"space t a", actTaskArchive, "archive"},
-	{"space t h", actTaskMoveLeft, "move left"},
-	{"space t l", actTaskMoveRight, "move right"},
-	{"space t k", actTaskReorderUp, "reorder up"},
-	{"space t j", actTaskReorderDown, "reorder down"},
-	{"space t w", actTaskWhiteboards, "whiteboards"},
-	{"space t y", actTaskCopyID, "copy ID"},
+	{"space t n", actTaskNew, "new", "new task"},
+	{"space t e", actTaskEdit, "edit", "edit task"},
+	{"space t x", actTaskDelete, "delete", "delete task"},
+	{"space t a", actTaskArchive, "archive", "archive task"},
+	{"space t h", actTaskMoveLeft, "move left", "move task left"},
+	{"space t l", actTaskMoveRight, "move right", "move task right"},
+	{"space t k", actTaskReorderUp, "reorder up", "move task up"},
+	{"space t j", actTaskReorderDown, "reorder down", "move task down"},
+	{"space t w", actTaskWhiteboards, "whiteboards", "whiteboards…"},
+	{"space t y", actTaskCopyID, "copy ID", "copy task ID"},
 
-	{"space c n", actColumnNew, "new"},
-	{"space c r", actColumnRename, "rename"},
-	{"space c d", actColumnDelete, "delete"},
-	{"space c h", actColumnMoveLeft, "move left"},
-	{"space c l", actColumnMoveRight, "move right"},
+	{"space c n", actColumnNew, "new", "new column"},
+	{"space c r", actColumnRename, "rename", "rename column"},
+	{"space c d", actColumnDelete, "delete", "delete column"},
+	{"space c h", actColumnMoveLeft, "move left", "move column left"},
+	{"space c l", actColumnMoveRight, "move right", "move column right"},
 
-	{"space p p", actProjects, "list / switch"},
-	{"space p n", actProjectNew, "new"},
-	{"space p r", actProjectRename, "rename current"},
-	{"space p x", actProjectDelete, "delete current"},
+	{"space p p", actProjects, "list / switch", "switch project…"},
+	{"space p n", actProjectNew, "new", "new project"},
+	{"space p r", actProjectRename, "rename current", "rename project"},
+	{"space p x", actProjectDelete, "delete current", "delete project"},
 
-	{"space a v", actArchiveView, "view"},
-	{"space a o", actArchiveOld, "archive old done"},
+	{"space a v", actArchiveView, "view", "view archive"},
+	{"space a o", actArchiveOld, "archive old done", ""},
 
-	{"space d d", actDailyToggle, "daily board / back"},
-	{"space d m", actDailyDone, "mark done"},
-	{"space d p", actDailyPromote, "promote to project"},
-	{"space d X", actDailyClear, "clear board"},
+	{"space d d", actDailyToggle, "daily board / back", "toggle daily board"},
+	{"space d m", actDailyDone, "mark done", "mark daily task done"},
+	{"space d p", actDailyPromote, "promote to project", "promote daily task"},
+	{"space d X", actDailyClear, "clear board", "clear daily board"},
 }
 
 // boardGroups names the prefixes, drawn as "+name" like which-key.nvim.

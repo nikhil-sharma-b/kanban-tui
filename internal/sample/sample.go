@@ -98,7 +98,18 @@ func DailyEmpty(now time.Time) *domain.Workspace {
 // DailyPromote is DailyBoard with the four projects 11/promote-project lists:
 // home (4 columns), work (3), workbench (5) and reading (2).
 func DailyPromote(now time.Time) *domain.Workspace {
-	w := DailyBoard(now)
+	return withFourProjects(DailyBoard(now), now)
+}
+
+// FourProjects is 01/default beside work, workbench and reading, the
+// projects 12/second-step picks from.
+func FourProjects(now time.Time) *domain.Workspace {
+	return withFourProjects(Workspace(now), now)
+}
+
+// withFourProjects puts work (3 columns), workbench (5) and reading (2)
+// after w's first project.
+func withFourProjects(w *domain.Workspace, now time.Time) *domain.Workspace {
 	daily := w.DailyProject()
 	withColumns := func(name string, columns ...domain.Status) *domain.Project {
 		p := project(name, now, nil)

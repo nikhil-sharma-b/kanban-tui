@@ -36,6 +36,9 @@ type Options struct {
 	// ExternalCheckInterval is how often to look for writes by another
 	// process (default 1 s).
 	ExternalCheckInterval time.Duration
+	// PaletteRecent seeds the command palette's recent actions, most recent
+	// first, as binding keys (e.g. "space t l").
+	PaletteRecent []string
 }
 
 // NewWithOptions is New with a theme and clock.
@@ -44,6 +47,7 @@ func NewWithOptions(workspace *domain.Workspace, boardStore store.WorkspaceStore
 	if opts.Palette != nil {
 		m.palette = *opts.Palette
 	}
+	m.pal.recent = actionsForKeys(opts.PaletteRecent)
 	if opts.WhichKeyDelay > 0 {
 		m.whichKeyDelay = opts.WhichKeyDelay
 	}

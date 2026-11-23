@@ -287,7 +287,7 @@ Board keys. Rows marked *planned* come from the designs and are not yet in `inte
 | `↵` | open task detail |
 | `/` | search / refine filter |
 | `esc` | back one level: cancels a pending leader, then clears the filter |
-| `:` | command palette (page 12, *planned*) |
+| `:` | command palette (page 12) |
 | `z` | focus mode (page 13, *planned*) |
 | `?` | help / cheat sheet |
 | `q` · `ctrl+c` | quit |
