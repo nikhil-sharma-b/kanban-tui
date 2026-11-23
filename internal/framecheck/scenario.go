@@ -120,10 +120,27 @@ var Scenarios = map[string]Scenario{
 	"08/rename-80x24":            whiteboardsScenario(sample.Whiteboards, 80, 24, "r"),
 	"08/open-in-editor":          whiteboardsScenario(sample.Whiteboards, 120, 36, "enter"),
 	"08/open-in-editor-80x24":    whiteboardsScenario(sample.Whiteboards, 80, 24, "enter"),
-	"09/delete-project":          deleteProjectScenario(120, 36),
-	"09/delete-project-80x24":    deleteProjectScenario(80, 24),
-	"09/delete-project-typing":   deleteProjectScenario(120, 36, "w", "o", "r"),
-	"09/delete-project-matched":  deleteProjectScenario(120, 36, "w", "o", "r", "k"),
+	"10/list":                    archiveScenario(sample.Archive, 120, 36, "j"),
+	"10/list-80x24":              archiveScenario(sample.Archive, 80, 24, "j"),
+	"10/searching":               archiveScenario(sample.Archive, 120, 36, "/", "dialog"),
+	"10/searching-80x24":         archiveScenario(sample.Archive, 80, 24, "/", "dialog"),
+	"10/no-match":                archiveScenario(sample.Archive, 120, 36, "/", "invoice"),
+	"10/empty":                   archiveScenario(sample.Workspace, 120, 36),
+	"10/empty-80x24":             archiveScenario(sample.Workspace, 80, 24),
+	"10/detail":                  archiveScenario(sample.Archive, 120, 36, "j", "enter"),
+	"10/detail-80x24":            archiveScenario(sample.Archive, 80, 24, "j", "enter"),
+	"10/restored":                archiveScenario(sample.ArchiveRestore, 120, 36, "j", "r"),
+	// After restoring “Copy task ID keybind”, open the task whose column is gone.
+	"10/restore-fallback":  archiveScenario(sample.ArchiveRestore, 120, 36, "j", "r", "j", "j", "j", "j", "enter"),
+	"10/archive-old":       confirmScenario(sample.ArchiveOld, 120, 36, "space", "a", "o"),
+	"10/archive-old-80x24": confirmScenario(sample.ArchiveOld, 80, 24, "space", "a", "o"),
+	// The cursor sits on done, which the bulk archive empties.
+	"10/archived-old":           {Workspace: sample.ArchiveOld, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "l", "l", "space", "a", "o", "y"}},
+	"10/archive-old-none":       {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "l", "l", "space", "a", "o"}},
+	"09/delete-project":         deleteProjectScenario(120, 36),
+	"09/delete-project-80x24":   deleteProjectScenario(80, 24),
+	"09/delete-project-typing":  deleteProjectScenario(120, 36, "w", "o", "r"),
+	"09/delete-project-matched": deleteProjectScenario(120, 36, "w", "o", "r", "k"),
 }
 
 // confirmScenario selects “Undo for move and delete” in todo (the board every
@@ -145,6 +162,11 @@ func deleteProjectScenario(w, h int, keys ...string) Scenario {
 // whiteboardsScenario opens the selected task's whiteboards with SPC t w.
 func whiteboardsScenario(ws func(time.Time) *domain.Workspace, w, h int, keys ...string) Scenario {
 	return confirmScenario(ws, w, h, append([]string{"space", "t", "w"}, keys...)...)
+}
+
+// archiveScenario opens the archive with SPC a v over the home board.
+func archiveScenario(ws func(time.Time) *domain.Workspace, w, h int, keys ...string) Scenario {
+	return confirmScenario(ws, w, h, append([]string{"space", "a", "v"}, keys...)...)
 }
 
 // projectsScenario opens the project switcher over the home board.

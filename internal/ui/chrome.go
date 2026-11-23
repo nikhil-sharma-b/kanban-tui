@@ -197,6 +197,9 @@ const (
 type KeybarStatus struct {
 	Text  string
 	Token dusk.Token
+	// Glyph, when set, leads Text in its own colour (an info "●").
+	Glyph      string
+	GlyphToken dusk.Token
 }
 
 func drawKeybar(g *termgrid.Grid, p dusk.Palette, x, y, width int, size KeybarSize, hints []KeyHint, status KeybarStatus) {
@@ -212,7 +215,11 @@ func drawKeybar(g *termgrid.Grid, p dusk.Palette, x, y, width int, size KeybarSi
 		col = drawKeyHint(g, p, col, y, h)
 	}
 	if status.Text != "" {
-		g.Text(x+width-len([]rune(status.Text)), y, status.Text, tokenFG(p, status.Token, false))
+		end := x + width - len([]rune(status.Text))
+		g.Text(end, y, status.Text, tokenFG(p, status.Token, false))
+		if status.Glyph != "" {
+			g.Text(end-1-len([]rune(status.Glyph)), y, status.Glyph, tokenFG(p, status.GlyphToken, false))
+		}
 	}
 }
 
@@ -367,6 +374,8 @@ func (m *model) keybarStatus(width int, size KeybarSize, hints []KeyHint) Keybar
 			text, _, _ = strings.Cut(text, " in ")
 		}
 		return KeybarStatus{Text: truncateCell(text, width), Token: dusk.Success}
+	case m.lastInfo != "":
+		return KeybarStatus{Text: m.lastInfo, Token: dusk.TextCard, Glyph: "●", GlyphToken: dusk.Accent}
 	case m.lastStatus != "":
 		return KeybarStatus{Text: "✓ " + m.lastStatus, Token: dusk.Success}
 	}

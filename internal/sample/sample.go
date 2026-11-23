@@ -100,6 +100,52 @@ func ArchiveOld(now time.Time) *domain.Workspace {
 	return workspace(project("home", now, tasks), dailyWithTasks(now))
 }
 
+// Archive is the home board page 10 Archive shows behind its list: Release
+// notes v0.4 tops done, and seven archived tasks span relative and dated hints.
+func Archive(now time.Time) *domain.Workspace {
+	tasks := homeTasks()
+	tasks["done"][0] = taskSpec{title: "Release notes v0.4", age: 10 * 24 * time.Hour}
+	w := workspace(project("home", now, tasks), dailyWithTasks(now))
+	fillArchive(w.ActiveProject().Board, now)
+	return w
+}
+
+// ArchiveRestore is Archive before “Copy task ID keybind” is restored to the
+// top of done (10/restored): done holds the other three home tasks.
+func ArchiveRestore(now time.Time) *domain.Workspace {
+	tasks := homeTasks()
+	tasks["done"] = tasks["done"][1:]
+	w := workspace(project("home", now, tasks), dailyWithTasks(now))
+	fillArchive(w.ActiveProject().Board, now)
+	return w
+}
+
+func fillArchive(board *domain.Board, now time.Time) {
+	day := func(m time.Month, d, hour int) time.Time { return time.Date(2026, m, d, hour, 0, 0, 0, time.Local) }
+	specs := []struct {
+		title, desc string
+		from        domain.Status
+		at          time.Time
+	}{
+		{"Wider projects dialog", "", "done", now.Add(-time.Hour)},
+		{"Copy task ID keybind", "Press y on a selected card to copy its 8-character ID to the clipboard, so it can be pasted into kanban CLI commands or commit messages. Show “copied a3f91c07” in the status line. Fall back to OSC 52 when no system clipboard tool is found, and say so if both fail instead of failing silently.", "done", now.Add(-48 * time.Hour)},
+		{"Spike: SQLite store", "", "doing", day(time.November, 12, 12)},
+		{"Old onboarding notes", "", "backlog", day(time.November, 3, 12)},
+		{"Makefile install", "", "done", day(time.October, 21, 13)},
+		{"Agent skill for CLI", "", "done", day(time.October, 21, 12)},
+		{"Tab order in dialogs", "Tab and shift+tab should move between fields in every dialog in the same order as they are drawn, top to bottom. Today the create dialog jumps from title to the column picker and skips the description.", "review", day(time.October, 2, 12)},
+	}
+	for i, s := range specs {
+		at := s.at
+		id := fmt.Sprintf("a7c%05d%024d", i, i)
+		task := &domain.Task{ID: id, Title: s.title, Description: s.desc, Status: s.from, CreatedAt: at.Add(-24 * time.Hour), UpdatedAt: at, ArchivedAt: &at, ArchivedFrom: s.from}
+		if i == 1 {
+			task.Whiteboards = []domain.Whiteboard{{ID: id[:8] + "-wb1", Name: "clipboard-paths", Format: "xopp", CreatedAt: at, UpdatedAt: day(time.November, 9, 12)}}
+		}
+		board.Tasks[id] = task
+	}
+}
+
 // WithWorkProject adds project "work" to the home workspace: 14 tasks, 5 of
 // them archived, as 09/delete-project describes it.
 func WithWorkProject(now time.Time) *domain.Workspace {

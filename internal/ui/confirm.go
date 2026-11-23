@@ -178,18 +178,19 @@ func (m *model) confirmArchiveTask(task *domain.Task) (tea.Model, tea.Cmd) {
 		func() (tea.Model, tea.Cmd) { return m.archiveSelected() }), modeBoard)
 }
 
-func (m *model) confirmArchiveOld() (tea.Model, tea.Cmd) {
-	cutoff := m.now().Add(-bulkArchiveAge)
-	n := 0
-	for _, id := range m.board.Order[domain.StatusDone] {
-		if t := m.board.Tasks[id]; t != nil && !t.Archived() && t.UpdatedAt.Before(cutoff) {
-			n++
-		}
+// confirmArchiveOld asks before archiving done tasks untouched for 30 days,
+// or says there are none without asking (10/archive-old-none). back is where
+// esc and the result land: the board or the archive list.
+func (m *model) confirmArchiveOld(back mode) (tea.Model, tea.Cmd) {
+	n := len(m.oldDoneTasks())
+	if n == 0 {
+		m.say(back, StatusInfo, fmt.Sprintf("no done tasks past %d days", bulkArchiveDays))
+		return m, nil
 	}
 	body := fmt.Sprintf("%s in “%s” not updated in over %d days will move to the archive.",
-		plural(n, "task"), domain.StatusDone, int(bulkArchiveAge.Hours()/24))
+		plural(n, "task"), domain.StatusDone, bulkArchiveDays)
 	return m.askConfirm(archival("Archive old done tasks?", body, "restore them any time from the archive",
-		func() (tea.Model, tea.Cmd) { return m.archiveOldDone() }), modeBoard)
+		func() (tea.Model, tea.Cmd) { return m.archiveOldDone(back) }), back)
 }
 
 func (m *model) confirmDeleteColumn(col domain.Status) (tea.Model, tea.Cmd) {

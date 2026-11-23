@@ -79,11 +79,11 @@ func TestArchiveViewListsArchivedTask(t *testing.T) {
 		t.Fatalf("mode = %v, want %v", got.mode, modeArchive)
 	}
 
-	view := got.renderArchiveDialog()
+	view := renderGrid(got.archiveDialog())
 	if !strings.Contains(view, "Ship feature") {
 		t.Fatalf("expected archived task in view, got:\n%s", view)
 	}
-	if !strings.Contains(view, "Backlog") {
+	if !strings.Contains(view, "from backlog") {
 		t.Fatalf("expected original column in view, got:\n%s", view)
 	}
 }
@@ -108,8 +108,8 @@ func TestArchiveViewRestoreReturnsTaskToBoard(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected save cmd after restore")
 	}
-	if got.lastStatus != "restored task" {
-		t.Fatalf("unexpected status: %q", got.lastStatus)
+	if got.archiveStatus != "restored “Ship feature” to backlog" {
+		t.Fatalf("unexpected status: %q", got.archiveStatus)
 	}
 }
 
@@ -133,15 +133,15 @@ func TestArchiveViewFilterMatchesTitleAndDescription(t *testing.T) {
 	}
 }
 
-func TestBulkArchiveConfirmMessage(t *testing.T) {
+func TestBulkArchiveWithNothingOldSaysSoWithoutAsking(t *testing.T) {
 	m, _ := newArchiveTestModel(t)
 
 	got := pressBoardKeys(m, " ", "a", "o")
-	if got.mode != modeConfirm {
-		t.Fatalf("mode = %v, want %v", got.mode, modeConfirm)
+	if got.mode != modeBoard {
+		t.Fatalf("mode = %v, want board (no confirm)", got.mode)
 	}
-	if got.confirm.title != "Archive old done tasks?" {
-		t.Fatalf("unexpected confirm title: %q", got.confirm.title)
+	if got.lastInfo != "no done tasks past 30 days" {
+		t.Fatalf("unexpected info: %q", got.lastInfo)
 	}
 }
 

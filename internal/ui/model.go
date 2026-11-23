@@ -109,8 +109,8 @@ const (
 	modeDailyPromote
 )
 
-// bulkArchiveAge is the fixed v1 threshold for archiving old Done tasks.
-const bulkArchiveAge = 30 * 24 * time.Hour
+// bulkArchiveDays is the fixed v1 threshold for archiving old Done tasks.
+const bulkArchiveDays = 30
 
 type saveFinishedMsg struct {
 	err error
@@ -208,16 +208,21 @@ type model struct {
 	vimCommand         string // command-line input in normal mode, including leading ':'
 	showHelp           bool
 	lastStatus         string
-	lastErr            error
-	confirm            confirmation
-	confirmPrev        mode
-	confirmInput       textinput.Model
-	detailScroll       int
-	detailWhiteboards  bool
-	detailHelp         bool
-	detailStatus       string
-	detailStatusKind   StatusKind
-	writeClipboard     func(string) error
+	// lastInfo is an info toast on the keybar until the next key.
+	lastInfo string
+	// archiveStatus is the archive dialog's footer message until the next key.
+	archiveStatus     string
+	archiveStatusKind StatusKind
+	lastErr           error
+	confirm           confirmation
+	confirmPrev       mode
+	confirmInput      textinput.Model
+	detailScroll      int
+	detailWhiteboards bool
+	detailHelp        bool
+	detailStatus      string
+	detailStatusKind  StatusKind
+	writeClipboard    func(string) error
 	// prevProjectID is the project to return to when leaving the daily board.
 	prevProjectID string
 	palette       dusk.Palette
@@ -427,7 +432,7 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	case tea.KeyMsg:
-		m.createFeedback = ""
+		m.createFeedback, m.lastInfo = "", ""
 		switch m.mode {
 		case modeCreate:
 			return m.updateNewTask(msg)
@@ -493,16 +498,18 @@ func (m *model) View() string {
 	if m.mode == modeWhiteboards {
 		return m.placeDialog(board, m.whiteboardsDialog())
 	}
+	if m.mode == modeArchive {
+		return m.placeDialog(board, m.archiveDialog())
+	}
+	if m.mode == modeArchiveDetail {
+		return m.placeDialog(board, m.archiveDetail())
+	}
 	if m.mode == modeWhiteboardRename {
 		return m.placeWhiteboardRenameDialog(board)
 	}
 	view := renderGrid(board)
 
 	switch m.mode {
-	case modeArchive:
-		return m.placeOverlayCenter(view, m.renderArchiveDialog())
-	case modeArchiveDetail:
-		return m.placeOverlayCenter(view, m.renderTaskDetail(m.selectedArchivedTask(), true))
 	case modeDailyPromote:
 		return m.placeOverlayCenter(view, m.renderDailyPromoteDialog())
 	default:
@@ -666,14 +673,9 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.confirmArchiveTask(task)
 		}
 	case actArchiveOld:
-		return m.confirmArchiveOld()
+		return m.confirmArchiveOld(modeBoard)
 	case actArchiveView:
-		m.mode = modeArchive
-		m.archiveCursor = 0
-		m.archiveFiltering = false
-		m.archiveFilterInput.SetValue("")
-		m.archiveFilterInput.Blur()
-		m.lastErr = nil
+		return m.openArchive()
 	case actHelp:
 		m.showHelp = !m.showHelp
 	case actTaskTop:
@@ -1718,155 +1720,6 @@ func (m *model) archiveSelected() (tea.Model, tea.Cmd) {
 	return m, m.saveWorkspaceCmd()
 }
 
-func (m *model) archiveOldDone() (tea.Model, tea.Cmd) {
-	count, err := m.board.ArchiveDoneOlderThan(bulkArchiveAge)
-	m.mode = modeBoard
-	if err != nil {
-		m.lastErr = err
-		return m, nil
-	}
-
-	m.lastErr = nil
-	m.lastStatus = fmt.Sprintf("archived %d done tasks", count)
-	if count == 0 {
-		m.lastStatus = "no done tasks old enough to archive"
-		return m, nil
-	}
-	m.recalculateVisible()
-	return m, m.saveWorkspaceCmd()
-}
-
-// filteredArchivedTasks returns archived tasks (newest first) matching the
-// archive filter against title + description.
-func (m *model) filteredArchivedTasks() []*domain.Task {
-	archived := m.board.ArchivedTasks()
-	query := strings.ToLower(strings.TrimSpace(m.archiveFilterInput.Value()))
-	if query == "" {
-		return archived
-	}
-	matches := make([]*domain.Task, 0, len(archived))
-	for _, task := range archived {
-		if strings.Contains(task.SearchText(), query) {
-			matches = append(matches, task)
-		}
-	}
-	return matches
-}
-
-func (m *model) selectedArchivedTask() *domain.Task {
-	archived := m.filteredArchivedTasks()
-	if len(archived) == 0 {
-		return nil
-	}
-	if m.archiveCursor < 0 {
-		m.archiveCursor = 0
-	}
-	if m.archiveCursor >= len(archived) {
-		m.archiveCursor = len(archived) - 1
-	}
-	return archived[m.archiveCursor]
-}
-
-func (m *model) updateArchive(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.archiveFiltering {
-		switch msg.String() {
-		case "esc":
-			m.archiveFiltering = false
-			m.archiveFilterInput.SetValue("")
-			m.archiveFilterInput.Blur()
-			m.archiveCursor = 0
-			return m, nil
-		case "enter":
-			m.archiveFiltering = false
-			m.archiveFilterInput.Blur()
-			return m, nil
-		case "up", "down":
-			// fall through to list navigation below
-		default:
-			var cmd tea.Cmd
-			m.archiveFilterInput, cmd = m.archiveFilterInput.Update(msg)
-			m.archiveCursor = 0
-			return m, cmd
-		}
-	}
-
-	archived := m.filteredArchivedTasks()
-	if m.archiveCursor >= len(archived) {
-		m.archiveCursor = max(0, len(archived)-1)
-	}
-
-	switch msg.String() {
-	case "esc", "q":
-		if !m.archiveFiltering && strings.TrimSpace(m.archiveFilterInput.Value()) != "" {
-			m.archiveFilterInput.SetValue("")
-			m.archiveCursor = 0
-			return m, nil
-		}
-		m.mode = modeBoard
-		m.lastErr = nil
-		return m, nil
-	case "/":
-		m.archiveFiltering = true
-		m.archiveFilterInput.CursorEnd()
-		m.archiveFilterInput.Focus()
-		return m, textinput.Blink
-	case "up", "k":
-		if m.archiveCursor > 0 {
-			m.archiveCursor--
-		}
-		return m, nil
-	case "down", "j":
-		if m.archiveCursor < len(archived)-1 {
-			m.archiveCursor++
-		}
-		return m, nil
-	case "enter":
-		if m.selectedArchivedTask() != nil {
-			m.mode = modeArchiveDetail
-		}
-		return m, nil
-	case "r":
-		return m.restoreSelectedArchived()
-	}
-
-	return m, nil
-}
-
-func (m *model) restoreSelectedArchived() (tea.Model, tea.Cmd) {
-	task := m.selectedArchivedTask()
-	if task == nil {
-		return m, nil
-	}
-
-	restored, err := m.board.RestoreTask(task.ID)
-	if err != nil {
-		m.lastErr = err
-		return m, nil
-	}
-
-	m.lastErr = nil
-	m.lastStatus = "restored task"
-	m.ensureColumnState()
-	m.recalculateVisible()
-	m.syncScroll(restored.Status)
-	if m.archiveCursor >= len(m.filteredArchivedTasks()) {
-		m.archiveCursor = max(0, len(m.filteredArchivedTasks())-1)
-	}
-	return m, m.saveWorkspaceCmd()
-}
-
-func (m *model) updateArchiveDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "enter", "q":
-		m.mode = modeArchive
-	case "r":
-		model, cmd := m.restoreSelectedArchived()
-		m.mode = modeArchive
-		return model, cmd
-	}
-	return m, nil
-}
-
 func (m *model) moveSelection(delta int) {
 	statuses := m.board.Statuses()
 	if len(statuses) == 0 || m.activeColumn >= len(statuses) {
@@ -2075,106 +1928,6 @@ func (m *model) selectedWhiteboard() *domain.Whiteboard {
 
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
 
-// renderTaskDetail renders the detail dialog for an explicit task so archived
-// tasks (which are never the active-board selection) can reuse it. archived
-// selects the read-only hint set.
-func (m *model) renderTaskDetail(task *domain.Task, archived bool) string {
-	if task == nil {
-		return ""
-	}
-
-	accent := statusAccent(task.Status)
-
-	titleView := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(theme.Text).
-		Render(task.Title)
-
-	// Outline badge rather than a filled one: the palette is pure ANSI, so the
-	// RGB behind accent/Mantle comes from the user's terminal theme and a
-	// filled badge can land text on a near-matching background. An accent
-	// foreground on the dialog background is legible in every theme.
-	statusBadge := lipgloss.NewStyle().
-		Foreground(accent).
-		Bold(true).
-		Render(statusIcon(task.Status) + " " + task.Status.Title())
-	dialogWidth := m.dialogWidth(detailDialogMaxWidth)
-	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
-
-	separator := lipgloss.NewStyle().
-		Foreground(accent).
-		Render(strings.Repeat("\u2501", contentWidth))
-
-	labelWidth := 12
-	if contentWidth < 24 {
-		labelWidth = max(1, contentWidth/3)
-	}
-	if labelWidth > contentWidth {
-		labelWidth = contentWidth
-	}
-	labelStyle := lipgloss.NewStyle().Foreground(theme.Overlay0).Width(labelWidth)
-	valueStyle := lipgloss.NewStyle().Foreground(theme.Subtext1)
-
-	metaRows := []string{
-		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("ID"), valueStyle.Render(task.ID)),
-		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Status"), statusBadge),
-		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Whiteboards"), valueStyle.Render(fmt.Sprintf("%d", len(task.Whiteboards)))),
-		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Created"), valueStyle.Render(task.CreatedAt.Local().Format("02 Jan 2006 15:04"))),
-		lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Updated"), valueStyle.Render(task.UpdatedAt.Local().Format("02 Jan 2006 15:04"))),
-	}
-	if task.Archived() {
-		metaRows = append(metaRows,
-			lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Archived"), valueStyle.Render(task.ArchivedAt.Local().Format("02 Jan 2006 15:04"))),
-		)
-	}
-
-	description := strings.TrimSpace(task.Description)
-	descView := ""
-	if description != "" {
-		descView = lipgloss.NewStyle().
-			Width(max(1, contentWidth)).
-			Foreground(theme.Subtext1).
-			PaddingTop(1).
-			Render(description)
-	} else {
-		descView = lipgloss.NewStyle().
-			Foreground(theme.Surface2).
-			Italic(true).
-			PaddingTop(1).
-			Render("No description")
-	}
-
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	hint := keyStyle.Render("e") + hintStyle.Render(" edit  ") +
-		keyStyle.Render("w") + hintStyle.Render(" whiteboards  ") +
-		keyStyle.Render("y") + hintStyle.Render(" copy ID  ") +
-		keyStyle.Render("esc") + hintStyle.Render(" close")
-	if archived {
-		hint = keyStyle.Render("r") + hintStyle.Render(" restore  ") +
-			keyStyle.Render("esc") + hintStyle.Render(" back")
-	}
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		titleView,
-		separator,
-		"",
-		strings.Join(metaRows, "\n"),
-		descView,
-		"",
-		hint,
-	)
-
-	return lipgloss.NewStyle().
-		Width(dialogWidth).
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(accent).
-		Background(theme.Base).
-		Render(content)
-}
-
 func (m *model) renderDailyPromoteDialog() string {
 	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Green).Render("Promote daily task")
 	dialogWidth := m.dialogWidth(projectDialogMaxWidth)
@@ -2220,68 +1973,6 @@ func (m *model) renderDailyPromoteDialog() string {
 	}
 	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
 	return lipgloss.NewStyle().Width(dialogWidth).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.Green).Background(theme.Base).Render(content)
-}
-
-func (m *model) renderArchiveDialog() string {
-	projectName := ""
-	if m.project != nil {
-		projectName = m.project.Name
-	}
-	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Lavender).Render("Archive - " + projectName)
-	dialogWidth := m.dialogWidth(projectDialogMaxWidth + 8)
-	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
-	separator := lipgloss.NewStyle().Foreground(theme.Lavender).Render(strings.Repeat("━", contentWidth))
-
-	archived := m.filteredArchivedTasks()
-	cursor := min(m.archiveCursor, max(0, len(archived)-1))
-
-	rows := make([]string, 0, len(archived))
-	for i, task := range archived {
-		prefix := "  "
-		if i == cursor {
-			prefix = lipgloss.NewStyle().Foreground(theme.Mauve).Render("▸ ")
-		}
-		name := lipgloss.NewStyle().Foreground(theme.Text).Render(truncate(task.Title, max(1, contentWidth-24)))
-		meta := lipgloss.NewStyle().Foreground(theme.Overlay0).Render(
-			task.ArchivedAt.Local().Format("02 Jan 2006") + " · " + task.ArchivedFrom.Title(),
-		)
-		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Center, prefix, name,
-			spacer(max(1, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(name)-lipgloss.Width(meta))), meta))
-	}
-	if len(rows) == 0 {
-		emptyText := "No archived tasks"
-		if strings.TrimSpace(m.archiveFilterInput.Value()) != "" {
-			emptyText = "No matching archived tasks"
-		}
-		rows = append(rows, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render(emptyText))
-	}
-
-	filterView := m.archiveFilterInput.View()
-
-	errView := ""
-	if m.lastErr != nil {
-		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("✗ " + m.lastErr.Error())
-	}
-
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	hint := keyStyle.Render("enter") + hintStyle.Render(" details  ") +
-		keyStyle.Render("r") + hintStyle.Render(" restore  ") +
-		keyStyle.Render("/") + hintStyle.Render(" filter  ") +
-		keyStyle.Render("esc") + hintStyle.Render(" close")
-	if m.archiveFiltering {
-		hint = keyStyle.Render("enter") + hintStyle.Render(" apply  ") +
-			keyStyle.Render("↑↓") + hintStyle.Render(" move  ") +
-			keyStyle.Render("esc") + hintStyle.Render(" clear")
-	}
-
-	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", filterView, "", strings.Join(rows, "\n"))
-	if errView != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
-	}
-	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
-
-	return lipgloss.NewStyle().Width(dialogWidth).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.Lavender).Background(theme.Base).Render(content)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -2724,7 +2415,7 @@ func relativeTime(now, t time.Time) string {
 		}
 		return fmt.Sprintf("%dd ago", days)
 	default:
-		return t.Local().Format("02 Jan")
+		return t.Local().Format("2 Jan")
 	}
 }
 
