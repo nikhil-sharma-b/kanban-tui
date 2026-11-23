@@ -2135,6 +2135,7 @@ func (m *model) activateProject(id string) {
 	}
 	m.board = m.project.Board
 	m.activeColumn = 0
+	m.focus = focusState{} // focus mode belongs to the board it opened on
 	m.filter = ""
 	m.filterDraft = ""
 	m.searchInput.SetValue("")

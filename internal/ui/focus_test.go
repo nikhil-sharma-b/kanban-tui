@@ -74,3 +74,18 @@ func TestFocusChangesNothingOnEnterAndExit(t *testing.T) {
 		t.Fatal("focus mode changed the board")
 	}
 }
+
+func TestFocusEndsOnProjectOrDailySwitch(t *testing.T) {
+	for _, keys := range [][]string{{" ", "d", "d"}, {" ", "p", "p"}} {
+		m := newFocusModel(t, sample.FourProjects)
+		press(m, "l", "l", "z")
+		press(m, keys...)
+		if keys[1] == "p" {
+			m.Update(tea.KeyMsg{Type: tea.KeyDown})
+			m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		}
+		if m.focus.on {
+			t.Fatalf("%v kept focus mode on", keys)
+		}
+	}
+}
