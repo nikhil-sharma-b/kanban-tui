@@ -65,7 +65,7 @@ func main() {
 // terminal is asked for its background once, before the TUI owns the input.
 func themeSetting(dataPath string) *ui.ThemeSetting {
 	path := themeconf.Path(dataPath)
-	setting, _ := themeconf.Read(path)
+	setting, _ := themeconf.Read(path) // a read error is in setting.Warning()
 	env := themeconf.Detect()
 	dark, ok := env.Background()
 	env.Background = func() (bool, bool) { return dark, ok }

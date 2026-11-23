@@ -53,6 +53,30 @@ func TestReadUnknownValueIsDuskAndNamesIt(t *testing.T) {
 	}
 }
 
+func TestReadUnreadableFileIsDuskAndSaysSo(t *testing.T) {
+	s, err := Read(t.TempDir()) // a directory can't be read as a file
+	if err == nil || s != (Setting{Name: Dusk, Unreadable: true}) {
+		t.Fatalf("Read = %+v, %v; want dusk, unreadable", s, err)
+	}
+	if got := s.Warning(); got != "can't read config.toml, using dusk" {
+		t.Fatalf("Warning = %q", got)
+	}
+}
+
+func TestThemeInsideATableIsNotTheSetting(t *testing.T) {
+	path := writeConfig(t, "[plugins]\ntheme = \"dusk-light\"\n")
+	if s, _ := Read(path); s != (Setting{Name: Dusk}) {
+		t.Fatalf("Read = %+v; a table's theme key was read", s)
+	}
+	if err := Write(path, Terminal); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if string(b) != "theme = \"terminal\"\n[plugins]\ntheme = \"dusk-light\"\n" {
+		t.Fatalf("file = %q", b)
+	}
+}
+
 func TestReadEachValidValue(t *testing.T) {
 	for _, n := range Names {
 		for _, body := range []string{"theme = \"" + string(n) + "\"", "  theme=\"" + string(n) + "\"  # mine", "theme = '" + string(n) + "'"} {

@@ -1,12 +1,15 @@
 package ui
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/nikhilsharma/kanban-tui/internal/domain"
 	"github.com/nikhilsharma/kanban-tui/internal/sample"
+	"github.com/nikhilsharma/kanban-tui/internal/store"
 	"github.com/nikhilsharma/kanban-tui/internal/themeconf"
 	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
 )
@@ -47,6 +50,19 @@ func TestUnknownThemeToastsOnStart(t *testing.T) {
 	m.Init()
 	if m.palette.Name != "dark" || m.toast.text != "unknown theme “neon”, using dusk" || m.toast.kind != StatusInfo {
 		t.Fatalf("palette = %s, toast = %+v", m.palette.Name, m.toast)
+	}
+}
+
+func TestUnknownThemeToastsWhenUnreadableBoardOpens(t *testing.T) {
+	ws := sample.Workspace(sample.Now)
+	reopen := func() (store.WorkspaceStore, *domain.Workspace, error) { return nil, ws, nil }
+	opts := Options{Theme: &ThemeSetting{Setting: themeconf.Setting{Name: themeconf.Dusk, Unknown: "neon"}}}
+	var u tea.Model = NewUnreadable("", "board.db", errors.New("bad"), reopen, opts)
+	u, _ = u.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	next, _ := u.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	m, ok := next.(*model)
+	if !ok || m.toast.text != "unknown theme “neon”, using dusk" {
+		t.Fatalf("after retry: %T toast %+v", next, m)
 	}
 }
 

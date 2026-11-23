@@ -57,18 +57,23 @@ func Path(dataPath string) string {
 }
 
 // Setting is what config.toml asks for. Unknown holds a theme value the file
-// names that does not exist; Name is then Dusk.
+// names that does not exist; Unreadable is set when the file exists but
+// can't be read. Name is Dusk in both cases.
 type Setting struct {
-	Name    Name
-	Unknown string
+	Name       Name
+	Unknown    string
+	Unreadable bool
 }
 
-// Warning is the info toast for an unknown value, or "".
+// Warning is the info toast for an unknown value or unreadable file, or "".
 func (s Setting) Warning() string {
-	if s.Unknown == "" {
-		return ""
+	switch {
+	case s.Unreadable:
+		return "can't read config.toml, using dusk"
+	case s.Unknown != "":
+		return "unknown theme “" + s.Unknown + "”, using dusk"
 	}
-	return "unknown theme “" + s.Unknown + "”, using dusk"
+	return ""
 }
 
 // Read reads the setting. A missing file or key means dusk.
@@ -78,10 +83,13 @@ func Read(path string) (Setting, error) {
 		return Setting{Name: Dusk}, nil
 	}
 	if err != nil {
-		return Setting{Name: Dusk}, err
+		return Setting{Name: Dusk, Unreadable: true}, err
 	}
 	sc := bufio.NewScanner(strings.NewReader(string(b)))
 	for sc.Scan() {
+		if isTable(sc.Text()) {
+			break // theme is a top-level key; tables come after
+		}
 		value, ok := themeValue(sc.Text())
 		if !ok {
 			continue
@@ -92,6 +100,11 @@ func Read(path string) (Setting, error) {
 		return Setting{Name: Dusk, Unknown: value}, nil
 	}
 	return Setting{Name: Dusk}, nil
+}
+
+// isTable reports whether a line opens a TOML table ([x] or [[x]]).
+func isTable(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), "[")
 }
 
 // themeValue returns the value of a top-level theme = "…" line.
@@ -129,15 +142,20 @@ func Write(path string, n Name) error {
 	if len(b) > 0 {
 		lines = strings.Split(strings.TrimSuffix(string(b), "\n"), "\n")
 	}
+	at := len(lines) // where a new theme line goes: before the first table
 	replaced := false
 	for i, l := range lines {
+		if isTable(l) {
+			at = i
+			break
+		}
 		if _, ok := themeValue(l); ok {
 			lines[i], replaced = line, true
 			break
 		}
 	}
 	if !replaced {
-		lines = append(lines, line)
+		lines = append(lines[:at], append([]string{line}, lines[at:]...)...)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
