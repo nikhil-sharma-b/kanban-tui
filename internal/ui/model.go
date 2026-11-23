@@ -1427,7 +1427,7 @@ func (m *model) updateWhiteboards(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.whiteboardStatus = ""
 
 	switch msg.String() {
-	case "esc", "q":
+	case "esc":
 		m.mode = m.whiteboardBack
 		m.lastErr = nil
 		return m, nil
@@ -1443,7 +1443,7 @@ func (m *model) updateWhiteboards(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "n":
 		return m.createWhiteboard()
-	case "enter", "o":
+	case "enter":
 		return m.openSelectedWhiteboard()
 	case "r":
 		return m.beginRenameWhiteboard()
