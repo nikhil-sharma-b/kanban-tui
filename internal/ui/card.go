@@ -275,6 +275,28 @@ func fitCards(cards []Card, scroll, height int) int {
 	return count
 }
 
+type cardPlace struct{ index, top int }
+
+// layoutCards returns where each shown card's top row lands in a column body
+// starting at row y, the way drawColumnBody draws them.
+func layoutCards(cards []Card, scroll, y, height int) []cardPlace {
+	if len(cards) == 0 {
+		return nil
+	}
+	scroll = min(scroll, len(cards)-1)
+	row := y
+	if scroll > 0 {
+		row += scrollUpRows
+	}
+	end := scroll + fitCards(cards, scroll, height)
+	out := make([]cardPlace, 0, end-scroll)
+	for i := scroll; i < end; i++ {
+		out = append(out, cardPlace{index: i, top: row + cardSlot(cards[i]) - cardHeight(cards[i])})
+		row += cardSlot(cards[i])
+	}
+	return out
+}
+
 func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status domain.Status, active, hintIfEmpty bool) {
 	p := m.palette
 	cards := m.columnCards(status, active)
@@ -289,17 +311,15 @@ func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status
 		return
 	}
 	scroll := min(m.scroll[status], len(cards)-1)
-	row := y
 	if scroll > 0 {
 		drawScrollHint(g, p, x, y+1, ScrollUp, scroll)
-		row += scrollUpRows
 	}
-	end := scroll + fitCards(cards, scroll, height)
-	for i := scroll; i < end; i++ {
-		drawCard(g, p, x, row+cardSlot(cards[i])-cardHeight(cards[i]), width, cards[i])
-		row += cardSlot(cards[i])
+	places := layoutCards(cards, scroll, y, height)
+	for _, c := range places {
+		drawCard(g, p, x, c.top, width, cards[c.index])
 	}
-	if hidden := len(cards) - end; hidden > 0 {
-		drawScrollHint(g, p, x, row, ScrollDown, hidden)
+	last := places[len(places)-1]
+	if hidden := len(cards) - last.index - 1; hidden > 0 {
+		drawScrollHint(g, p, x, last.top+cardHeight(cards[last.index]), ScrollDown, hidden)
 	}
 }

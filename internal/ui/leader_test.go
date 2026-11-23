@@ -67,19 +67,17 @@ func TestWhichKeyListsContinuations(t *testing.T) {
 	m, _ := newArchiveTestModel(t)
 
 	m = pressBoardKeys(m, " ")
-	float := m.renderWhichKey()
+	m.Update(whichKeyMsg{seq: m.whichKeySeq})
+	view := m.View()
 	for _, want := range []string{"SPC", "+task", "+column", "+archive", "+project"} {
-		if !strings.Contains(float, want) {
-			t.Fatalf("which-key float missing %q:\n%s", want, float)
+		if !strings.Contains(view, want) {
+			t.Fatalf("which-key popover missing %q:\n%s", want, view)
 		}
-	}
-	if !strings.Contains(m.View(), "+task") {
-		t.Fatal("which-key float not composited into view")
 	}
 
 	m = pressBoardKeys(m, "t")
-	if float := m.renderWhichKey(); !strings.Contains(float, "archive") || strings.Contains(float, "+column") {
-		t.Fatalf("task submenu wrong:\n%s", float)
+	if view := m.View(); !strings.Contains(view, "archive") || strings.Contains(view, "+column") {
+		t.Fatalf("task submenu wrong:\n%s", view)
 	}
 }
 

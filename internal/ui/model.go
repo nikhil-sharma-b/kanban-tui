@@ -195,6 +195,9 @@ type model struct {
 	descInput          textarea.Model
 	searchInput        textinput.Model
 	pendingKeys        []string // unfinished key sequence, e.g. ["space", "t"]
+	whichKeyShown      bool     // the popover is up for pendingKeys
+	whichKeySeq        uint64
+	whichKeyDelay      time.Duration
 	projectEditPrev    mode     // where the project name dialog returns on cancel/rename
 	editingTaskID      string
 	editReturn         mode
@@ -349,6 +352,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		now:                time.Now,
 		newTask:            domain.NewTask,
 		toastDuration:      defaultToastDuration,
+		whichKeyDelay:      defaultWhichKeyDelay,
 		saveRetryInterval:  defaultSaveRetryInterval,
 		reloadedDuration:   defaultReloadedDuration,
 		externalInterval:   externalCheckInterval,
@@ -410,6 +414,11 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSaveFinished(msg.err)
 	case saveRetryMsg:
 		return m.handleSaveRetry()
+	case whichKeyMsg:
+		if msg.seq == m.whichKeySeq && len(m.pendingKeys) > 0 {
+			m.whichKeyShown = true
+		}
+		return m, nil
 	case toastExpiredMsg:
 		if msg.seq == m.toastSeq {
 			m.clearToast()
@@ -501,7 +510,6 @@ func (m *model) View() string {
 		return ""
 	}
 
-	footerHeight := 2
 	board := m.duskBoard()
 	if m.mode == modeDetail || m.mode == modeDetailEdit || m.mode == modeCreate {
 		return m.placeDialog(board, m.taskDetail())
@@ -543,9 +551,6 @@ func (m *model) View() string {
 		if m.showHelp {
 			return m.placeOverlayCenter(view, m.renderHelpOverlay())
 		}
-		if float := m.renderWhichKey(); float != "" {
-			return m.placeFloatBottomRight(view, float, footerHeight)
-		}
 		return view
 	}
 }
@@ -572,11 +577,19 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if handled, cmd := m.leaderKeyStep(normalizeKey(msg)); handled {
+		return m, cmd
+	}
 	if msg.String() == "esc" && len(m.pendingKeys) == 0 && m.filter != "" {
 		m.clearFilter()
 		return m, nil
 	}
 	action := m.resolveBoardKey(normalizeKey(msg))
+	if len(m.pendingKeys) == 0 {
+		m.whichKeyShown = false
+	} else if !m.whichKeyShown {
+		return m, m.armWhichKey()
+	}
 	switch action {
 	case actColumnLeft, actColumnRight, actTaskUp, actTaskDown:
 		// Moving while filtered keeps the new place when the filter clears.

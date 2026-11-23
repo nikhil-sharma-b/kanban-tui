@@ -8,12 +8,10 @@ package ui
 // documented as another.
 
 import (
-	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 )
 
 type boardAction int
@@ -178,99 +176,34 @@ type whichKeyEntry struct {
 	group bool
 }
 
-// continuations lists the keys that may follow prefix, one entry per key.
+// continuations lists the keys that may follow prefix, one entry per key:
+// groups first, then actions, each in the order the bindings table lists them.
 func continuations(prefix string) []whichKeyEntry {
 	seen := map[string]bool{}
-	var out []whichKeyEntry
-	add := func(full string, desc string, group bool) {
-		rest, ok := strings.CutPrefix(full, prefix+" ")
-		if !ok || strings.Contains(rest, " ") || seen[rest] {
-			return
-		}
-		seen[rest] = true
-		out = append(out, whichKeyEntry{key: rest, desc: desc, group: group})
-	}
-	for p, name := range boardGroups {
-		add(p, "+"+name, true)
-	}
+	var groups, actions []whichKeyEntry
 	for _, b := range boardBindings {
-		add(b.keys, b.desc, false)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].group != out[j].group {
-			return out[i].group
+		rest, ok := strings.CutPrefix(b.keys, prefix+" ")
+		if !ok {
+			continue
 		}
-		return out[i].key < out[j].key
-	})
-	return out
+		key, _, nested := strings.Cut(rest, " ")
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		if nested {
+			if name, ok := boardGroups[prefix+" "+key]; ok {
+				groups = append(groups, whichKeyEntry{key: key, desc: "+" + name, group: true})
+			}
+			continue
+		}
+		actions = append(actions, whichKeyEntry{key: key, desc: b.desc})
+	}
+	return append(groups, actions...)
 }
 
 func displayKeys(seq string) string {
 	return strings.ReplaceAll(seq, leaderKey, "SPC")
-}
-
-// renderWhichKey draws the float for the pending sequence, or "" when none.
-func (m *model) renderWhichKey() string {
-	if len(m.pendingKeys) == 0 {
-		return ""
-	}
-	prefix := strings.Join(m.pendingKeys, " ")
-	entries := continuations(prefix)
-	if len(entries) == 0 {
-		return ""
-	}
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true)
-	arrowStyle := lipgloss.NewStyle().Foreground(theme.Overlay0)
-	groupStyle := lipgloss.NewStyle().Foreground(theme.Blue)
-	descStyle := lipgloss.NewStyle().Foreground(theme.Text)
-
-	keyWidth := 0
-	for _, e := range entries {
-		keyWidth = max(keyWidth, ansi.StringWidth(e.key))
-	}
-	lines := make([]string, 0, len(entries)+1)
-	lines = append(lines, lipgloss.NewStyle().Foreground(theme.Subtext0).Bold(true).Render(displayKeys(prefix)))
-	for _, e := range entries {
-		style := descStyle
-		if e.group {
-			style = groupStyle
-		}
-		lines = append(lines, keyStyle.Render(e.key+strings.Repeat(" ", keyWidth-ansi.StringWidth(e.key)))+
-			arrowStyle.Render(" → ")+style.Render(e.desc))
-	}
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Mauve).
-		Padding(0, 1).
-		Render(strings.Join(lines, "\n"))
-}
-
-// placeFloatBottomRight composites float over base without dimming it, just
-// above bottomMargin rows, so the board stays readable while a sequence is
-// finished.
-func (m *model) placeFloatBottomRight(base, float string, bottomMargin int) string {
-	baseLines := strings.Split(base, "\n")
-	floatLines := strings.Split(float, "\n")
-	width := lipgloss.Width(float)
-	left := max(m.width-width-2, 0)
-	top := max(len(baseLines)-bottomMargin-len(floatLines), 0)
-	for i, fl := range floatLines {
-		row := top + i
-		if row >= len(baseLines) {
-			break
-		}
-		line := baseLines[row]
-		if w := ansi.StringWidth(line); w < m.width {
-			line += strings.Repeat(" ", m.width-w)
-		}
-		head := ansi.Truncate(line, left, "")
-		if pad := left - ansi.StringWidth(head); pad > 0 {
-			head += strings.Repeat(" ", pad)
-		}
-		tail := ansi.TruncateLeft(line, left+ansi.StringWidth(fl), "")
-		baseLines[row] = head + fl + tail
-	}
-	return strings.Join(baseLines, "\n")
 }
 
 // renderHelpOverlay lists every board binding, grouped the way the leader

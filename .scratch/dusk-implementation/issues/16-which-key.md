@@ -4,9 +4,9 @@
 
 **Blocked by:** 06 — Task editing; 15 — Feedback: toasts, undo, sync states
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 14/root, 14/unbound, 14/pending, 14/group-task, 14/group-task-80x24, 14/root-80x24, 14/placement-flip
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Popover placement is computed from the selected card position, covered by tests for the normal, flipped and 80×24 cases
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 14/root, 14/unbound, 14/pending, 14/group-task, 14/group-task-80x24, 14/root-80x24, 14/placement-flip
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Popover placement is computed from the selected card position, covered by tests for the normal, flipped and 80×24 cases

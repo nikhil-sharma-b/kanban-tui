@@ -17,7 +17,7 @@ Build the finished design in design.figcraft and DESIGN.md so the app matches ev
 - [x] [13 — Archive](issues/13-archive.md) · blocked by: 09 — Confirm pattern
 - [x] [14 — Daily board and promote](issues/14-daily-board-promote.md) · blocked by: 06 — Task editing
 - [x] [15 — Feedback: toasts, undo, sync states](issues/15-feedback.md) · blocked by: 05 — Dialog shell and task detail view
-- [ ] [16 — Which-key](issues/16-which-key.md) · blocked by: 06 — Task editing; 15 — Feedback: toasts, undo, sync states
+- [x] [16 — Which-key](issues/16-which-key.md) · blocked by: 06 — Task editing; 15 — Feedback: toasts, undo, sync states
 - [ ] [17 — Command palette](issues/17-command-palette.md) · blocked by: 06 — Task editing
 - [ ] [18 — Focus mode](issues/18-focus-mode.md) · blocked by: 15 — Feedback: toasts, undo, sync states
 - [ ] [19 — Theme setting and fallbacks](issues/19-theme-setting.md) · blocked by: 17 — Command palette

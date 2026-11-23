@@ -30,6 +30,9 @@ type Options struct {
 	ToastDuration time.Duration
 	// SaveRetryInterval is the wait before retrying a failed save (default 2 s).
 	SaveRetryInterval time.Duration
+	// WhichKeyDelay is the wait after a leader key before the which-key
+	// popover shows (default 300 ms).
+	WhichKeyDelay time.Duration
 	// ExternalCheckInterval is how often to look for writes by another
 	// process (default 1 s).
 	ExternalCheckInterval time.Duration
@@ -40,6 +43,9 @@ func NewWithOptions(workspace *domain.Workspace, boardStore store.WorkspaceStore
 	m := New(workspace, boardStore, dataPath).(*model)
 	if opts.Palette != nil {
 		m.palette = *opts.Palette
+	}
+	if opts.WhichKeyDelay > 0 {
+		m.whichKeyDelay = opts.WhichKeyDelay
 	}
 	if opts.Now != nil {
 		m.now = opts.Now
@@ -227,6 +233,7 @@ type KeybarStatus struct {
 	// Glyph, when set, leads Text in its own colour (an info "●").
 	Glyph      string
 	GlyphToken dusk.Token
+	Bold       bool // a prompt, such as the typed leader path
 }
 
 func drawKeybar(g *termgrid.Grid, p dusk.Palette, x, y, width int, size KeybarSize, hints []KeyHint, status KeybarStatus) {
@@ -243,7 +250,7 @@ func drawKeybar(g *termgrid.Grid, p dusk.Palette, x, y, width int, size KeybarSi
 	}
 	if status.Text != "" {
 		end := x + width - len([]rune(status.Text))
-		g.Text(end, y, status.Text, tokenFG(p, status.Token, false))
+		g.Text(end, y, status.Text, tokenFG(p, status.Token, status.Bold))
 		if status.Glyph != "" {
 			g.Text(end-1-len([]rune(status.Glyph)), y, status.Glyph, tokenFG(p, status.GlyphToken, false))
 		}
@@ -391,7 +398,7 @@ func (m *model) boardHints(size KeybarSize) []KeyHint {
 func (m *model) keybarStatus(width int, size KeybarSize, hints []KeyHint) KeybarStatus {
 	switch {
 	case len(m.pendingKeys) > 0:
-		return KeybarStatus{Text: displayKeys(strings.Join(m.pendingKeys, " ")) + " …", Token: dusk.Accent}
+		return KeybarStatus{Text: displayKeys(strings.Join(m.pendingKeys, " ")), Token: dusk.Text, Bold: true}
 	case m.lastErr != nil:
 		return KeybarStatus{Text: "✗ " + m.lastErr.Error(), Token: dusk.Danger}
 	case m.createFeedback != "":
@@ -519,6 +526,7 @@ func (m *model) duskBoard() *termgrid.Grid {
 		toast := toastGrid(p, m.toast.kind, truncateCell(m.toast.text, inner-6), m.toast.hint)
 		g.Blit(screenGutter+inner-toast.W, y, toast)
 	}
+	m.drawWhichKey(g)
 	drawKeybar(g, p, screenGutter, m.height-2, inner, size, hints, status)
 	return g
 }

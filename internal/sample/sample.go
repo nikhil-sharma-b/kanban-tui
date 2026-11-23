@@ -322,6 +322,37 @@ func OverflowColumn(now time.Time) *domain.Workspace {
 	return workspace(project("home", now, tasks), dailyWithTasks(now))
 }
 
+// PlacementFlip is 14/placement-flip: todo, doing and done from 01/default
+// and a 16-task later column whose 11th task has a description and a
+// whiteboard, so selecting it puts the card where which-key would open.
+func PlacementFlip(now time.Time) *domain.Workspace {
+	tasks := homeTasks()
+	day := 24 * time.Hour
+	later := []taskSpec{
+		{title: "Keyboard macro recorder", age: 20 * day},
+		{title: "Board statistics view", age: 19 * day},
+	}
+	later = append(later, tasks["backlog"]...)
+	later = append(later,
+		taskSpec{title: "Card colour labels", age: 4 * day},
+		taskSpec{title: "Bulk move with visual mode", age: 3 * day},
+		taskSpec{title: "Mouse support", age: 3 * day},
+		taskSpec{id: "b7c24f19d03e4a5b8c6d7e8f90a1b2c3", title: "Import from Trello JSON", desc: "Lists → columns, cards and checklists → descriptions", age: 5 * day, whiteboards: 1},
+		taskSpec{title: "Export to CSV", age: 3 * day},
+		taskSpec{title: "Pin a task to the top", age: 2 * day},
+		taskSpec{title: "Task templates", age: 2 * day},
+		taskSpec{title: "Snooze a task until a date", age: day},
+		taskSpec{title: "Per-column sort order", age: day},
+	)
+	delete(tasks, "backlog")
+	tasks["later"] = later
+	home := project("home", now, tasks)
+	home.Board.Columns = []domain.Status{"todo", "doing", "done", "later"}
+	home.Board.Tasks = map[string]*domain.Task{}
+	fill(home.Board, now, "home", tasks)
+	return workspace(home, dailyWithTasks(now))
+}
+
 // MoreColumns is 01/more-columns: 01/default with a column before backlog and
 // one after done, six in all, so only four fit at 120 cols.
 func MoreColumns(now time.Time) *domain.Workspace {

@@ -37,6 +37,9 @@ type Scenario struct {
 	Reload bool
 	// After are keys pressed once saves and reloads have settled.
 	After []string
+	// WaitWhichKey runs the timer the last key started, so the which-key
+	// popover shows.
+	WaitWhichKey bool
 	// Unreadable opens the store-unreadable screen with this error.
 	Unreadable error
 }
@@ -174,10 +177,23 @@ var Scenarios = map[string]Scenario{
 	"01/sync-reloaded":          {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j"}, Reload: true, After: []string{"esc"}},
 	"15/store-unreadable":       {W: 120, H: 36, Palette: dusk.Dark, Unreadable: errors.New("file is not a database")},
 	"15/store-unreadable-80x24": {W: 80, H: 24, Palette: dusk.Dark, Unreadable: errors.New("file is not a database")},
+	"14/root":                   whichKeyScenario(sample.Workspace, 120, 36, true, "l", "j", "space"),
+	"14/root-80x24":             whichKeyScenario(sample.Workspace, 80, 24, true, "l", "j", "space"),
+	"14/pending":                whichKeyScenario(sample.Workspace, 120, 36, false, "l", "j", "space", "t"),
+	"14/group-task":             whichKeyScenario(sample.Workspace, 120, 36, true, "l", "j", "space", "t"),
+	"14/group-task-80x24":       whichKeyScenario(sample.Workspace, 80, 24, true, "l", "j", "space", "t"),
+	"14/unbound":                whichKeyScenario(sample.Workspace, 120, 36, false, "l", "j", "space", "t", "q"),
+	"14/placement-flip":         whichKeyScenario(sample.PlacementFlip, 120, 36, true, "l", "l", "l", "j", "j", "j", "j", "j", "j", "j", "j", "j", "j", "space"),
 	"09/delete-project":         deleteProjectScenario(120, 36),
 	"09/delete-project-80x24":   deleteProjectScenario(80, 24),
 	"09/delete-project-typing":  deleteProjectScenario(120, 36, "w", "o", "r"),
 	"09/delete-project-matched": deleteProjectScenario(120, 36, "w", "o", "r", "k"),
+}
+
+// whichKeyScenario presses keys; wait lets the which-key delay pass after the
+// last one, so the popover shows.
+func whichKeyScenario(ws func(time.Time) *domain.Workspace, w, h int, wait bool, keys ...string) Scenario {
+	return Scenario{Workspace: ws, W: w, H: h, Palette: dusk.Dark, Keys: keys, WaitWhichKey: wait}
 }
 
 // confirmScenario selects “Undo for move and delete” in todo (the board every
@@ -315,6 +331,7 @@ func (s Scenario) Run() string {
 		NewTask:               s.NewTask,
 		// Frames never launch a real editor.
 		LaunchWhiteboard: func(string) error { return nil },
+		WhichKeyDelay:    time.Millisecond,
 	})
 	if s.Loaded != nil {
 		s.Loaded(workspace)
@@ -324,7 +341,7 @@ func (s Scenario) Run() string {
 	for _, k := range s.Keys {
 		m, cmd = m.Update(keyMsg(k))
 	}
-	if s.Settle && cmd != nil {
+	if (s.Settle || s.WaitWhichKey) && cmd != nil {
 		for _, msg := range runCmd(cmd) {
 			m, _ = m.Update(msg)
 		}
