@@ -4,9 +4,9 @@
 
 **Blocked by:** 09 — Confirm pattern
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 10/list, 10/searching, 10/no-match, 10/empty, 10/detail, 10/restored, 10/restore-fallback, 10/archive-old, 10/archived-old, 10/archive-old-none, 10/list-80x24, 10/searching-80x24, 10/detail-80x24, 10/archive-old-80x24, 10/empty-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Uses only archived_at, archived_from and updated_at; no new stored fields
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 10/list, 10/searching, 10/no-match, 10/empty, 10/detail, 10/restored, 10/restore-fallback, 10/archive-old, 10/archived-old, 10/archive-old-none, 10/list-80x24, 10/searching-80x24, 10/detail-80x24, 10/archive-old-80x24, 10/empty-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Uses only archived_at, archived_from and updated_at; no new stored fields

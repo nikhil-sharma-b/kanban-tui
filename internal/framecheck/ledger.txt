@@ -100,11 +100,8 @@ enforced 10/detail
 enforced 10/restored
 enforced 10/restore-fallback
 enforced 10/archive-old
-# 10/archived-old and 10/archive-old-none show the done header active with no
-# card selected and the full keybar over an empty done column, which the board
-# rules pinned by 01/empty-column and 01/default contradict. Awaiting a design fix.
-pending  10/archived-old
-pending  10/archive-old-none
+enforced 10/archived-old
+enforced 10/archive-old-none
 enforced 10/list-80x24
 enforced 10/searching-80x24
 enforced 10/detail-80x24

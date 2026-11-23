@@ -136,7 +136,7 @@ var Scenarios = map[string]Scenario{
 	"10/archive-old-80x24": confirmScenario(sample.ArchiveOld, 80, 24, "space", "a", "o"),
 	// The cursor sits on done, which the bulk archive empties.
 	"10/archived-old":           {Workspace: sample.ArchiveOld, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "l", "l", "space", "a", "o", "y"}},
-	"10/archive-old-none":       {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "l", "l", "space", "a", "o"}},
+	"10/archive-old-none":       confirmScenario(sample.Workspace, 120, 36, "space", "a", "o"),
 	"09/delete-project":         deleteProjectScenario(120, 36),
 	"09/delete-project-80x24":   deleteProjectScenario(80, 24),
 	"09/delete-project-typing":  deleteProjectScenario(120, 36, "w", "o", "r"),
