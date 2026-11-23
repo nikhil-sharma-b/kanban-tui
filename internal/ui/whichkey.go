@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultWhichKeyDelay = 300 * time.Millisecond
+	defaultWhichKeyDelay = 100 * time.Millisecond
 	whichKeyWideWidth    = 44
 	whichKeyNarrowWidth  = 40
 )
