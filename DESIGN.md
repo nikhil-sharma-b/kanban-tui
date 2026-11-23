@@ -78,7 +78,7 @@ Everything lives on a character grid. There is one type size, hierarchy comes fr
 
 **Key Characteristics:**
 - Card-per-task board, 4 columns at 120×36, 2 at 80×24.
-- Single rose accent (`accent`) used only for focus, selection and prompts.
+- Single rose accent (`accent`) used only for focus, selection and a few fixed markers (see **The One Rose Rule**).
 - Every action on screen has a visible key hint, always in the same order.
 - Every screen is assembled from 00 Foundations components. No one-off look-alikes.
 
@@ -87,22 +87,22 @@ Everything lives on a character grid. There is one type size, hierarchy comes fr
 Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in the **Dusk** collection, with three modes: `dark` (the frontmatter values), `light`, and `ansi16`. Always bind the variable; never paste a hex.
 
 ### Primary
-- **Dusk Rose** (`accent`): active column header, selection bar `▌`, focused-field bar, prompts, badge fill. Nothing else.
+- **Dusk Rose** (`accent`): active column header, selection bar `▌`, selected list row text, focused-field bar, current project name in the App header, active filter chip, the `●` of info messages, badge fill. Nothing else.
 
 ### Neutral
 - **Night Plum** (`bg`): screen background.
 - **Card Plum** (`surface`): card and menu fill.
 - **Spent Plum** (`surface-done`): done-card fill.
 - **Lit Plum** (`surface-selected`): selected card/row fill and dialog fill.
-- **Rule Plum** (`border`): dialog and menu borders.
-- **Text ladder** (`text` → `text-card` → `text-muted` → `text-dim` → `text-faint`, plus `text-done`, `meta`): see each variable's description in FigCraft for its exact role. Keybar keys use `text-muted`, keybar labels use `text-faint`.
+- **Rule Plum** (`border`): defined in every mode, but no frame paints it today. Dialog and menu borders use `text-faint`.
+- **Text ladder** (`text` → `text-card` → `text-muted` → `text-dim` → `text-faint`, plus `text-done`, `meta`): see each variable's description in FigCraft for its exact role. Every Key hint, in the keybar and in dialog footers, draws its key in `text-card` and its label in `text-dim`.
 
 ### Status
 - **Sage** (`success`): saved, created, copied, restored.
 - **Clay Red** (`danger`): errors and destructive confirmations.
 
 ### Named Rules
-**The One Rose Rule.** `accent` marks focus or selection only. If nothing is focused or selected, no rose is on screen apart from the badge.
+**The One Rose Rule.** `accent` marks focus or selection: the active column header, `▌` bars and the text of the selected list row (a selected card keeps `text`). Four fixed markers also use it: the current project name in the App header, the active filter chip (`/ query` in `bg` on an `accent` fill), the `●` of an info Status message, Toast or `Sync=reloaded` header, and the badge fill. Nothing else is rose: no headings, no decoration.
 
 **The Variables-Only Rule.** Every fill and text colour is bound to a Dusk variable so the `light` and `ansi16` modes work. A raw hex on a screen frame is a bug.
 
@@ -123,7 +123,7 @@ FigCraft rounds an auto-width text box up to a whole pixel, so a run of hugging 
 ### Named Rules
 **The One Size Rule.** Hierarchy is colour token + bold. No italics, no underline, no new sizes. Use the three text styles; never set a font by hand.
 
-**The Glyph Whitelist Rule.** Allowed glyphs: `▌ ▀ ▄ ▗ ▖ ▝ ▘ › · ↑ ↓ ● ╭ ╮ ╰ ╯ │ ─ ▏ ◇ ↵ ✓ ✗ …`. `…` (U+2026, one cell) only ends truncated text. No Nerd Font icons, no emoji.
+**The Glyph Whitelist Rule.** Allowed glyphs: `▌ ▀ ▄ ▗ ▖ ▝ ▘ › ‹ · ↑ ↓ → ● ╭ ╮ ╰ ╯ │ ─ ▏ ◇ ▾ ↵ ✓ ✗ … – “ ” ’`. `…` (U+2026, one cell) only ends truncated text. `›` separates the app name from the project and, with `‹`, points to hidden columns in the Column rail; `▾` marks a field whose picker is open (`todo ▾`); `→` means moved to (`→ doing`); `–` joins a range (`columns 2–5 of 6`); `“ ”` quote names in titles and messages, and `’` is the apostrophe in copy. No Nerd Font icons, no emoji.
 
 ## Layout
 
@@ -131,7 +131,7 @@ FigCraft rounds an auto-width text box up to a whole pixel, so a run of hugging 
 - **Frames:** each state at 120×36 cells (1008×648), plus an 80×24 variant whenever layout changes. Name frames `<ticket>/<state>` and `<ticket>/<state>-80x24`, one page per ticket.
 - **120×36 rows:** row 1 blank · row 2 header · row 4 column headers · rows 5–33 cards · row 35 keybar · row 36 blank. At 80×24 the same 1-row margin: header row 2, column rail row 21, keybar row 23. Screen gutter is 2 cols at every size (16.8 px, close to the 18 px row, so the margin looks even on all sides). Column gap is 4 cols at 120×36 and 2 at 80×24; columns are 26 cols wide at 120×36. The keybar sits on the same gutters, with hints 3 cols apart.
 - **Breakpoint rule** (frame `02/breakpoint-rule`): visible columns N = clamp(floor(W/28), 1, 4). Hidden columns are named in the **Column rail**.
-- **Dialogs:** min(60, W−8) cells wide, min(20, H−4) rows tall, fixed size. Nothing changes height while the user interacts.
+- **Dialogs:** always min(60, W−8) cells wide and centred on whole rows. Full-height dialogs (task detail, new task, archive detail, command palette, cheat sheet) are min(20, H−4) rows tall and never change size while open. Every other dialog takes the height its frame shows: a confirm fits its body, a project or whiteboard list fits its rows, a name dialog fits its input, and the archive list keeps one height in every state. A content-sized dialog may grow or shrink by whole rows as its content changes (a filter drops list rows, an error adds its Status message row) and is re-centred.
 - **Truncation:** card titles and descriptions are one line each. Text wider than the card's text area (card width − 3 cols: 23 at 120×36, 34 at 80×24) is cut to width − 1 cols, trailing spaces dropped, and ends in `…`. lipgloss: `strings.TrimRight(ansi.Truncate(s, w-1, ""), " ") + "…"`.
 - **Cards in a column:** at regular density a one-line card is 3 rows (inset row, title row, inset row) and cards stack with no gap; the half-row insets make the visible 1-row gap. The first card's top inset row sits directly under the column header (row 5 at 120×36).
 - **Compact density** below 30 rows (every 80×24 frame): `Density=compact` cards, no inset rows, 1 blank row between cards and below the column header.
@@ -143,7 +143,7 @@ Flat. Terminals have no shadows or transparency. Depth comes from tonal layering
 ## Shapes
 
 - **Cards:** quarter-block glyphs cut the corners (reads as 4px radius). Text always starts at col 2 in every state, so titles never shift when the selection moves. One col of right padding, so the text area is card width − 3 cols.
-- **Dialogs and menus:** `╭╮╰╯` rounded box drawn in `border`. The border takes the outer ring of cells: 1 row top and bottom, 1 col left and right. Inside a dialog the content starts at col 1; a row with a focus bar puts `▌` in col 1 and its text from col 3, and all other dialog text (title, body, labels, hints) also starts at col 3. One blank col stays inside the right border. A menu's rows start at col 1, their `▌` in col 1 and text from col 3.
+- **Dialogs and menus:** `╭╮╰╯` rounded box drawn in `text-faint`. The border takes the outer ring of cells: 1 row top and bottom, 1 col left and right. Inside a dialog the content starts at col 1; a row with a focus bar puts `▌` in col 1 and its text from col 3, and all other dialog text (title, body, labels, hints) also starts at col 3. One blank col stays inside the right border. A menu's rows start at col 1, their `▌` in col 1 and text from col 3.
 - **Focus:** a `▌` accent bar down every text row of the focused item, never an outline (an outline costs 2 rows and 2 cols). Rows with a bar (list rows, text inputs) put the bar in their col 0 and their text at col 2, like cards.
 - **Carets:** one full cell (8.4 × 18), in field inputs and in the command line.
 
@@ -206,13 +206,13 @@ The key hint system is what users rely on most, so it has the strictest rules.
 
 **The Board Keybar Rule.** The board keybar is exactly: `h j k l select · ↵ open · / search · SPC t n new · SPC t h l move · SPC more · ? help` (85 cols; edit and delete live under `SPC t`, shown by which-key, so every keybar fits the 116 cols between the gutters). With a filter applied, `/ search` becomes `/ refine` and `SPC more` becomes `esc clear filter`. At 80×24 (`Size=narrow`) it keeps `h j k l select · ↵ open · SPC t n new · SPC more · ? help` (filter: `/ refine · esc clear filter` replace the middle). On the daily board the same slots carry the daily actions: `h j k l select · ↵ open · SPC t n new · SPC d m done · SPC d p promote · SPC d d back · SPC more · ? help` (narrow: `h j k l select · ↵ open · SPC d p promote · SPC more · ? help`). Don't reword or reorder it per screen.
 
-**The Safe-Key-First Rule.** Tier 1 confirmations (one task, one whiteboard, archive) are always `esc keep · y <verb>` (`delete`, `archive`), with the safe key first. `↵` is inert in them: only `y` acts and only `esc` keeps, so a reflex enter can't delete and `↵` never means cancel. Tier 2 (project, non-empty column, clear daily) asks the user to type the name: footer `esc keep` until it matches, then `↵ delete · esc keep`. This is the one exception to "confirm before leave".
+**The Safe-Key-First Rule.** Tier 1 confirmations (one task, one whiteboard, archive) are always `esc keep · y <verb>` (`delete`, `archive`), with the safe key first. `↵` is inert in them: only `y` acts and only `esc` keeps, so a reflex enter can't delete and `↵` never means cancel. Tier 2 (project, non-empty column, clear daily) asks the user to type the name: footer `esc keep` until it matches, then `↵ delete · esc keep`. This is the one exception to "confirm before leave". The discard-changes prompt while editing (`03/unsaved`) is not a confirmation dialog: it reads `discard unsaved changes?  y yes  n no`, and `esc` answers no.
 
 **The Confirm Pattern Rule** (page `09 Confirm`). Every destructive or bulk action uses one Dialog: title = verb + quoted object, body = what will be lost with real counts, then one Status message (`danger` `can't be undone` for permanent loss, `info` for archive), then the footer above. Tier 2 adds a focused Text input above the Status message, which reads `info` `type “name” to delete` until it matches, then `danger` `↵ deletes N tasks for good`.
 
 **The Same-Key Rule.** A key means the same thing everywhere it appears. `↵` confirms, `esc` backs out one level, `?` opens help. Lists use `j k`; use `↑↓` only where the list has a live text filter that would swallow `j k`.
 
-**The Short Footer Rule.** A dialog footer is one row: either a Status message or 3–4 hints plus `? more`, never both. Extra keys go behind `?`.
+**The Short Footer Rule.** A dialog footer is one row of hints or one Status message. Keys that don't fit go behind `? more`, which ends the row only when something is hidden: a footer that shows every key (`08/list`, `05/typing`) has none. Two exceptions come from the frames: a list dialog with its own actions puts them on a second hint row (`n new  e rename  x delete` under `j k move  ↵ open  / filter  esc close` in `07/actions`; `r restore  a archive old done` in `10/list`), and the discard prompt puts its prompt Status message and its two keys on one row (`03/unsaved`).
 
 ## Screens
 
@@ -262,7 +262,7 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 | `danger` | `#E28C8C` | `#B44A4A` | `"1"` |
 
 - **Typography:** `Dusk/Title` → `.Bold(true)`; `Dusk/Body` and `Dusk/Hint` → plain. The 13.94 px size is a mockup detail that makes one glyph exactly one 8.4 px cell; terminals have one size.
-- **Rounded:** card corners → quarter-block glyphs `▗▖▝▘` in `surface` on `bg`, inside the inset rows `▄`/`▀` (see **Shape → glyph rules**); dialog and menu → `lipgloss.RoundedBorder()` with `BorderForeground(border)`.
+- **Rounded:** card corners → quarter-block glyphs `▗▖▝▘` in `surface` on `bg`, inside the inset rows `▄`/`▀` (see **Shape → glyph rules**); dialog and menu → `╭─╮ │ ╰─╯` glyphs in `text-faint` on the box fill (see **Shape → glyph rules**).
 - **Spacing:** `cell-w`/`cell-h` are mockup units only; in code every size is whole cells.
 - **Scrim:** the FigCraft `scrim` variable (70% black overlay) is a mockup aid. In code there is no transparency: re-render the board behind a dialog with every foreground set to `text-faint` and fills dropped.
 
@@ -271,7 +271,7 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 | Width W / height H | Rule |
 |---|---|
 | Visible columns | N = clamp(floor(W/28), 1, 4); hidden columns listed in the Column rail |
-| Dialog size | min(60, W−8) cols × min(20, H−4) rows, fixed while open |
+| Dialog size | min(60, W−8) cols; full-height dialogs min(20, H−4) rows, fixed while open; the rest fit their content (see **Layout → Dialogs**) |
 | Keybar | `Size=wide` at W ≥ 100, else `Size=narrow` |
 | Density | H < 30 → compact: no card insets, 1 blank row between cards |
 | Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`). At 80×24 both columns sit under it, so it drops onto the keybar instead, leaving a blank row below the selected card. Menus and dialogs are whole rows: the border is drawn inside the padding. The popover is only as tall as its entries plus its 1-row borders (root 7 rows, a group up to 9) and grows upward from a fixed bottom edge |
@@ -317,6 +317,6 @@ Dialogs: `j k` (or `↑↓` beside a live filter) move, `↵` confirm, `tab` nex
 - **Don't** create a new component, or a frame that imitates one, when a 00 Foundations component exists.
 - **Don't** detach instances or override their fills, fonts or spacing.
 - **Don't** reorder, rename or reword key hints on one screen only.
-- **Don't** use `accent` for decoration, headings or anything that isn't focus, selection or a prompt.
+- **Don't** use `accent` for decoration, headings or anything **The One Rose Rule** doesn't list.
 - **Don't** use shadows, transparency, gradients, icons, emoji, italics, underline or a second font size.
-- **Don't** let a dialog change size while the user interacts with it.
+- **Don't** let a full-height dialog change size while it is open, or let a content-sized one leave whole rows or the centre when its content changes.
