@@ -291,11 +291,11 @@ func TestDailyPromoteMovesTaskToChosenProjectColumn(t *testing.T) {
 	next, _ = pressBoardSeq(m, " ", "d", "p")
 	m = next.(*model)
 	m, _ = promoteKeys(m, keyEnter)
-	for m.promoteColumns()[m.promoteColumnCursor] != domain.StatusInProgress {
+	for m.promoteColumns()[m.promoteColumnCursor] != domain.StatusDoing {
 		before := m.promoteColumnCursor
 		m, _ = promoteKeys(m, runeKey('j'))
 		if m.promoteColumnCursor == before {
-			t.Fatal("missing Work / In Progress destination")
+			t.Fatal("missing Work / doing destination")
 		}
 	}
 
@@ -316,10 +316,10 @@ func TestDailyPromoteMovesTaskToChosenProjectColumn(t *testing.T) {
 	if m.board.Tasks[task.ID] != nil {
 		t.Fatal("task remained on daily board")
 	}
-	if promoted == nil || promoted.Status != domain.StatusInProgress || promoted.Title != task.Title || promoted.Description != task.Description {
+	if promoted == nil || promoted.Status != domain.StatusDoing || promoted.Title != task.Title || promoted.Description != task.Description {
 		t.Fatalf("task not promoted to target column: %+v", promoted)
 	}
-	if want := "promoted “Ship release” to Work / " + string(domain.StatusInProgress); m.toast.text != want {
+	if want := "promoted “Ship release” to Work / " + string(domain.StatusDoing); m.toast.text != want {
 		t.Fatalf("toast = %q, want %q", m.toast.text, want)
 	}
 	if got := m.boardSelectedTask(); got == nil || got.ID != after.ID {

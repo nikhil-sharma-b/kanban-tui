@@ -33,7 +33,7 @@ func TestPromoteDailyTaskMovesTaskToProjectColumn(t *testing.T) {
 	task.Whiteboards = []Whiteboard{{ID: "whiteboard-1", Name: "Plan"}}
 	createdAt := task.CreatedAt
 
-	promoted, err := workspace.PromoteDailyTask(task.ID, target.ID, StatusInProgress)
+	promoted, err := workspace.PromoteDailyTask(task.ID, target.ID, StatusDoing)
 	if err != nil {
 		t.Fatalf("promote daily task: %v", err)
 	}
@@ -46,11 +46,11 @@ func TestPromoteDailyTaskMovesTaskToProjectColumn(t *testing.T) {
 	if target.Board.Tasks[task.ID] != task {
 		t.Fatal("task missing from target project")
 	}
-	if task.Status != StatusInProgress {
-		t.Fatalf("status = %q, want %q", task.Status, StatusInProgress)
+	if task.Status != StatusDoing {
+		t.Fatalf("status = %q, want %q", task.Status, StatusDoing)
 	}
-	if len(target.Board.Order[StatusInProgress]) != 1 || target.Board.Order[StatusInProgress][0] != task.ID {
-		t.Fatalf("unexpected target order: %v", target.Board.Order[StatusInProgress])
+	if len(target.Board.Order[StatusDoing]) != 1 || target.Board.Order[StatusDoing][0] != task.ID {
+		t.Fatalf("unexpected target order: %v", target.Board.Order[StatusDoing])
 	}
 	if task.Title != "Plan release" || task.Description != "Write the checklist" || !task.CreatedAt.Equal(createdAt) || len(task.Whiteboards) != 1 {
 		t.Fatalf("task data not preserved: %+v", task)

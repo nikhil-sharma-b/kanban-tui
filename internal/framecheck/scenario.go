@@ -213,7 +213,36 @@ var Scenarios = withLightScenarios(map[string]Scenario{
 	"09/delete-project-80x24":   deleteProjectScenario(80, 24),
 	"09/delete-project-typing":  deleteProjectScenario(120, 36, "w", "o", "r"),
 	"09/delete-project-matched": deleteProjectScenario(120, 36, "w", "o", "r", "k"),
+	"18/no-projects":            firstRunScenario(120, 36),
+	"18/no-projects-80x24":      firstRunScenario(80, 24),
+	"18/first-project":          firstRunScenario(120, 36, "space", "p", "n", "work", "enter"),
+	"18/first-task":             firstTaskScenario(),
+	"18/cheat-sheet":            {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "?"}},
+	"18/cheat-sheet-80x24":      {Workspace: sample.Workspace, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j", "?"}},
 })
+
+func firstRunScenario(w, h int, keys ...string) Scenario {
+	return Scenario{
+		Workspace: func(time.Time) *domain.Workspace { return domain.NewWorkspace() },
+		W:         w, H: h, Palette: dusk.Dark, Keys: keys,
+	}
+}
+
+func firstTaskScenario() Scenario {
+	s := firstRunScenario(120, 36)
+	s.Workspace = func(now time.Time) *domain.Workspace {
+		ws := domain.NewWorkspace()
+		task := &domain.Task{
+			ID: "5b21e0aa", Title: "Try kanban-tui",
+			CreatedAt: now, UpdatedAt: now,
+		}
+		if err := ws.ActiveProject().Board.AppendTask(task, domain.StatusBacklog); err != nil {
+			panic(err)
+		}
+		return ws
+	}
+	return s
+}
 
 func withLightScenarios(scenarios map[string]Scenario) map[string]Scenario {
 	// Page 16 repeats source scenarios in light mode. The wide palette

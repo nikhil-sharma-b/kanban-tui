@@ -473,14 +473,14 @@ func (m *model) duskBoard() *termgrid.Grid {
 	}
 	if n > 0 {
 		colWidth := (inner - gap*(n-1)) / n
-		// An empty board shows the add hint in the active column only; once
-		// the board has tasks, every empty column shows it.
-		boardEmpty := true
+		bodyHeight := m.duskBodyHeight()
+		taskCount := 0
 		for _, status := range statuses {
-			if len(m.visible[status]) > 0 {
-				boardEmpty = false
-			}
+			taskCount += len(m.board.Order[status])
 		}
+		showGuide := !m.onDailyBoard() && m.filter == ""
+		showEmptyGuide := showGuide && len(m.board.Tasks) == 0
+		showTaskGuide := showGuide && taskCount == 1
 		for i := 0; i < n; i++ {
 			idx := first + i
 			status := statuses[idx]
@@ -502,7 +502,22 @@ func (m *model) duskBoard() *termgrid.Grid {
 			if i == n-1 && first+n < len(statuses) && !rail {
 				g.Text(hx+1, 3, "›", tokenFG(p, dusk.TextDim, false))
 			}
-			m.drawColumnBody(g, x, 4, colWidth, m.duskBodyHeight(), status, active && (m.mode != modeCreate || m.compact()), m.filter == "" && (active || !boardEmpty))
+			showSelection := active && (m.mode != modeCreate || m.compact())
+			if showEmptyGuide {
+				if active {
+					m.drawBoardGuide(g, x, 5, colWidth, bodyHeight-1, firstRunEmptyHints)
+				}
+				continue
+			}
+			hintIfEmpty := m.filter == "" && !showTaskGuide && (active || taskCount > 0)
+			end := m.drawColumnBody(g, x, 4, colWidth, bodyHeight, status, showSelection, hintIfEmpty)
+			if showTaskGuide && showSelection && end > 4 {
+				hints := firstRunTaskHints
+				if idx == len(statuses)-1 {
+					hints = hints[:1] // only open; there is no column to the right
+				}
+				m.drawBoardGuide(g, x, end+1, colWidth, 4+bodyHeight-end-1, hints)
+			}
 		}
 	}
 

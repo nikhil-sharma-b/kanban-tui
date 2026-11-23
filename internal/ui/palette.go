@@ -29,7 +29,10 @@ const (
 	paletteProjects
 	paletteStatuses
 	paletteThemes
+	paletteKeys
 )
+
+func (s paletteStep) isRoot() bool { return s == paletteActions || s == paletteKeys }
 
 type paletteState struct {
 	input      textinput.Model
@@ -130,10 +133,14 @@ func paletteKeyHint(keys string) string {
 }
 
 func (m *model) openPalette(fromDetail bool) (tea.Model, tea.Cmd) {
+	return m.openPaletteAt(paletteActions, fromDetail)
+}
+
+func (m *model) openPaletteAt(step paletteStep, fromDetail bool) (tea.Model, tea.Cmd) {
 	m.mode = modePalette
 	m.pal.fromDetail = fromDetail
 	m.resetForPalette()
-	m.enterPaletteStep(paletteActions)
+	m.enterPaletteStep(step)
 	return m, textinput.Blink
 }
 
@@ -295,6 +302,8 @@ func (m *model) paletteSections() []paletteSection {
 	case paletteThemes:
 		items := m.themeStepItems()
 		return []paletteSection{{title: fmt.Sprintf("themes · %d", len(items)), items: items}}
+	case paletteKeys:
+		return m.cheatSheetSections()
 	}
 	var board []paletteItem
 	first, skip := paletteFirst, map[boardAction]bool(nil)
@@ -354,9 +363,12 @@ func (m *model) paletteItems() []paletteItem {
 func paletteScore(query string, item paletteItem) (int, bool) {
 	q := strings.ToLower(query)
 	label := strings.ToLower(item.label)
-	compact := strings.ToLower(strings.ReplaceAll(strings.TrimPrefix(paletteKeyHint(item.keys), "SPC "), " ", ""))
+	keys := strings.ToLower(paletteKeyHint(item.keys))
+	compact := strings.ReplaceAll(strings.TrimPrefix(keys, "spc "), " ", "")
 	switch {
-	case strings.HasPrefix(label, q), item.keys != "" && strings.HasPrefix(compact, strings.ReplaceAll(q, " ", "")):
+	case strings.HasPrefix(label, q),
+		item.keys != "" && strings.HasPrefix(compact, strings.ReplaceAll(q, " ", "")),
+		item.keys != "" && strings.HasPrefix(keys, q):
 		return 0, true
 	case strings.Contains(" "+label, " "+q):
 		return 1, true
@@ -399,6 +411,10 @@ func (m *model) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		key = "enter" // the offered row's own key
 	}
 	switch key {
+	case ":":
+		if m.pal.step == paletteKeys && query == "" {
+			return m.openPalette(false)
+		}
 	case "up", "ctrl+p":
 		m.pal.cursor = max(0, m.pal.cursor-1)
 		return m, nil
@@ -418,18 +434,22 @@ func (m *model) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "esc":
-		if m.pal.step != paletteActions {
+		if !m.pal.step.isRoot() {
 			m.enterPaletteStep(paletteActions)
 			return m, nil
 		}
 		m.closePalette()
 		return m, nil
 	case "?":
+		if m.pal.step == paletteKeys {
+			m.closePalette()
+			return m, nil
+		}
 		m.closePalette()
 		if m.mode == modeDetail {
 			m.detailHelp = true
 		} else {
-			m.showHelp = true
+			return m.openCheatSheet()
 		}
 		return m, nil
 	}
@@ -445,8 +465,11 @@ func (m *model) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // paletteHints are the footer, in the Fixed Order.
 func (m *model) paletteHints(noMatch bool) []KeyHint {
 	leave := KeyHint{"esc", "close"}
-	if m.pal.fromDetail || m.pal.step != paletteActions {
+	if m.pal.fromDetail || !m.pal.step.isRoot() {
 		leave = KeyHint{"esc", "back"}
+	}
+	if m.pal.step == paletteKeys {
+		return []KeyHint{{"↑↓", "move"}, {"↵", "run"}, leave}
 	}
 	if noMatch {
 		return []KeyHint{{"↵", "search"}, leave, {"backspace", "edit"}, {"?", "more"}}
@@ -472,6 +495,8 @@ func (m *model) paletteContext(width int) string {
 		return "set status › pick one"
 	case paletteThemes:
 		return "theme › pick one"
+	case paletteKeys:
+		return "keys"
 	}
 	task := m.selectedTask()
 	if task == nil {
@@ -503,7 +528,7 @@ func (m *model) paletteDialog() *termgrid.Grid {
 	context := m.paletteContext(width - 16)
 	g.Text(w-2-ansi.StringWidth(context), 1, context, tokenFG(p, dusk.TextDim, false))
 	inputWidth := width - ansi.StringWidth(context) - 1
-	placeholder := map[paletteStep]string{paletteActions: "Type an action…", paletteProjects: "Filter projects…", paletteStatuses: "Filter columns…", paletteThemes: "Filter themes…"}[m.pal.step]
+	placeholder := map[paletteStep]string{paletteActions: "Type an action…", paletteProjects: "Filter projects…", paletteStatuses: "Filter columns…", paletteThemes: "Filter themes…", paletteKeys: "Filter keys…"}[m.pal.step]
 	lines, col := cutInput(m.pal.input.Value(), m.pal.input.Position(), inputWidth)
 	drawFocusedInput(g, p, 1, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
 
@@ -513,6 +538,9 @@ func (m *model) paletteDialog() *termgrid.Grid {
 	if noMatch {
 		drawStatusMessage(g, p, 1, 3, width+2, StatusInfo, "no action matches “"+query+"”")
 		drawListRow(g, p, 1, 5, w-3, "search tasks for “"+query+"”", "/", ListRowSelected)
+	}
+	if m.pal.step == paletteKeys && len(sections) == 0 {
+		drawStatusMessage(g, p, 1, 3, width+2, StatusInfo, "no key matches “"+query+"”")
 	}
 
 	var rows []paletteRow

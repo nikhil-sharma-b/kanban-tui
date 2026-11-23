@@ -175,8 +175,8 @@ func (m *model) updateProjectEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.activateProject(project.ID)
 			m.closeProjectEdit(modeBoard)
-			m.lastStatus = fmt.Sprintf("created project %s", project.Name)
-			return m, m.saveWorkspaceCmd()
+			text := m.quotedToast("Created project ", project.Name, KeyHint{})
+			return m, tea.Batch(m.saveWorkspaceCmd(), m.showToast(StatusSuccess, text, KeyHint{}))
 		}
 
 		previousPaths := snapshotProjectWhiteboardPaths(m.workspace.ProjectByID(m.projectDraft), m.dataPath)

@@ -46,8 +46,8 @@ func TestTaskLifecycle(t *testing.T) {
 	h.ok(nil, "project", "create", "Work")
 
 	var task taskView
-	h.ok(&task, "task", "add", "Write docs", "-p", "work", "-d", "README", "--column", "in progress")
-	if task.Project != "Work" || task.Column != "in_progress" || task.Description != "README" {
+	h.ok(&task, "task", "add", "Write docs", "-p", "work", "-d", "README", "--column", "Doing")
+	if task.Project != "Work" || task.Column != "doing" || task.Description != "README" {
 		t.Fatalf("unexpected task %+v", task)
 	}
 
@@ -178,7 +178,7 @@ func TestColumnCommands(t *testing.T) {
 	for _, column := range columns.Columns {
 		names = append(names, column.Name)
 	}
-	if got := strings.Join(names, ","); got != "backlog,QA,in_progress,done" {
+	if got := strings.Join(names, ","); got != "backlog,QA,todo,doing,done" {
 		t.Fatalf("unexpected columns %s", got)
 	}
 }

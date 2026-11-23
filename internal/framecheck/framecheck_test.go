@@ -363,7 +363,7 @@ func TestBoardHelpUsesActivePalette(t *testing.T) {
 			h.Palette = dusk.Light
 			light := ReadScreen(h.Run(), h.W, h.H, h.Palette)
 			rows := strings.Join(light.Rows(), "\n")
-			for _, binding := range []string{"SPC d p   promote to project", "SPC c l   move right"} {
+			for _, binding := range []string{"start here", "everything else · : lists all", "SPC t h l"} {
 				if !strings.Contains(rows, binding) {
 					t.Fatalf("help did not show %q", binding)
 				}
@@ -377,6 +377,60 @@ func TestBoardHelpUsesActivePalette(t *testing.T) {
 				t.Errorf("changing theme changed help cells beyond their palette values:\n%s", summary(diffs))
 			}
 		})
+	}
+}
+
+func TestCheatSheetFiltersKeysAndRunsTheSelectedAction(t *testing.T) {
+	s := firstRunScenario(120, 36, "?", "SPC p")
+	screen := func(s Scenario) string {
+		return strings.Join(ReadScreen(s.Run(), s.W, s.H, s.Palette).Rows(), "\n")
+	}
+	if rows := screen(s); !strings.Contains(rows, "matches · 1") || !strings.Contains(rows, "projects") || strings.Contains(rows, "start here") {
+		t.Fatal("filtering the cheat sheet by displayed keys should show the matching project action")
+	}
+	s.After = []string{"enter"}
+	if rows := screen(s); !strings.Contains(rows, "Filter projects…") || strings.Contains(rows, "start here") {
+		t.Fatal("enter should run the matching project action")
+	}
+	s.After = []string{"esc"}
+	if rows := screen(s); strings.Contains(rows, "matches · 1") || !strings.Contains(rows, "add the first task") {
+		t.Fatal("escape should close the cheat sheet without running an action")
+	}
+}
+
+func TestFirstRunGuideFollowsActiveTaskCount(t *testing.T) {
+	s := firstRunScenario(120, 36, "space", "t", "n", "First", "enter")
+	screen := func(s Scenario) string {
+		return strings.Join(ReadScreen(s.Run(), s.W, s.H, s.Palette).Rows(), "\n")
+	}
+	if rows := screen(s); !strings.Contains(rows, "open it") || strings.Contains(rows, "add the first task") {
+		t.Fatal("first saved task should replace the empty-board guide with card hints")
+	}
+	s.After = []string{"space", "t", "n", "Second", "enter"}
+	if rows := screen(s); strings.Contains(rows, "open it") || strings.Contains(rows, "add the first task") || !strings.Contains(rows, "Second") {
+		t.Fatal("second saved task should remove the first-run guide")
+	}
+}
+
+func TestFirstRunGuideStaysUsableBetweenFrameSizes(t *testing.T) {
+	s := firstRunScenario(112, 36)
+	rows := strings.Join(ReadScreen(s.Run(), s.W, s.H, s.Palette).Rows(), "\n")
+	if !strings.Contains(rows, "SPC t n add the first") {
+		t.Fatal("the primary guide should still show in a narrower four-column layout")
+	}
+}
+
+func TestFirstTaskGuideOnlyShowsAvailableActions(t *testing.T) {
+	s := firstTaskScenario()
+	s.Keys = []string{"l"}
+	rows := strings.Join(ReadScreen(s.Run(), s.W, s.H, s.Palette).Rows(), "\n")
+	if strings.Contains(rows, "open it") || strings.Contains(rows, "move it along") {
+		t.Fatal("the lone card's shortcuts should not show while another column is active")
+	}
+	s.Keys = []string{"space", "t", "l", "space", "t", "l", "space", "t", "l"}
+	rows = strings.Join(ReadScreen(s.Run(), s.W, s.H, s.Palette).Rows(), "\n")
+	if !strings.Contains(rows, "open it") || strings.Contains(rows, "move it along") {
+		t.Fatal("a card in the final column should show open, but not move right")
 	}
 }
 

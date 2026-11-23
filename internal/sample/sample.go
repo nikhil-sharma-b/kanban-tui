@@ -405,10 +405,15 @@ func MoreColumns(now time.Time) *domain.Workspace {
 	return workspace(home, dailyWithTasks(now))
 }
 
-// EmptyBoard is 01/empty-board: project "home" with its four columns and no
-// tasks anywhere, the daily board included.
+// EmptyBoard is 01/empty-board: an established board with no active tasks.
+// A task in the archive distinguishes it from a fresh board (page 18).
 func EmptyBoard(now time.Time) *domain.Workspace {
-	return workspace(project("home", now, nil), dailyProject(now, nil))
+	home := project("home", now, nil)
+	home.Board.Tasks["archived"] = &domain.Task{
+		ID: "archived", Title: "An archived task", Status: domain.StatusBacklog,
+		CreatedAt: now, UpdatedAt: now, ArchivedAt: &now, ArchivedFrom: domain.StatusBacklog,
+	}
+	return workspace(home, dailyProject(now, nil))
 }
 
 func workspace(projects ...*domain.Project) *domain.Workspace {

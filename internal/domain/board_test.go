@@ -32,14 +32,14 @@ func TestShiftTaskMovesAcrossColumns(t *testing.T) {
 		t.Fatalf("expected shift to succeed")
 	}
 
-	if task.Status != StatusInProgress {
-		t.Fatalf("unexpected status: got %s want %s", task.Status, StatusInProgress)
+	if task.Status != StatusTodo {
+		t.Fatalf("unexpected status: got %s want %s", task.Status, StatusTodo)
 	}
 	if len(board.Order[StatusBacklog]) != 0 {
 		t.Fatalf("expected backlog to be empty")
 	}
-	if len(board.Order[StatusInProgress]) != 1 || board.Order[StatusInProgress][0] != task.ID {
-		t.Fatalf("unexpected in-progress order: %v", board.Order[StatusInProgress])
+	if len(board.Order[StatusTodo]) != 1 || board.Order[StatusTodo][0] != task.ID {
+		t.Fatalf("unexpected todo order: %v", board.Order[StatusTodo])
 	}
 }
 
@@ -52,14 +52,10 @@ func TestAddColumnAllowsCustomColumnAndShift(t *testing.T) {
 		t.Fatalf("add column: %v", err)
 	}
 
-	if !board.ShiftTask(task.ID, 1) {
-		t.Fatalf("expected first shift")
-	}
-	if !board.ShiftTask(task.ID, 1) {
-		t.Fatalf("expected second shift")
-	}
-	if !board.ShiftTask(task.ID, 1) {
-		t.Fatalf("expected third shift into custom column")
+	for range 4 {
+		if !board.ShiftTask(task.ID, 1) {
+			t.Fatal("expected shift toward custom column")
+		}
 	}
 
 	if task.Status != custom {
@@ -81,7 +77,7 @@ func TestMoveColumnReordersColumns(t *testing.T) {
 		t.Fatalf("expected column move to succeed")
 	}
 
-	want := []Status{StatusInProgress, StatusBacklog, StatusDone, Status("Review")}
+	want := []Status{StatusTodo, StatusBacklog, StatusDoing, StatusDone, Status("Review")}
 	if len(board.Columns) != len(want) {
 		t.Fatalf("unexpected columns length: got %d want %d", len(board.Columns), len(want))
 	}
@@ -157,7 +153,7 @@ func TestRenameColumnRejectsExistingName(t *testing.T) {
 		t.Fatalf("add column: %v", err)
 	}
 
-	if _, err := board.RenameColumn("Review", string(StatusInProgress)); err == nil {
+	if _, err := board.RenameColumn("Review", string(StatusTodo)); err == nil {
 		t.Fatal("expected rename to existing name to fail")
 	}
 }
@@ -304,11 +300,10 @@ func TestUpdateTaskPreservesWhiteboards(t *testing.T) {
 func TestDeleteColumnDisallowsRemovingLastColumn(t *testing.T) {
 	board := NewBoard()
 
-	if err := board.DeleteColumn(StatusDone); err != nil {
-		t.Fatalf("delete %q: %v", StatusDone, err)
-	}
-	if err := board.DeleteColumn(StatusInProgress); err != nil {
-		t.Fatalf("delete %q: %v", StatusInProgress, err)
+	for _, status := range []Status{StatusDone, StatusDoing, StatusTodo} {
+		if err := board.DeleteColumn(status); err != nil {
+			t.Fatalf("delete %q: %v", status, err)
+		}
 	}
 
 	if err := board.DeleteColumn(StatusBacklog); err == nil {

@@ -61,9 +61,8 @@ func (m *model) leaderKeyStep(key string) (bool, tea.Cmd) {
 		}
 		return true, nil
 	case "?":
-		m.cancelPending()
-		m.showHelp = true
-		return true, nil
+		_, cmd := m.openCheatSheet()
+		return true, cmd
 	}
 	seq := strings.Join(append(append([]string(nil), m.pendingKeys...), key), " ")
 	if m.peekBoardAction(key) != actNone {
@@ -140,7 +139,7 @@ func (m *model) selectedCardBox() (box, bool) {
 
 // drawWhichKey blits the popover over the board grid when it shows.
 func (m *model) drawWhichKey(g *termgrid.Grid) {
-	if !m.whichKeyShown || len(m.pendingKeys) == 0 || m.mode != modeBoard || m.showHelp {
+	if !m.whichKeyShown || len(m.pendingKeys) == 0 || m.mode != modeBoard {
 		return
 	}
 	entries := continuations(strings.Join(m.pendingKeys, " "))

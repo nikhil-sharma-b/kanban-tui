@@ -165,7 +165,6 @@ type model struct {
 	vimReplace         bool   // R – replace mode (overtype)
 	vimStatus          string // transient feedback shown in dialog (e.g. yanked "foo")
 	vimCommand         string // command-line input in normal mode, including leading ':'
-	showHelp           bool
 	lastStatus         string
 	// lastInfo is an info toast on the keybar until the next key.
 	lastInfo string
@@ -478,21 +477,12 @@ func (m *model) View() string {
 	if m.mode == modePalette {
 		return m.placeDialog(board, m.paletteDialog())
 	}
-	if m.showHelp {
-		return m.placeDialog(board, m.helpOverlay())
-	}
 	return renderGrid(board)
 }
 
 func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	statuses := m.board.Statuses()
 	if len(statuses) == 0 {
-		return m, nil
-	}
-	if m.showHelp {
-		if k := msg.String(); k == "esc" || k == "?" || k == "q" {
-			m.showHelp = false
-		}
 		return m, nil
 	}
 
@@ -666,7 +656,7 @@ func (m *model) runBoardAction(action boardAction) (tea.Model, tea.Cmd) {
 	case actArchiveView:
 		return m.openArchive()
 	case actHelp:
-		m.showHelp = !m.showHelp
+		return m.openCheatSheet()
 	case actTaskTop:
 		m.moveSelection(-len(m.visible[statuses[m.activeColumn]]))
 	case actTaskBottom:

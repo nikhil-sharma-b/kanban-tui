@@ -302,7 +302,8 @@ func layoutCards(cards []Card, scroll, y, height int) []cardPlace {
 	return out
 }
 
-func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status domain.Status, active, hintIfEmpty bool) {
+// drawColumnBody returns the first row below the last card, or y if empty.
+func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status domain.Status, active, hintIfEmpty bool) int {
 	p := m.palette
 	cards := m.columnCards(status, active)
 	if len(cards) == 0 {
@@ -313,7 +314,7 @@ func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status
 			}
 			drawKeyHint(g, p, x, y+1, KeyHint{"SPC t n", label})
 		}
-		return
+		return y
 	}
 	scroll := min(m.scroll[status], len(cards)-1)
 	if scroll > 0 {
@@ -324,7 +325,9 @@ func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status
 		drawCard(g, p, x, c.top, width, cards[c.index])
 	}
 	last := places[len(places)-1]
+	end := last.top + cardHeight(cards[last.index])
 	if hidden := len(cards) - last.index - 1; hidden > 0 {
-		drawScrollHint(g, p, x, last.top+cardHeight(cards[last.index]), ScrollDown, hidden)
+		drawScrollHint(g, p, x, end, ScrollDown, hidden)
 	}
+	return end
 }

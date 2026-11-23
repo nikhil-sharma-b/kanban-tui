@@ -79,7 +79,7 @@ Existing JSON data is migrated automatically on first run:
 Any arguments run a single command instead of the TUI, which makes the board scriptable and usable by AI agents:
 
 ```bash
-kanban task add "Write release notes" -p Work --column "in progress"
+kanban task add "Write release notes" -p Work --column doing
 kanban task list -p Work --json
 kanban task move 3f2a --column done        # unique ID prefix is enough
 kanban daily add "Call Bob"
@@ -90,6 +90,7 @@ Run `kanban help` for every command. Notes:
 
 - every command accepts `--json` and prints the affected task, project or board
 - projects are referenced by name (case-insensitive) or ID; `-p` defaults to the active project
+- new projects start with `backlog`, `todo`, `doing`, and `done`; existing projects keep their columns
 - tasks are referenced by full ID or any unique prefix, across all projects
 - errors go to stderr; exit code `1` for failures, `2` for bad usage
 
@@ -106,7 +107,7 @@ Navigation:
 - `gg` / `G`: first / last task in the column
 - `/`: search tasks
 - `enter`: open task details
-- `?`: show all keys
+- `?`: open the key cheat sheet (type to filter, `enter` to run, `esc` to close)
 - `q`: quit
 
 `SPC t` (+task):

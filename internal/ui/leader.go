@@ -3,18 +3,13 @@ package ui
 // Board keys resolve through one table, the way Neovim resolves mappings: bare
 // keys only navigate, and anything that creates, mutates or opens something
 // sits behind the leader (space). While a sequence is unfinished, a which-key
-// float lists what may follow it. The float, the help overlay and the
-// resolver all read boardBindings, so a key cannot do one thing and be
-// documented as another.
+// float lists what may follow it. The float, the command palette and the
+// resolver all read boardBindings.
 
 import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
-
-	"github.com/nikhilsharma/kanban-tui/internal/termgrid"
-	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
 )
 
 type boardAction int
@@ -212,99 +207,4 @@ func continuations(prefix string) []whichKeyEntry {
 
 func displayKeys(seq string) string {
 	return strings.ReplaceAll(seq, leaderKey, "SPC")
-}
-
-// helpOverlay lists every board binding, grouped the way the leader tree is.
-func (m *model) helpOverlay() *termgrid.Grid {
-	// One row per action: arrow keys and ctrl+c are aliases of keys already
-	// listed, and repeating them only makes the overlay taller.
-	type row struct{ key, label string }
-	type section struct{ title, prefix string }
-	listed := map[boardAction]bool{}
-	var columns [][]row
-	for _, sections := range [][]section{
-		{{"Navigate", ""}},
-		{{"+task", "space t"}, {"+column", "space c"}},
-		{{"+project", "space p"}, {"+daily", "space d"}, {"+archive", "space a"}},
-	} {
-		var rows []row
-		for i, s := range sections {
-			if i > 0 {
-				rows = append(rows, row{})
-			}
-			rows = append(rows, row{label: s.title})
-			for _, b := range boardBindings {
-				if listed[b.action] || !bindingInSection(b.keys, s.prefix) {
-					continue
-				}
-				listed[b.action] = true
-				rows = append(rows, row{displayKeys(b.keys), b.desc})
-			}
-		}
-		columns = append(columns, rows)
-	}
-	keyWidth := func(key string) int {
-		if key == "" {
-			return 0
-		}
-		return max(10, ansi.StringWidth(key)+1)
-	}
-	widths := make([]int, len(columns))
-	bodyW, bodyH := 0, 0
-	for i, rows := range columns {
-		bodyH = max(bodyH, len(rows))
-		for _, r := range rows {
-			widths[i] = max(widths[i], keyWidth(r.key)+ansi.StringWidth(r.label))
-		}
-		bodyW += widths[i]
-	}
-	pad, gap := 4, 4
-	if bodyW+2*pad+(len(columns)-1)*gap > m.width {
-		pad, gap = 2, 1
-	}
-	w := bodyW + 2*pad + (len(columns)-1)*gap
-	p := m.palette
-	g := newDialog(p, min(w, m.width), min(bodyH+8, m.height))
-	if g.W < 2*pad || g.H < 8 {
-		return g
-	}
-	draw := func(x, y int, s string, token dusk.Token, bold bool) {
-		g.Text(x, y, truncateCell(s, g.W-1-x), tokenFG(p, token, bold))
-	}
-	draw(pad, 2, "Keys", dusk.Text, true)
-	bodyTop, footer := 4, g.H-3
-	if g.H < bodyH+8 {
-		bodyTop, footer = 3, g.H-2
-	}
-	x := pad
-	for i, rows := range columns {
-		for j, r := range rows {
-			y := bodyTop + j
-			if y >= footer {
-				break
-			}
-			if r.key == "" {
-				draw(x, y, r.label, dusk.Meta, true)
-			} else {
-				draw(x, y, r.key, dusk.TextMuted, true)
-				draw(x+keyWidth(r.key), y, r.label, dusk.Text, false)
-			}
-		}
-		x += widths[i] + gap
-	}
-	drawDialogHints(g, p, pad, footer, g.W-pad-1, []KeyHint{{"esc / ?", "close"}})
-	return g
-}
-
-func bindingInSection(keys, prefix string) bool {
-	switch prefix {
-	case "":
-		return !strings.HasPrefix(keys, leaderKey+" ")
-	case leaderKey:
-		// Leader keys that belong to no named group.
-		rest, ok := strings.CutPrefix(keys, leaderKey+" ")
-		return ok && !strings.Contains(rest, " ")
-	default:
-		return strings.HasPrefix(keys, prefix+" ")
-	}
 }

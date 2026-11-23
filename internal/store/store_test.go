@@ -61,8 +61,8 @@ func TestSQLiteStoreRoundTrip(t *testing.T) {
 	if got := loadedProject.Board.Order[domain.StatusBacklog]; len(got) != 1 || got[0] != first.ID {
 		t.Fatalf("unexpected backlog order: %v", got)
 	}
-	if got := loadedProject.Board.Order[domain.StatusInProgress]; len(got) != 1 || got[0] != second.ID {
-		t.Fatalf("unexpected in-progress order: %v", got)
+	if got := loadedProject.Board.Order[domain.StatusTodo]; len(got) != 1 || got[0] != second.ID {
+		t.Fatalf("unexpected todo order: %v", got)
 	}
 	if got := len(loadedProject.Board.Tasks[first.ID].Whiteboards); got != 1 {
 		t.Fatalf("unexpected whiteboard count: got %d want 1", got)
@@ -170,10 +170,10 @@ func TestSQLiteStorePersistsProjectsAndColumns(t *testing.T) {
 	if loadedProject == nil {
 		t.Fatal("expected first project to load")
 	}
-	if len(loadedProject.Board.Columns) != 4 {
-		t.Fatalf("unexpected columns count: got %d want 4", len(loadedProject.Board.Columns))
+	if len(loadedProject.Board.Columns) != 5 {
+		t.Fatalf("unexpected columns count: got %d want 5", len(loadedProject.Board.Columns))
 	}
-	if loadedProject.Board.Columns[3] != review {
+	if loadedProject.Board.Columns[4] != review {
 		t.Fatalf("unexpected custom column order: %v", loadedProject.Board.Columns)
 	}
 	if got := loadedProject.Board.Order[review]; len(got) != 1 || got[0] != task.ID {
@@ -293,7 +293,8 @@ func TestSQLiteStoreLoadsPreDailyWorkspace(t *testing.T) {
 	if len(kept.Board.Tasks) != 1 {
 		t.Fatalf("stored project tasks = %d, want 1", len(kept.Board.Tasks))
 	}
-	if got := kept.Board.Statuses(); len(got) != 3 || got[0] != domain.StatusBacklog {
+	if got := kept.Board.Statuses(); len(got) != 3 || got[0] != domain.StatusBacklog ||
+		got[1] != domain.StatusInProgress || got[2] != domain.StatusDone {
 		t.Fatalf("stored project columns changed: %v", got)
 	}
 

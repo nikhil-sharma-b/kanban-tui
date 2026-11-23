@@ -160,9 +160,9 @@ enforced 17/dusk-light
 enforced 17/dusk
 enforced 17/palette-theme
 enforced 17/palette-theme-80x24
-pending  18/first-task
-pending  18/no-projects-80x24
-pending  18/first-project
-pending  18/no-projects
-pending  18/cheat-sheet
-pending  18/cheat-sheet-80x24
+enforced 18/first-task
+enforced 18/no-projects-80x24
+enforced 18/first-project
+enforced 18/no-projects
+enforced 18/cheat-sheet
+enforced 18/cheat-sheet-80x24

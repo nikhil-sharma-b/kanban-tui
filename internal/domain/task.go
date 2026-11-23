@@ -12,14 +12,18 @@ import (
 type Status string
 
 const (
-	StatusBacklog    Status = "backlog"
+	StatusBacklog Status = "backlog"
+	StatusTodo    Status = "todo"
+	StatusDoing   Status = "doing"
+	// StatusInProgress is retained for boards created with the old defaults.
 	StatusInProgress Status = "in_progress"
 	StatusDone       Status = "done"
 )
 
 var StatusOrder = []Status{
 	StatusBacklog,
-	StatusInProgress,
+	StatusTodo,
+	StatusDoing,
 	StatusDone,
 }
 
