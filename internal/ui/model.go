@@ -22,11 +22,11 @@ import (
 )
 
 const (
+	projectDialogMaxWidth = 60
 	createDialogMaxWidth  = 92
 	searchDialogMaxWidth  = 50
 	detailDialogMaxWidth  = 72
 	columnDialogMaxWidth  = 56
-	projectDialogMaxWidth = 60
 	defaultDialogPadding  = 2
 	searchDialogPadding   = 2
 	createDialogPadding   = 3
@@ -165,6 +165,7 @@ type model struct {
 	projectCursor      int
 	projectFilterInput textinput.Model
 	projectFiltering   bool
+	projectErr         error // shown in the projects dialogs, not the keybar
 	whiteboardInput    textinput.Model
 	whiteboardCursor   int
 	whiteboardRenameID string
@@ -479,13 +480,15 @@ func (m *model) View() string {
 	if m.mode == modeAddColumn {
 		return m.placeAddColumnDialog(board)
 	}
+	if m.mode == modeProjects {
+		return m.placeDialog(board, m.projectsDialog())
+	}
+	if m.mode == modeProjectEdit {
+		return m.placeProjectEditDialog(board)
+	}
 	view := renderGrid(board)
 
 	switch m.mode {
-	case modeProjects:
-		return m.placeOverlayCenter(view, m.renderProjectsDialog())
-	case modeProjectEdit:
-		return m.placeOverlayCenter(view, m.renderProjectEditDialog())
 	case modeWhiteboards:
 		return m.placeOverlayCenter(view, m.renderWhiteboardsDialog())
 	case modeWhiteboardRename:
@@ -629,14 +632,7 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.lastErr = nil
 		return m, textinput.Blink
 	case actProjects:
-		m.mode = modeProjects
-		m.projectCursor = m.activeProjectIndex()
-		m.projectInput.Blur()
-		m.projectFiltering = true
-		m.projectFilterInput.SetValue("")
-		m.projectFilterInput.Focus()
-		m.lastErr = nil
-		return m, textinput.Blink
+		return m.openProjects()
 	case actColumnRename:
 		return m.beginRenameColumn()
 	case actColumnDelete:
@@ -690,6 +686,10 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case actProjectDelete:
 		if m.project != nil {
+			if err := m.deletableProject(m.project); err != nil {
+				m.lastErr = err
+				return m, nil
+			}
 			return m.confirmDeleteProject(m.project, modeBoard)
 		}
 	}
@@ -1226,163 +1226,6 @@ func fuzzyMatch(query, target string) bool {
 		}
 	}
 	return true
-}
-
-func (m *model) filteredProjects() []*domain.Project {
-	projects := m.workspace.RegularProjects()
-	query := strings.TrimSpace(m.projectFilterInput.Value())
-	if query == "" {
-		return projects
-	}
-	matches := make([]*domain.Project, 0, len(projects))
-	for _, project := range projects {
-		if fuzzyMatch(query, project.Name) {
-			matches = append(matches, project)
-		}
-	}
-	return matches
-}
-
-func (m *model) updateProjects(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.projectFiltering {
-		switch msg.String() {
-		case "esc":
-			m.projectFiltering = false
-			m.projectFilterInput.SetValue("")
-			m.projectFilterInput.Blur()
-			m.projectCursor = 0
-			return m, nil
-		case "enter":
-			m.projectFiltering = false
-			m.projectFilterInput.Blur()
-			if projects := m.filteredProjects(); len(projects) > 0 {
-				if m.projectCursor >= len(projects) {
-					m.projectCursor = len(projects) - 1
-				}
-				return m.switchProject(projects[m.projectCursor].ID)
-			}
-			return m, nil
-		case "up", "down":
-			// fall through to list navigation below
-		default:
-			var cmd tea.Cmd
-			m.projectFilterInput, cmd = m.projectFilterInput.Update(msg)
-			m.projectCursor = 0
-			return m, cmd
-		}
-	}
-
-	projects := m.filteredProjects()
-	if m.projectCursor >= len(projects) {
-		m.projectCursor = max(0, len(projects)-1)
-	}
-
-	switch msg.String() {
-	case "esc":
-		if strings.TrimSpace(m.projectFilterInput.Value()) != "" {
-			m.projectFilterInput.SetValue("")
-			m.projectCursor = 0
-			return m, nil
-		}
-		m.mode = modeBoard
-		m.lastErr = nil
-		return m, nil
-	case "/":
-		m.projectFiltering = true
-		m.projectFilterInput.CursorEnd()
-		m.projectFilterInput.Focus()
-		m.lastErr = nil
-		return m, textinput.Blink
-	}
-
-	if len(projects) == 0 {
-		return m, nil
-	}
-
-	switch msg.String() {
-	case "up", "k":
-		if m.projectCursor > 0 {
-			m.projectCursor--
-		}
-		return m, nil
-	case "down", "j":
-		if m.projectCursor < len(projects)-1 {
-			m.projectCursor++
-		}
-		return m, nil
-	case "enter":
-		return m.switchProject(projects[m.projectCursor].ID)
-	case "n":
-		return m.beginProjectEdit("", "", modeProjects)
-	case "e":
-		project := projects[m.projectCursor]
-		return m.beginProjectEdit(project.ID, project.Name, modeProjects)
-	case "x":
-		return m.confirmDeleteProject(projects[m.projectCursor], modeProjects)
-	}
-
-	return m, nil
-}
-
-// beginProjectEdit opens the project name dialog: a new project when id is
-// empty, otherwise a rename. back is where cancelling or renaming returns.
-func (m *model) beginProjectEdit(id, name string, back mode) (tea.Model, tea.Cmd) {
-	m.mode = modeProjectEdit
-	m.projectEditPrev = back
-	m.projectDraft = id
-	m.projectInput.SetValue(name)
-	m.projectInput.CursorEnd()
-	m.projectInput.Focus()
-	m.lastErr = nil
-	return m, textinput.Blink
-}
-
-func (m *model) updateProjectEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.mode = m.projectEditPrev
-		m.projectInput.Blur()
-		m.lastErr = nil
-		m.projectDraft = ""
-		return m, nil
-	case "enter":
-		name := m.projectInput.Value()
-		if m.projectDraft == "" {
-			project, err := m.workspace.CreateProject(name)
-			if err != nil {
-				m.lastErr = err
-				return m, nil
-			}
-			m.activateProject(project.ID)
-			m.mode = modeBoard
-			m.projectInput.Blur()
-			m.lastErr = nil
-			m.lastStatus = fmt.Sprintf("created project %s", project.Name)
-			return m, m.saveWorkspaceCmd()
-		}
-
-		previousPaths := snapshotProjectWhiteboardPaths(m.workspace.ProjectByID(m.projectDraft), m.dataPath)
-		project, err := m.workspace.RenameProject(m.projectDraft, name)
-		if err != nil {
-			m.lastErr = err
-			return m, nil
-		}
-		if err := relocateProjectWhiteboardFiles(project, m.dataPath, previousPaths); err != nil {
-			m.lastErr = fmt.Errorf("rename project whiteboards: %w", err)
-			return m, nil
-		}
-		m.mode = m.projectEditPrev
-		m.projectInput.Blur()
-		m.projectDraft = ""
-		m.projectCursor = m.regularProjectIndex(project.ID)
-		m.lastErr = nil
-		m.lastStatus = fmt.Sprintf("renamed project %s", project.Name)
-		return m, m.saveWorkspaceCmd()
-	}
-
-	var cmd tea.Cmd
-	m.projectInput, cmd = m.projectInput.Update(msg)
-	return m, cmd
 }
 
 func (m *model) moveColumn(delta int) (tea.Model, tea.Cmd) {
@@ -2407,68 +2250,6 @@ func (m *model) renderWhiteboardRenameDialog() string {
 		Render(content)
 }
 
-func (m *model) renderProjectsDialog() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Blue).Render("Projects")
-	dialogWidth := m.dialogWidth(projectDialogMaxWidth + 8)
-	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
-	separator := lipgloss.NewStyle().Foreground(theme.Blue).Render(strings.Repeat("\u2501", contentWidth))
-
-	projects := m.filteredProjects()
-	cursor := min(m.projectCursor, max(0, len(projects)-1))
-
-	rows := make([]string, 0, len(projects))
-	for i, project := range projects {
-		prefix := "  "
-		if i == cursor {
-			prefix = lipgloss.NewStyle().Foreground(theme.Mauve).Render("\u25b8 ")
-		}
-
-		name := project.Name
-		if project.ID == m.workspace.ActiveProjectID {
-			name += lipgloss.NewStyle().Foreground(theme.Green).Render("  active")
-		}
-		count := lipgloss.NewStyle().Foreground(theme.Subtext0).Render(fmt.Sprintf("%d tasks", project.Board.ActiveTaskCount()))
-		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Center, prefix, truncate(name, max(1, contentWidth-12)), spacer(max(1, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(name)-lipgloss.Width(count))), count))
-	}
-
-	if len(rows) == 0 {
-		emptyText := "No projects"
-		if strings.TrimSpace(m.projectFilterInput.Value()) != "" {
-			emptyText = "No matching projects"
-		}
-		rows = append(rows, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render(emptyText))
-	}
-
-	filterView := m.projectFilterInput.View()
-
-	errView := ""
-	if m.lastErr != nil {
-		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
-	}
-
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	hint := keyStyle.Render("enter") + hintStyle.Render(" open  ") +
-		keyStyle.Render("n") + hintStyle.Render(" new  ") +
-		keyStyle.Render("e") + hintStyle.Render(" rename  ") +
-		keyStyle.Render("x") + hintStyle.Render(" delete  ") +
-		keyStyle.Render("/") + hintStyle.Render(" filter  ") +
-		keyStyle.Render("esc") + hintStyle.Render(" close")
-	if m.projectFiltering {
-		hint = keyStyle.Render("enter") + hintStyle.Render(" open  ") +
-			keyStyle.Render("↑↓") + hintStyle.Render(" move  ") +
-			keyStyle.Render("esc") + hintStyle.Render(" clear")
-	}
-
-	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", filterView, "", strings.Join(rows, "\n"))
-	if errView != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
-	}
-	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
-
-	return lipgloss.NewStyle().Width(dialogWidth).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.Blue).Background(theme.Base).Render(content)
-}
-
 func (m *model) renderDailyPromoteDialog() string {
 	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Green).Render("Promote daily task")
 	dialogWidth := m.dialogWidth(projectDialogMaxWidth)
@@ -2576,37 +2357,6 @@ func (m *model) renderArchiveDialog() string {
 	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
 
 	return lipgloss.NewStyle().Width(dialogWidth).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.Lavender).Background(theme.Base).Render(content)
-}
-
-func (m *model) renderProjectEditDialog() string {
-	isRename := m.projectDraft != ""
-	titleText := "New Project"
-	actionText := "create"
-	if isRename {
-		titleText = "Rename Project"
-		actionText = "rename"
-	}
-
-	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Mauve).Render(titleText)
-	dialogWidth := m.dialogWidth(projectDialogMaxWidth)
-	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
-	separator := lipgloss.NewStyle().Foreground(theme.Mauve).Render(strings.Repeat("\u2501", contentWidth))
-	label := lipgloss.NewStyle().Foreground(theme.Overlay0).Bold(true).Render("NAME")
-	errView := ""
-	if m.lastErr != nil {
-		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
-	}
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	hint := keyStyle.Render("enter") + hintStyle.Render(" "+actionText+"  ") + keyStyle.Render("esc") + hintStyle.Render(" cancel")
-
-	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", label, m.projectInput.View())
-	if errView != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
-	}
-	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
-
-	return lipgloss.NewStyle().Width(dialogWidth).Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.Mauve).Background(theme.Base).Render(content)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

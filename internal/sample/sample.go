@@ -103,6 +103,36 @@ func WithWorkProject(now time.Time) *domain.Workspace {
 	return workspace(project("home", now, homeTasks()), work, dailyWithTasks(now))
 }
 
+// Projects is the workspace page 07 Projects shows: home (current, 14
+// tasks), work (8 open, 5 archived), workbench (2) and reading (empty),
+// beside the daily board.
+func Projects(now time.Time) *domain.Workspace {
+	numbered := func(name string, n int) map[domain.Status][]taskSpec {
+		specs := map[domain.Status][]taskSpec{}
+		for i := 1; i <= n; i++ {
+			status := Columns[i%len(Columns)]
+			specs[status] = append(specs[status], taskSpec{title: fmt.Sprintf("%s task %d", name, i), age: time.Duration(i) * 24 * time.Hour})
+		}
+		return specs
+	}
+	work := project("work", now, numbered("work", 13))
+	archived := 0
+	for _, status := range Columns {
+		ids := work.Board.Order[status]
+		n := min(len(ids), 5-archived)
+		for _, id := range ids[:n] {
+			at := now.Add(-time.Hour)
+			task := work.Board.Tasks[id]
+			task.ArchivedAt, task.ArchivedFrom = &at, task.Status
+		}
+		archived += n
+		work.Board.Order[status] = ids[n:]
+	}
+	return workspace(project("home", now, homeTasks()), work,
+		project("workbench", now, numbered("workbench", 2)),
+		project("reading", now, nil), dailyWithTasks(now))
+}
+
 func archivedCount(b *domain.Board) int {
 	n := 0
 	for _, t := range b.Tasks {

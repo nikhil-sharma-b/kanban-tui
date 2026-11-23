@@ -4,9 +4,9 @@
 
 **Blocked by:** 09 — Confirm pattern
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 07/switcher, 07/single-project, 07/no-matches, 07/filtering, 07/actions, 07/new, 07/rename, 07/delete, 07/switcher-80x24, 07/actions-80x24, 07/filtering-80x24, 07/no-matches-80x24, 07/single-project-80x24, 07/new-80x24, 07/rename-80x24, 07/delete-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Deleting the last regular project is impossible from every entry point
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 07/switcher, 07/single-project, 07/no-matches, 07/filtering, 07/actions, 07/new, 07/rename, 07/delete, 07/switcher-80x24, 07/actions-80x24, 07/filtering-80x24, 07/no-matches-80x24, 07/single-project-80x24, 07/new-80x24, 07/rename-80x24, 07/delete-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Deleting the last regular project is impossible from every entry point

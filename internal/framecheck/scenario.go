@@ -94,6 +94,22 @@ var Scenarios = map[string]Scenario{
 	"06/rename-in-place-80x24":   confirmScenario(sample.Workspace, 80, 24, "space", "c", "r", "backspace", "backspace", "backspace", "backspace", "r", "e", "a", "d", "y"),
 	"06/delete-non-empty":        confirmScenario(sample.Workspace, 120, 36, "space", "c", "d"),
 	"06/delete-non-empty-80x24":  confirmScenario(sample.Workspace, 80, 24, "space", "c", "d"),
+	"07/switcher":                projectsScenario(120, 36),
+	"07/switcher-80x24":          projectsScenario(80, 24),
+	"07/filtering":               projectsScenario(120, 36, "w", "o", "r"),
+	"07/filtering-80x24":         projectsScenario(80, 24, "w", "o", "r"),
+	"07/no-matches":              projectsScenario(120, 36, "z", "z"),
+	"07/no-matches-80x24":        projectsScenario(80, 24, "z", "z"),
+	"07/actions":                 projectsScenario(120, 36, "esc", "j"),
+	"07/actions-80x24":           projectsScenario(80, 24, "esc", "j"),
+	"07/single-project":          confirmScenario(sample.Workspace, 120, 36, "space", "p", "p", "esc", "x"),
+	"07/single-project-80x24":    confirmScenario(sample.Workspace, 80, 24, "space", "p", "p", "esc", "x"),
+	"07/new":                     confirmScenario(sample.Projects, 120, 36, "space", "p", "n"),
+	"07/new-80x24":               confirmScenario(sample.Projects, 80, 24, "space", "p", "n"),
+	"07/rename":                  projectsScenario(120, 36, "esc", "j", "e"),
+	"07/rename-80x24":            projectsScenario(80, 24, "esc", "j", "e"),
+	"07/delete":                  projectsScenario(120, 36, "esc", "j", "x"),
+	"07/delete-80x24":            projectsScenario(80, 24, "esc", "j", "x"),
 	"09/delete-project":          deleteProjectScenario(120, 36),
 	"09/delete-project-80x24":    deleteProjectScenario(80, 24),
 	"09/delete-project-typing":   deleteProjectScenario(120, 36, "w", "o", "r"),
@@ -114,6 +130,11 @@ func clearDailyScenario(keys ...string) Scenario {
 // deleteProjectScenario deletes “work” from the projects list, over the home board.
 func deleteProjectScenario(w, h int, keys ...string) Scenario {
 	return confirmScenario(sample.WithWorkProject, w, h, append([]string{"space", "p", "p", "esc", "j", "x"}, keys...)...)
+}
+
+// projectsScenario opens the project switcher over the home board.
+func projectsScenario(w, h int, keys ...string) Scenario {
+	return confirmScenario(sample.Projects, w, h, append([]string{"space", "p", "p"}, keys...)...)
 }
 
 func searchScenario(w, h int, keys ...string) Scenario {
