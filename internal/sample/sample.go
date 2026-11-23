@@ -84,10 +84,57 @@ func SearchFilter(now time.Time) *domain.Workspace {
 func DailyBoard(now time.Time) *domain.Workspace {
 	daily := dailyProject(now, map[domain.Status][]taskSpec{
 		domain.StatusWaiting: {{title: "Hear back from IT on laptop", age: 3 * time.Hour}, {title: "Design review sign-off", age: 2 * time.Hour}},
-		domain.StatusActive:  {{title: "Reply to standup thread", age: 90 * time.Minute}, {id: "d41e2b90c7a54f1e8b3d5a7c9e1f2468", title: "Fix flaky CI test", desc: "Retries hide a race in the store", age: time.Hour}},
+		domain.StatusActive:  {{id: "7c02e1aa5b3d4c6e8f90a1b2c3d4e5f6", title: "Reply to standup thread", desc: "Answer the blockers question", age: 90 * time.Minute}, {id: "d41e2b90c7a54f1e8b3d5a7c9e1f2468", title: "Fix flaky CI test", desc: "Retries hide a race in the store", age: time.Hour}},
 		domain.StatusNext:    {{title: "Book dentist", age: 30 * time.Minute}},
 	})
 	return workspace(project("home", now, homeTasks()), daily)
+}
+
+// DailyEmpty is the home board beside an empty daily board (11/empty).
+func DailyEmpty(now time.Time) *domain.Workspace {
+	return workspace(project("home", now, homeTasks()), dailyProject(now, nil))
+}
+
+// DailyPromote is DailyBoard with the four projects 11/promote-project lists:
+// home (4 columns), work (3), workbench (5) and reading (2).
+func DailyPromote(now time.Time) *domain.Workspace {
+	w := DailyBoard(now)
+	daily := w.DailyProject()
+	withColumns := func(name string, columns ...domain.Status) *domain.Project {
+		p := project(name, now, nil)
+		p.Board.Columns = columns
+		p.Board.Order = map[domain.Status][]string{}
+		for _, c := range columns {
+			p.Board.Order[c] = []string{}
+		}
+		return p
+	}
+	w.Projects = []*domain.Project{
+		w.Projects[0],
+		withColumns("work", "todo", "doing", "done"),
+		withColumns("workbench", "ideas", "backlog", "todo", "doing", "done"),
+		withColumns("reading", "to read", "read"),
+		daily,
+	}
+	return w
+}
+
+// DailyTwoProjects is DailyBoard beside projects home and work, the pair
+// 11/no-columns-fallback lists.
+func DailyTwoProjects(now time.Time) *domain.Workspace {
+	w := DailyBoard(now)
+	w.Projects = []*domain.Project{w.Projects[0], project("work", now, nil), w.Projects[1]}
+	return w
+}
+
+// DropColumns empties every regular project's columns. Loading resets empty
+// column lists to the defaults, so this runs after the app has loaded the
+// workspace, for the defensive 11/no-columns-fallback.
+func DropColumns(w *domain.Workspace) {
+	for _, p := range w.RegularProjects() {
+		p.Board.Columns = nil
+		p.Board.Order = map[domain.Status][]string{}
+	}
 }
 
 // ArchiveOld is the home board with every done task untouched for over 30

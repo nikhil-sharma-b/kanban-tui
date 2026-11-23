@@ -280,7 +280,11 @@ func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status
 	cards := m.columnCards(status, active)
 	if len(cards) == 0 {
 		if hintIfEmpty {
-			drawKeyHint(g, p, x, y+1, KeyHint{"SPC t n", "add a task"})
+			label := "add a task"
+			if m.onDailyBoard() {
+				label = "add what you’re on right now" // 11/empty
+			}
+			drawKeyHint(g, p, x, y+1, KeyHint{"SPC t n", label})
 		}
 		return
 	}

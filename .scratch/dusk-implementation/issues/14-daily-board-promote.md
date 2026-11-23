@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 11/daily, 11/empty, 11/promoted, 11/promote-project, 11/no-columns-fallback, 11/promote-column, 11/daily-80x24, 11/empty-80x24, 11/promote-column-80x24, 11/promote-project-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Promote targets are the same set the app offers today, only grouped by project
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 11/daily, 11/empty, 11/promoted, 11/promote-project, 11/no-columns-fallback, 11/promote-column, 11/daily-80x24, 11/empty-80x24, 11/promote-column-80x24, 11/promote-project-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Promote targets are the same set the app offers today, only grouped by project
 

@@ -288,6 +288,12 @@ func (m *model) appHeader() AppHeader {
 			counts = append(counts, fmt.Sprintf("%d %s", len(m.board.Order[status]), status))
 		}
 		h.Counts = strings.Join(counts, " · ")
+		total := m.board.ActiveTaskCount()
+		if m.width < narrowBelowCols {
+			h.Counts = plural(total, "task") // 11/daily-80x24
+		} else if total == 0 {
+			h.Counts = "0 on daily" // 11/empty
+		}
 		return h
 	}
 	open := 0
@@ -337,7 +343,7 @@ func (m *model) boardHints(size KeybarSize) []KeyHint {
 	add(true, "h j k l", "select")
 	add(hasTask, "↵", "open")
 	if m.onDailyBoard() {
-		add(wide, "SPC t n", "new")
+		add(wide || !hasTask, "SPC t n", "new") // 11/empty-80x24
 		add(wide && hasTask, "SPC d m", "done")
 		add(hasTask, "SPC d p", "promote")
 		add(wide, "SPC d d", "back")
@@ -475,6 +481,11 @@ func (m *model) duskBoard() *termgrid.Grid {
 		if m.columnErr != nil {
 			status = KeybarStatus{Text: "✗ " + m.columnErr.Error(), Token: dusk.Danger}
 		}
+	}
+	if m.toast != "" {
+		// A success toast sits right-aligned one row above the keybar (11/promoted).
+		toast := toastGrid(p, StatusSuccess, truncateCell(m.toast, inner-6), KeyHint{})
+		g.Blit(screenGutter+inner-toast.W, m.height-4, toast)
 	}
 	drawKeybar(g, p, screenGutter, m.height-2, inner, size, hints, status)
 	return g

@@ -182,6 +182,22 @@ func TestProjectManagerHidesDailyBoard(t *testing.T) {
 	}
 }
 
+// promoteKeys feeds keys to the open promote dialog.
+func promoteKeys(m *model, keys ...tea.KeyMsg) (*model, tea.Cmd) {
+	var cmd tea.Cmd
+	var next tea.Model = m
+	for _, k := range keys {
+		next, cmd = next.(*model).updateDailyPromote(k)
+	}
+	return next.(*model), cmd
+}
+
+var (
+	keyEnter = tea.KeyMsg{Type: tea.KeyEnter}
+	keyEsc   = tea.KeyMsg{Type: tea.KeyEsc}
+	keyDown  = tea.KeyMsg{Type: tea.KeyDown}
+)
+
 func TestDailyPromoteOpensDestinationDialogAndCancels(t *testing.T) {
 	m := newDailyTestModel(t)
 	next, _ := pressBoardSeq(m, " ", "d", "d")
@@ -195,17 +211,62 @@ func TestDailyPromoteOpensDestinationDialogAndCancels(t *testing.T) {
 
 	next, _ = pressBoardSeq(m, " ", "d", "p")
 	m = next.(*model)
-	if m.mode != modeDailyPromote {
-		t.Fatalf("mode = %v, want %v", m.mode, modeDailyPromote)
+	if m.mode != modeDailyPromote || m.promoteStep != promoteStepProject {
+		t.Fatalf("mode = %v step = %v, want the project step", m.mode, m.promoteStep)
 	}
-	if len(m.dailyPromotionTargets()) != len(m.workspace.ActiveProject().Board.Statuses()) {
-		t.Fatalf("unexpected promotion targets: %v", m.dailyPromotionTargets())
+	if got := len(m.promoteProjects()); got != len(m.workspace.RegularProjects()) {
+		t.Fatalf("promote lists %d projects, want %d", got, len(m.workspace.RegularProjects()))
 	}
 
-	next, _ = m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEsc})
-	m = next.(*model)
+	m, _ = promoteKeys(m, keyEsc)
 	if m.mode != modeBoard || m.board.Tasks[task.ID] == nil {
 		t.Fatal("cancel should return to daily board without moving task")
+	}
+}
+
+func TestDailyPromoteTargetsAreEveryProjectColumn(t *testing.T) {
+	m := newDailyTestModel(t)
+	if _, err := m.workspace.CreateProject("Work"); err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	want := 0
+	for _, project := range m.workspace.RegularProjects() {
+		want += len(project.Board.Statuses())
+	}
+	got := 0
+	for _, group := range m.promoteProjects() {
+		got += len(group.project.Board.Statuses())
+	}
+	if got != want {
+		t.Fatalf("promote offers %d columns, want %d", got, want)
+	}
+}
+
+func TestDailyPromoteStartsOnLastBoardAndEscStepsBack(t *testing.T) {
+	m := newDailyTestModel(t)
+	work, err := m.workspace.CreateProject("Work")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	m.activateProject(work.ID)
+	next, _ := pressBoardSeq(m, " ", "d", "d")
+	m = next.(*model)
+	task, _ := m.board.AddTask("Ship release", "")
+	m.recalculateVisible()
+	m.selectTask(task.ID)
+	next, _ = pressBoardSeq(m, " ", "d", "p")
+	m = next.(*model)
+
+	if got := m.promoteProjects()[m.promoteProjectCursor].project.ID; got != work.ID {
+		t.Fatalf("cursor starts on %s, want the last board %s", got, work.ID)
+	}
+	m, _ = promoteKeys(m, keyEnter)
+	if m.promoteStep != promoteStepColumn {
+		t.Fatal("enter should move to the column step")
+	}
+	m, _ = promoteKeys(m, keyEsc)
+	if m.mode != modeDailyPromote || m.promoteStep != promoteStepProject {
+		t.Fatalf("esc in the column step should go back to projects, got mode %v step %v", m.mode, m.promoteStep)
 	}
 }
 
@@ -222,27 +283,23 @@ func TestDailyPromoteMovesTaskToChosenProjectColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("add task: %v", err)
 	}
+	after, _ := m.board.AddTask("Next one", "")
 	daily := m.project
 	m.recalculateVisible()
 	m.selectTask(task.ID)
 
 	next, _ = pressBoardSeq(m, " ", "d", "p")
 	m = next.(*model)
-	targets := m.dailyPromotionTargets()
-	wantCursor := -1
-	for i, destination := range targets {
-		if destination.project.ID == target.ID && destination.status == domain.StatusInProgress {
-			wantCursor = i
-			break
+	m, _ = promoteKeys(m, keyEnter)
+	for m.promoteColumns()[m.promoteColumnCursor] != domain.StatusInProgress {
+		before := m.promoteColumnCursor
+		m, _ = promoteKeys(m, runeKey('j'))
+		if m.promoteColumnCursor == before {
+			t.Fatal("missing Work / In Progress destination")
 		}
 	}
-	if wantCursor < 0 {
-		t.Fatal("missing Work / In Progress destination")
-	}
-	m.promotionCursor = wantCursor
 
-	next, cmd := m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEnter})
-	m = next.(*model)
+	m, cmd := promoteKeys(m, keyEnter)
 	if cmd == nil {
 		t.Fatal("expected save command")
 	}
@@ -262,8 +319,11 @@ func TestDailyPromoteMovesTaskToChosenProjectColumn(t *testing.T) {
 	if promoted == nil || promoted.Status != domain.StatusInProgress || promoted.Title != task.Title || promoted.Description != task.Description {
 		t.Fatalf("task not promoted to target column: %+v", promoted)
 	}
-	if !strings.Contains(m.lastStatus, "Work") || !strings.Contains(m.lastStatus, "In Progress") {
-		t.Fatalf("unexpected status: %q", m.lastStatus)
+	if want := "promoted “Ship release” to Work / " + string(domain.StatusInProgress); m.toast != want {
+		t.Fatalf("toast = %q, want %q", m.toast, want)
+	}
+	if got := m.boardSelectedTask(); got == nil || got.ID != after.ID {
+		t.Fatalf("selection = %v, want the next card %q", got, after.Title)
 	}
 }
 
@@ -289,8 +349,7 @@ func TestDailyPromoteRelocatesWhiteboardFiles(t *testing.T) {
 
 	next, _ = pressBoardSeq(m, " ", "d", "p")
 	m = next.(*model)
-	next, cmd := m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEnter})
-	m = next.(*model)
+	m, cmd := promoteKeys(m, keyEnter, keyEnter)
 	next, _ = m.Update(cmd())
 	m = next.(*model)
 	task = m.workspace.ProjectByID(target.ID).Board.Tasks[task.ID]
@@ -329,8 +388,7 @@ func TestDailyPromoteSaveFailureLeavesTaskOnDailyBoard(t *testing.T) {
 
 	next, _ = pressBoardSeq(m, " ", "d", "p")
 	m = next.(*model)
-	next, cmd := m.updateDailyPromote(tea.KeyMsg{Type: tea.KeyEnter})
-	m = next.(*model)
+	m, cmd := promoteKeys(m, keyEnter, keyEnter)
 	if !m.promotionPending {
 		t.Fatal("expected pending promotion")
 	}

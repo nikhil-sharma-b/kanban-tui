@@ -7,6 +7,7 @@ import (
 
 	"github.com/nikhilsharma/kanban-tui/internal/domain"
 	"github.com/nikhilsharma/kanban-tui/internal/sample"
+	"github.com/nikhilsharma/kanban-tui/internal/store"
 	"github.com/nikhilsharma/kanban-tui/internal/ui"
 	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
 )
@@ -23,6 +24,12 @@ type Scenario struct {
 	WriteClipboard func(string) error
 	NewTask        func(string, string) (*domain.Task, error)
 	Blur           bool // capture the cursor's hidden phase after typing
+	// Settle runs the command the last key returned against a store that
+	// discards writes and feeds its result back, so a save can finish.
+	Settle bool
+	// Loaded changes the workspace after the app has loaded it, for states
+	// loading would repair.
+	Loaded func(*domain.Workspace)
 }
 
 // Scenarios maps a frame name to how to reach it. Frames without one are
@@ -137,6 +144,16 @@ var Scenarios = map[string]Scenario{
 	// The cursor sits on done, which the bulk archive empties.
 	"10/archived-old":           {Workspace: sample.ArchiveOld, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "l", "l", "space", "a", "o", "y"}},
 	"10/archive-old-none":       confirmScenario(sample.Workspace, 120, 36, "space", "a", "o"),
+	"11/daily":                  dailyScenario(sample.DailyBoard, 120, 36),
+	"11/daily-80x24":            dailyScenario(sample.DailyBoard, 80, 24),
+	"11/empty":                  {Workspace: sample.DailyEmpty, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"space", "d", "d"}},
+	"11/empty-80x24":            {Workspace: sample.DailyEmpty, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"space", "d", "d"}},
+	"11/promote-project":        dailyScenario(sample.DailyPromote, 120, 36, "space", "d", "p"),
+	"11/promote-project-80x24":  dailyScenario(sample.DailyPromote, 80, 24, "space", "d", "p"),
+	"11/promote-column":         dailyScenario(sample.DailyPromote, 120, 36, "space", "d", "p", "enter", "j"),
+	"11/promote-column-80x24":   dailyScenario(sample.DailyPromote, 80, 24, "space", "d", "p", "enter", "j"),
+	"11/no-columns-fallback":    noColumnsScenario(),
+	"11/promoted":               promotedScenario(),
 	"09/delete-project":         deleteProjectScenario(120, 36),
 	"09/delete-project-80x24":   deleteProjectScenario(80, 24),
 	"09/delete-project-typing":  deleteProjectScenario(120, 36, "w", "o", "r"),
@@ -152,6 +169,31 @@ func confirmScenario(ws func(time.Time) *domain.Workspace, w, h int, keys ...str
 // clearDailyScenario opens the daily board and asks to clear it.
 func clearDailyScenario(keys ...string) Scenario {
 	return Scenario{Workspace: sample.DailyBoard, W: 120, H: 36, Palette: dusk.Dark, Keys: append([]string{"space", "d", "d", "l", "j", "space", "d", "X"}, keys...)}
+}
+
+// dailyScenario opens the daily board from home, selects “Fix flaky CI test”
+// in active, then presses keys.
+func dailyScenario(ws func(time.Time) *domain.Workspace, w, h int, keys ...string) Scenario {
+	return Scenario{Workspace: ws, W: w, H: h, Palette: dusk.Dark, Keys: append([]string{"space", "d", "d", "l", "j"}, keys...)}
+}
+
+// noColumnsScenario opens promote once no project has a column left.
+func noColumnsScenario() Scenario {
+	// Start on the daily board: the home board can't run without columns.
+	ws := func(now time.Time) *domain.Workspace {
+		w := sample.DailyTwoProjects(now)
+		w.ActiveProjectID = w.DailyProject().ID
+		return w
+	}
+	return Scenario{Workspace: ws, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "space", "d", "p"}, Loaded: sample.DropColumns}
+}
+
+// promotedScenario promotes “Fix flaky CI test” to home / todo and lets the
+// save finish.
+func promotedScenario() Scenario {
+	s := dailyScenario(sample.DailyPromote, 120, 36, "space", "d", "p", "enter", "j", "enter")
+	s.Settle = true
+	return s
 }
 
 // deleteProjectScenario deletes “work” from the projects list, over the home board.
@@ -217,7 +259,12 @@ func newTaskCreatedScenario(w, h int) Scenario {
 // the final screen as ANSI.
 func (s Scenario) Run() string {
 	palette := s.Palette
-	m := ui.NewWithOptions(s.Workspace(sample.Now), nil, "", ui.Options{
+	var st store.WorkspaceStore
+	if s.Settle {
+		st = noopStore{}
+	}
+	workspace := s.Workspace(sample.Now)
+	m := ui.NewWithOptions(workspace, st, "", ui.Options{
 		Palette:        &palette,
 		Now:            func() time.Time { return sample.Now },
 		WriteClipboard: s.WriteClipboard,
@@ -225,9 +272,16 @@ func (s Scenario) Run() string {
 		// Frames never launch a real editor.
 		LaunchWhiteboard: func(string) error { return nil },
 	})
+	if s.Loaded != nil {
+		s.Loaded(workspace)
+	}
 	m, _ = m.Update(tea.WindowSizeMsg{Width: s.W, Height: s.H})
+	var cmd tea.Cmd
 	for _, k := range s.Keys {
-		m, _ = m.Update(keyMsg(k))
+		m, cmd = m.Update(keyMsg(k))
+	}
+	if s.Settle && cmd != nil {
+		m, _ = m.Update(cmd())
 	}
 	if s.Blur {
 		m, _ = m.Update(tea.BlurMsg{})
@@ -249,3 +303,8 @@ func keyMsg(k string) tea.KeyMsg {
 	}
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 }
+
+type noopStore struct{}
+
+func (noopStore) Load() (*domain.Workspace, error) { return nil, nil }
+func (noopStore) Save(*domain.Workspace) error     { return nil }

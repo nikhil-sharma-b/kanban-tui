@@ -210,6 +210,10 @@ func RenderStatusMessage(p dusk.Palette, width int, kind StatusKind, text string
 // RenderToast draws the Foundations toast with an optional action hint.
 // Only success and danger have their own dot color; other kinds use accent.
 func RenderToast(p dusk.Palette, kind StatusKind, text string, hint KeyHint) string {
+	return renderGrid(toastGrid(p, kind, text, hint))
+}
+
+func toastGrid(p dusk.Palette, kind StatusKind, text string, hint KeyHint) *termgrid.Grid {
 	width := 6 + ansi.StringWidth(text)
 	if hint.Key != "" {
 		width += 3 + hint.width()
@@ -227,5 +231,5 @@ func RenderToast(p dusk.Palette, kind StatusKind, text string, hint KeyHint) str
 		g.Text(end+1, 0, "·", tokenFG(p, dusk.TextDim, false))
 		drawKeyHint(g, p, end+3, 0, hint)
 	}
-	return renderGrid(g)
+	return g
 }
