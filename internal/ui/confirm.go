@@ -265,19 +265,7 @@ func (m *model) confirmDeleteWhiteboard() (tea.Model, tea.Cmd) {
 	if whiteboard == nil {
 		return m, nil
 	}
-	links := 0
-	for _, t := range m.board.Tasks {
-		for _, wb := range t.Whiteboards {
-			if wb.ID == whiteboard.ID {
-				links++
-			}
-		}
-	}
-	linkVerb := "link"
-	if links == 1 {
-		linkVerb = "links"
-	}
-	body := fmt.Sprintf("The whiteboard and its file will be permanently deleted. %s %s to it.", plural(links, "task"), linkVerb)
+	body := "The whiteboard and its file will be permanently deleted."
 	return m.askConfirm(permanent(fmt.Sprintf("Delete whiteboard “%s”?", whiteboard.Name), body,
 		func() (tea.Model, tea.Cmd) { return m.deleteSelectedWhiteboard() }), modeWhiteboards)
 }

@@ -37,13 +37,32 @@ func TaskDetail(now time.Time) *domain.Workspace {
 	w := Workspace(now)
 	t := w.ActiveProject().Board.Tasks[DetailTaskID]
 	t.Description = "Undo the last move or delete with u. Keep a short history in memory only, so a mistaken H/L or delete can be reverted without touching the store format. Limit to the last 20 actions; older ones drop off. Show what was undone in the status line, e.g. “undid move → doing”. Redo with ctrl+r while the history is intact. Clear it on project switch and on live reload so undo never runs against a board that changed underneath. Nothing about the stack is written to disk; quitting drops it. If the target task no longer exists, skip the entry and say so in the status line instead of failing silently."
+	nameWhiteboards(t, now)
+	return w
+}
+
+// Whiteboards is the home board page 08 Whiteboards shows: the selected
+// task keeps its short description and carries two named whiteboards.
+func Whiteboards(now time.Time) *domain.Workspace {
+	w := Workspace(now)
+	nameWhiteboards(w.ActiveProject().Board.Tasks[DetailTaskID], now)
+	return w
+}
+
+// WhiteboardsEmpty is Whiteboards with no whiteboards on the selected task.
+func WhiteboardsEmpty(now time.Time) *domain.Workspace {
+	w := Workspace(now)
+	w.ActiveProject().Board.Tasks[DetailTaskID].Whiteboards = nil
+	return w
+}
+
+func nameWhiteboards(t *domain.Task, now time.Time) {
 	t.Whiteboards[0].Name = "undo-flow"
 	t.Whiteboards[0].UpdatedAt = now.Add(-72 * time.Hour)
 	t.Whiteboards[1].Name = "history-stack"
 	t.Whiteboards[1].Format = "rnote"
 	date := now.UTC().AddDate(0, 0, -8)
 	t.Whiteboards[1].UpdatedAt = time.Date(date.Year(), date.Month(), date.Day(), 12, 0, 0, 0, time.Local)
-	return w
 }
 
 func TaskDetailWithoutWhiteboards(now time.Time) *domain.Workspace {

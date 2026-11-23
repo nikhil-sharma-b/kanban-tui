@@ -24,6 +24,8 @@ type Options struct {
 	WriteClipboard func(string) error
 	// NewTask constructs a new task before it is appended (default domain.NewTask).
 	NewTask func(title, description string) (*domain.Task, error)
+	// LaunchWhiteboard opens a whiteboard file (default: the external editor).
+	LaunchWhiteboard func(path string) error
 }
 
 // NewWithOptions is New with a theme and clock.
@@ -40,6 +42,9 @@ func NewWithOptions(workspace *domain.Workspace, boardStore store.WorkspaceStore
 	}
 	if opts.NewTask != nil {
 		m.newTask = opts.NewTask
+	}
+	if opts.LaunchWhiteboard != nil {
+		m.launchWhiteboard = opts.LaunchWhiteboard
 	}
 	return m
 }

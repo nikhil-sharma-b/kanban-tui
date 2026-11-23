@@ -110,6 +110,16 @@ var Scenarios = map[string]Scenario{
 	"07/rename-80x24":            projectsScenario(80, 24, "esc", "j", "e"),
 	"07/delete":                  projectsScenario(120, 36, "esc", "j", "x"),
 	"07/delete-80x24":            projectsScenario(80, 24, "esc", "j", "x"),
+	"08/list":                    whiteboardsScenario(sample.Whiteboards, 120, 36),
+	"08/list-80x24":              whiteboardsScenario(sample.Whiteboards, 80, 24),
+	"08/empty":                   whiteboardsScenario(sample.WhiteboardsEmpty, 120, 36),
+	"08/empty-80x24":             whiteboardsScenario(sample.WhiteboardsEmpty, 80, 24),
+	"08/delete":                  whiteboardsScenario(sample.Whiteboards, 120, 36, "x"),
+	"08/delete-80x24":            whiteboardsScenario(sample.Whiteboards, 80, 24, "x"),
+	"08/rename":                  whiteboardsScenario(sample.Whiteboards, 120, 36, "r"),
+	"08/rename-80x24":            whiteboardsScenario(sample.Whiteboards, 80, 24, "r"),
+	"08/open-in-editor":          whiteboardsScenario(sample.Whiteboards, 120, 36, "enter"),
+	"08/open-in-editor-80x24":    whiteboardsScenario(sample.Whiteboards, 80, 24, "enter"),
 	"09/delete-project":          deleteProjectScenario(120, 36),
 	"09/delete-project-80x24":    deleteProjectScenario(80, 24),
 	"09/delete-project-typing":   deleteProjectScenario(120, 36, "w", "o", "r"),
@@ -130,6 +140,11 @@ func clearDailyScenario(keys ...string) Scenario {
 // deleteProjectScenario deletes “work” from the projects list, over the home board.
 func deleteProjectScenario(w, h int, keys ...string) Scenario {
 	return confirmScenario(sample.WithWorkProject, w, h, append([]string{"space", "p", "p", "esc", "j", "x"}, keys...)...)
+}
+
+// whiteboardsScenario opens the selected task's whiteboards with SPC t w.
+func whiteboardsScenario(ws func(time.Time) *domain.Workspace, w, h int, keys ...string) Scenario {
+	return confirmScenario(ws, w, h, append([]string{"space", "t", "w"}, keys...)...)
 }
 
 // projectsScenario opens the project switcher over the home board.
@@ -185,6 +200,8 @@ func (s Scenario) Run() string {
 		Now:            func() time.Time { return sample.Now },
 		WriteClipboard: s.WriteClipboard,
 		NewTask:        s.NewTask,
+		// Frames never launch a real editor.
+		LaunchWhiteboard: func(string) error { return nil },
 	})
 	m, _ = m.Update(tea.WindowSizeMsg{Width: s.W, Height: s.H})
 	for _, k := range s.Keys {

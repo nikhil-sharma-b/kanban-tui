@@ -309,7 +309,7 @@ func TestRenderWhiteboardsDialogEmptyState(t *testing.T) {
 	m.width = 100
 	m.height = 30
 
-	view := m.renderWhiteboardsDialog()
+	view := renderGrid(m.whiteboardsDialog())
 	if !strings.Contains(view, "No whiteboards yet") {
 		t.Fatalf("expected empty state in whiteboards dialog: %q", view)
 	}

@@ -169,6 +169,10 @@ type model struct {
 	whiteboardInput    textinput.Model
 	whiteboardCursor   int
 	whiteboardRenameID string
+	whiteboardBack     mode // where esc from the list returns
+	whiteboardStatus   string
+	whiteboardKind     StatusKind
+	launchWhiteboard   func(path string) error // nil: the package launcher
 	archiveCursor      int
 	archiveFilterInput textinput.Model
 	archiveFiltering   bool
@@ -486,13 +490,15 @@ func (m *model) View() string {
 	if m.mode == modeProjectEdit {
 		return m.placeProjectEditDialog(board)
 	}
+	if m.mode == modeWhiteboards {
+		return m.placeDialog(board, m.whiteboardsDialog())
+	}
+	if m.mode == modeWhiteboardRename {
+		return m.placeWhiteboardRenameDialog(board)
+	}
 	view := renderGrid(board)
 
 	switch m.mode {
-	case modeWhiteboards:
-		return m.placeOverlayCenter(view, m.renderWhiteboardsDialog())
-	case modeWhiteboardRename:
-		return m.placeOverlayCenter(view, m.renderWhiteboardRenameDialog())
 	case modeArchive:
 		return m.placeOverlayCenter(view, m.renderArchiveDialog())
 	case modeArchiveDetail:
@@ -1417,10 +1423,12 @@ func (m *model) updateWhiteboards(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeBoard
 		return m, nil
 	}
+	// A status line answers only the key that produced it.
+	m.whiteboardStatus = ""
 
 	switch msg.String() {
 	case "esc", "q":
-		m.mode = modeDetail
+		m.mode = m.whiteboardBack
 		m.lastErr = nil
 		return m, nil
 	case "up", "k":
@@ -1474,8 +1482,11 @@ func (m *model) openWhiteboards() (tea.Model, tea.Cmd) {
 	} else if m.whiteboardCursor >= len(task.Whiteboards) {
 		m.whiteboardCursor = len(task.Whiteboards) - 1
 	}
+	if m.mode != modeWhiteboards {
+		m.whiteboardBack = m.mode
+	}
 	m.mode = modeWhiteboards
-	m.lastErr = nil
+	m.lastErr, m.whiteboardStatus = nil, ""
 	return m, nil
 }
 
@@ -1512,7 +1523,7 @@ func (m *model) createWhiteboard() (tea.Model, tea.Cmd) {
 	m.lastStatus = fmt.Sprintf("created %s", whiteboard.Name)
 
 	saveCmd := m.saveWorkspaceCmd()
-	launchErr := launchWhiteboard(whiteboard.Path)
+	launchErr := m.launch(whiteboard.Path)
 	if launchErr != nil {
 		m.lastErr = fmt.Errorf("launch whiteboard: %w", launchErr)
 		m.lastStatus = fmt.Sprintf("created %s", whiteboard.Name)
@@ -1529,7 +1540,7 @@ func (m *model) openSelectedWhiteboard() (tea.Model, tea.Cmd) {
 	}
 	path := resolveWhiteboardPath(m.dataPath, m.project.Name, task.ID, whiteboard.Name, whiteboard.Extension())
 	whiteboard.Path = path
-	if err := launchWhiteboard(path); err != nil {
+	if err := m.launch(path); err != nil {
 		if m.mode == modeDetail {
 			m.detailStatusKind, m.detailStatus = StatusDanger, "could not open whiteboard"
 			return m, nil
@@ -1542,7 +1553,7 @@ func (m *model) openSelectedWhiteboard() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.lastErr = nil
-	m.lastStatus = fmt.Sprintf("opened %s", whiteboard.Name)
+	m.whiteboardKind, m.whiteboardStatus = StatusSuccess, "opened "+whiteboard.Name
 	return m, nil
 }
 
@@ -2160,92 +2171,6 @@ func (m *model) renderTaskDetail(task *domain.Task, archived bool) string {
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(accent).
-		Background(theme.Base).
-		Render(content)
-}
-
-func (m *model) renderWhiteboardsDialog() string {
-	task := m.selectedTask()
-	if task == nil {
-		return ""
-	}
-
-	dialogWidth := m.dialogWidth(projectDialogMaxWidth + 8)
-	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
-	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Blue).Render("Whiteboards")
-	subtitle := lipgloss.NewStyle().Foreground(theme.Subtext0).Render(truncate(task.Title, max(1, contentWidth)))
-	separator := lipgloss.NewStyle().Foreground(theme.Blue).Render(strings.Repeat("\u2501", contentWidth))
-
-	rows := make([]string, 0, len(task.Whiteboards))
-	for i, whiteboard := range task.Whiteboards {
-		prefix := "  "
-		if i == m.whiteboardCursor {
-			prefix = lipgloss.NewStyle().Foreground(theme.Mauve).Render("\u25b8 ")
-		}
-		name := lipgloss.NewStyle().Foreground(theme.Text).Render(truncate(whiteboard.Name, max(1, contentWidth/2)))
-		path := lipgloss.NewStyle().Foreground(theme.Subtext0).Render(truncate(whiteboard.Path, max(1, contentWidth-lipgloss.Width(prefix)-6)))
-		meta := lipgloss.NewStyle().Foreground(theme.Overlay0).Render(relativeTime(m.clock(), whiteboard.UpdatedAt))
-		row := lipgloss.JoinVertical(lipgloss.Left, lipgloss.JoinHorizontal(lipgloss.Center, prefix, name, spacer(max(1, contentWidth-lipgloss.Width(prefix)-lipgloss.Width(name)-lipgloss.Width(meta))), meta), spacer(0)+path)
-		rows = append(rows, row)
-	}
-	if len(rows) == 0 {
-		rows = append(rows, lipgloss.NewStyle().Foreground(theme.Surface2).Italic(true).Render("No whiteboards yet"))
-	}
-
-	errView := ""
-	if m.lastErr != nil {
-		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
-	}
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	hint := keyStyle.Render("enter/o") + hintStyle.Render(" open  ") +
-		keyStyle.Render("n") + hintStyle.Render(" new  ") +
-		keyStyle.Render("r") + hintStyle.Render(" rename  ") +
-		keyStyle.Render("x") + hintStyle.Render(" delete  ") +
-		keyStyle.Render("esc") + hintStyle.Render(" close")
-
-	content := lipgloss.JoinVertical(lipgloss.Left, title, subtitle, separator, "", strings.Join(rows, "\n\n"))
-	if errView != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
-	}
-	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
-
-	return lipgloss.NewStyle().
-		Width(dialogWidth).
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Blue).
-		Background(theme.Base).
-		Render(content)
-}
-
-func (m *model) renderWhiteboardRenameDialog() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Mauve).Render("Rename Whiteboard")
-	dialogWidth := m.dialogWidth(projectDialogMaxWidth)
-	contentWidth := m.dialogContentWidth(dialogWidth, defaultDialogPadding)
-	separator := lipgloss.NewStyle().Foreground(theme.Mauve).Render(strings.Repeat("\u2501", contentWidth))
-	label := lipgloss.NewStyle().Foreground(theme.Overlay0).Bold(true).Render("NAME")
-
-	errView := ""
-	if m.lastErr != nil {
-		errView = lipgloss.NewStyle().Foreground(theme.Red).Render("\u2717 " + m.lastErr.Error())
-	}
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Subtext0)
-	hintStyle := lipgloss.NewStyle().Foreground(theme.Surface2)
-	hint := keyStyle.Render("enter") + hintStyle.Render(" rename  ") +
-		keyStyle.Render("esc") + hintStyle.Render(" cancel")
-
-	content := lipgloss.JoinVertical(lipgloss.Left, title, separator, "", label, m.whiteboardInput.View())
-	if errView != "" {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, "", errView)
-	}
-	content = lipgloss.JoinVertical(lipgloss.Left, content, "", hint)
-
-	return lipgloss.NewStyle().
-		Width(dialogWidth).
-		Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Mauve).
 		Background(theme.Base).
 		Render(content)
 }

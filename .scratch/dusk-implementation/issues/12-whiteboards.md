@@ -4,9 +4,9 @@
 
 **Blocked by:** 09 — Confirm pattern
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 08/list, 08/empty, 08/delete, 08/rename, 08/open-in-editor, 08/list-80x24, 08/open-in-editor-80x24, 08/rename-80x24, 08/delete-80x24, 08/empty-80x24
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Opening a whiteboard still launches the external editor as it does today
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 08/list, 08/empty, 08/delete, 08/rename, 08/open-in-editor, 08/list-80x24, 08/open-in-editor-80x24, 08/rename-80x24, 08/delete-80x24, 08/empty-80x24
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Opening a whiteboard still launches the external editor as it does today
