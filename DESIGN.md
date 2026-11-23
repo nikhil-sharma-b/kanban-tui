@@ -123,7 +123,7 @@ FigCraft rounds an auto-width text box up to a whole pixel, so a run of hugging 
 ### Named Rules
 **The One Size Rule.** Hierarchy is colour token + bold. No italics, no underline, no new sizes. Use the three text styles; never set a font by hand.
 
-**The Glyph Whitelist Rule.** Allowed glyphs: `▌ ▀ ▄ ▗ ▖ ▝ ▘ › ‹ · ↑ ↓ → ● ╭ ╮ ╰ ╯ │ ─ ▏ ◇ ▾ ↵ ✓ ✗ … – “ ” ’`. `…` (U+2026, one cell) only ends truncated text. `›` separates the app name from the project and, with `‹`, points to hidden columns in the Column rail; `▾` marks a field whose picker is open (`todo ▾`); `→` means moved to (`→ doing`); `–` joins a range (`columns 2–5 of 6`); `“ ”` quote names in titles and messages, and `’` is the apostrophe in copy. No Nerd Font icons, no emoji.
+**The Glyph Whitelist Rule.** Allowed glyphs: `▌ ▐ ▀ ▄ ▗ ▖ ▝ ▘ › ‹ · ↑ ↓ → ● ╭ ╮ ╰ ╯ │ ─ ▏ ◇ ▾ ↵ ✓ ✗ … – “ ” ’`. `…` (U+2026, one cell) only ends truncated text. `›` separates the app name from the project and, with `‹`, points to hidden columns in the Column rail; `▾` marks a field whose picker is open (`todo ▾`); `→` means moved to (`→ doing`); `–` joins a range (`columns 2–5 of 6`); `“ ”` quote names in titles and messages, and `’` is the apostrophe in copy. No Nerd Font icons, no emoji.
 
 ## Layout
 
@@ -138,12 +138,12 @@ FigCraft rounds an auto-width text box up to a whole pixel, so a run of hugging 
 
 ## Elevation & Depth
 
-Flat. Terminals have no shadows or transparency. Depth comes from tonal layering only: `bg` → `surface` → `surface-selected`. When a dialog is open, the board behind it is repainted in `text-faint` using the **Scrim** component.
+Flat. Terminals have no shadows or transparency. Depth comes from tonal layering only: `bg` → `surface` → `surface-selected`. When a dialog is open, the board behind it is repainted in `text-faint` on flattened `surface` card shapes using the **Scrim** component.
 
 ## Shapes
 
 - **Cards:** quarter-block glyphs cut the corners (reads as 4px radius). Text always starts at col 2 in every state, so titles never shift when the selection moves. One col of right padding, so the text area is card width − 3 cols.
-- **Dialogs and menus:** `╭╮╰╯` rounded box drawn in `text-faint`. The border takes the outer ring of cells: 1 row top and bottom, 1 col left and right. Inside a dialog the content starts at col 1; a row with a focus bar puts `▌` in col 1 and its text from col 3, and all other dialog text (title, body, labels, hints) also starts at col 3. One blank col stays inside the right border. A menu's rows start at col 1, their `▌` in col 1 and text from col 3.
+- **Dialogs and menus:** no stroke. The fill stops half a cell inside the outer ring of cells (1 row top and bottom, 1 col left and right), whose half blocks in the fill colour draw a clean edge: `▗▄…▄▖`, `▐` / `▌` down the sides, `▝▀…▀▘`. Inside a dialog the content starts at col 1; a row with a focus bar puts `▌` in col 1 and its text from col 3, and all other dialog text (title, body, labels, hints) also starts at col 3. One blank col stays inside the right edge. A menu's rows start at col 1, their `▌` in col 1 and text from col 3.
 - **Focus:** a `▌` accent bar down every text row of the focused item, never an outline (an outline costs 2 rows and 2 cols). Rows with a bar (list rows, text inputs) put the bar in their col 0 and their text at col 2. Cards differ: their bar is `▐` in a column of its own left of the surface (see **Shape → glyph rules**).
 - **Carets:** one full cell (8.4 × 18), in field inputs and in the command line.
 
@@ -156,9 +156,9 @@ Every cell the app paints can be read from a frame: a text node gives the glyph,
 | Card `surface` rectangle: square corners, inset 9 px from the top and bottom of its whole-row card frame (`Density=regular`) | Top inset row `▄` across the full width; bottom inset row `▀` across the full width (no corner glyphs, so the inset rows line up with the surface rows); across the card's width, foreground = the surface colour, background = what is behind the card. The rows between are the surface colour as background. |
 | Card `surface` rectangle at `Density=compact` (square, full height) | Plain background cells, no corner or inset glyphs. |
 | Accent bar 4.2 px wide at col 0: Card `bar`, List row `focus bar`, Text input `Input focus bar` | `▌` in `accent` on the row's background, in every row the bar spans. A card's bar is the exception: it sits in its own column left of the surface (Card col 0, 4.2 px wide at x 4.2, surface from col 1, text from col 3) and draws `▐` in `accent` on `bg`; at `Density=regular` it spans the surface's full height, `▗` in the top inset row and `▝` in the bottom one. The column stays empty on unselected cards. |
-| Dialog and Menu frame stroke (1 px inside, 6 px / 4 px radius) | `╭─╮` in the top row, `│` in the left and right cols, `╰─╯` in the bottom row, foreground = the stroke colour, on the frame's fill. |
+| Dialog and Menu frame (fill, 6 px / 4 px radius, no stroke) | Outer ring: `▗`, `▄` repeated, `▖` in the top row; `▐` in the left col and `▌` in the right col; `▝`, `▀` repeated, `▘` in the bottom row; foreground = the frame's fill, background = what is behind the frame. Cells inside the ring take the fill as background. |
 | Caret rectangle (one full cell, `text` fill) | That cell with `text` as background (reverse video), not the terminal cursor. |
-| Scrim instance (full-frame `scrim` overlay) | No overlay: the board behind the dialog is repainted with every foreground set to `text-faint` and its fills dropped. |
+| Scrim instance (full-frame `scrim` overlay) | No overlay: the board behind the dialog is repainted: every fill (`surface`, `surface-done`, `surface-selected`) flattens to `surface` and the block glyphs drawing its edges follow it; every other foreground, accent bars included, is set to `text-faint`. Card shapes stay visible, faintly. |
 
 ## Components
 
@@ -262,9 +262,9 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 | `danger` | `#E28C8C` | `#B44A4A` | `"1"` |
 
 - **Typography:** `Dusk/Title` → `.Bold(true)`; `Dusk/Body` and `Dusk/Hint` → plain. The 13.94 px size is a mockup detail that makes one glyph exactly one 8.4 px cell; terminals have one size.
-- **Rounded:** cards are square: inset rows are plain `▄`/`▀` in `surface` on `bg` (see **Shape → glyph rules**); dialog and menu → `╭─╮ │ ╰─╯` glyphs in `text-faint` on the box fill (see **Shape → glyph rules**).
+- **Rounded:** cards are square: inset rows are plain `▄`/`▀` in `surface` on `bg` (see **Shape → glyph rules**); dialog and menu → half-block edges in the fill colour, no stroke (see **Shape → glyph rules**).
 - **Spacing:** `cell-w`/`cell-h` are mockup units only; in code every size is whole cells.
-- **Scrim:** the FigCraft `scrim` variable (70% black overlay) is a mockup aid. In code there is no transparency: re-render the board behind a dialog with every foreground set to `text-faint` and fills dropped.
+- **Scrim:** the FigCraft `scrim` variable (70% black overlay) is a mockup aid. In code there is no transparency: re-render the board behind a dialog with fills flattened to `surface` (edge glyphs included) and every other foreground, accent bars included, set to `text-faint`.
 
 ## Breakpoints
 

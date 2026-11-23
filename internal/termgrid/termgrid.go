@@ -79,11 +79,17 @@ func (g *Grid) Fill(x, y, w, h int, bg string) {
 	}
 }
 
-// Blit copies src onto g with its top-left corner at col x, row y.
+// Blit copies src onto g with its top-left corner at col x, row y. Cells of
+// src with no background keep g's.
 func (g *Grid) Blit(x, y int, src *Grid) {
 	for row := 0; row < src.H; row++ {
 		for col := 0; col < src.W; col++ {
-			g.Set(x+col, y+row, src.At(col, row))
+			c := src.At(col, row)
+			if c.BG == "" {
+				// An unset background lets what is underneath show through.
+				c.BG = g.At(x+col, y+row).BG
+			}
+			g.Set(x+col, y+row, c)
 		}
 	}
 }

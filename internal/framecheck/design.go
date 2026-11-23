@@ -93,11 +93,19 @@ type node struct {
 	Strokes    []paint           `json:"strokes"`
 	Bound      map[string]string `json:"bound"`
 	Characters string            `json:"characters"`
-	Style      struct {
+	Corners    struct {
+		Radii []float64 `json:"radii"`
+	} `json:"corners"`
+	Style struct {
 		StyleID string `json:"style_id"`
 	} `json:"style"`
 	Children []int             `json:"children"`
 	VarModes map[string]string `json:"var_modes"`
+}
+
+// rounded is a panel frame with rounded corners (Dialog, Menu).
+func (n *node) rounded() bool {
+	return n.Type != "rectangle" && len(n.Corners.Radii) > 0 && n.Corners.Radii[0] > 0
 }
 
 func (n *node) shown() bool { return n.Visible == nil || *n.Visible }
@@ -406,7 +414,7 @@ func (r *renderer) paint(id int, px, py float64, isRoot bool, clip cellArea) {
 	case "text":
 		r.text(n, cx, cy, cw, clip)
 	default:
-		if f, ok := n.fill(); ok && !isRoot {
+		if f, ok := n.fill(); ok && (!isRoot || (n.rounded() && n.Type != "frame")) {
 			r.fill(n, f, cx, cy, cw, ch)
 		} else if ok && isRoot {
 			// The root's own fill is the background of every cell.
@@ -487,13 +495,58 @@ func (r *renderer) fill(n *node, f paint, cx, cy, cw, ch float64) {
 	w, okW := whole(cw)
 	h, okH := whole(ch)
 
+	// A rounded panel (Dialog, Menu): the fill stops half a cell inside its
+	// outer ring, whose half blocks in the fill colour draw the edge.
+	if n.rounded() && okX && okY && okW && okH && w >= 2 && h >= 2 {
+		for row := y; row < y+h; row++ {
+			for col := x; col < x+w; col++ {
+				var ch rune
+				switch {
+				case row == y && col == x:
+					ch = '▗'
+				case row == y && col == x+w-1:
+					ch = '▖'
+				case row == y+h-1 && col == x:
+					ch = '▝'
+				case row == y+h-1 && col == x+w-1:
+					ch = '▘'
+				case row == y:
+					ch = '▄'
+				case row == y+h-1:
+					ch = '▀'
+				case col == x:
+					ch = '▐'
+				case col == x+w-1:
+					ch = '▌'
+				default:
+					r.e.Grid.set(col, row, Cell{Ch: ' ', BG: tok})
+					continue
+				}
+				r.e.Grid.set(col, row, Cell{Ch: ch, FG: tok, BG: r.e.Grid.At(col, row).BG})
+			}
+		}
+		return
+	}
 	// The FigCraft overlay stands for a repaint, not a terminal fill.
 	if tok == "scrim" && okX && okY && okW && okH {
 		bg := r.d.behind(n.ID, r.e)
 		for row := y; row < y+h; row++ {
 			for col := x; col < x+w; col++ {
 				c := r.e.Grid.At(col, row)
-				c.BG = bg
+				isFill := func(t string) bool { return strings.HasPrefix(t, "surface") }
+				if isFill(c.BG) {
+					c.BG = "surface"
+				} else {
+					c.BG = bg
+				}
+				if strings.ContainsRune("▄▀▗▖▝▘▐▌", c.Ch) {
+					// Fill edges follow their fill; bars fade like text.
+					if isFill(c.FG) {
+						c.FG = "surface"
+						r.e.Grid.set(col, row, c)
+						continue
+					}
+				}
 				if c.Ch != ' ' && c.Ch != 0 {
 					c.FG = "text-faint"
 				}

@@ -14,18 +14,44 @@ func newDialog(p dusk.Palette, w, h int) *termgrid.Grid {
 	return roundedBox(p, w, h, dusk.SurfaceSelected)
 }
 
+// roundedBox is a panel whose fill stops half a cell inside its outer ring:
+// half blocks in the surface colour draw the edge, so there is no stroke and
+// the ring's other half shows whatever the box is blitted onto.
 func roundedBox(p dusk.Palette, w, h int, surface dusk.Token) *termgrid.Grid {
 	g := termgrid.New(w, h, tokenBG(p, surface))
 	if w < 2 || h < 2 {
 		return g
 	}
-	border := tokenFG(p, dusk.TextFaint, false)
-	rule := strings.Repeat("─", w-2)
-	g.Text(0, 0, "╭"+rule+"╮", border)
-	g.Text(0, h-1, "╰"+rule+"╯", border)
-	for y := 1; y < h-1; y++ {
-		g.Text(0, y, "│", border)
-		g.Text(w-1, y, "│", border)
+	edge := tokenFG(p, surface, false)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			ch := ' '
+			switch {
+			case y == 0 && x == 0:
+				ch = '▗'
+			case y == 0 && x == w-1:
+				ch = '▖'
+			case y == h-1 && x == 0:
+				ch = '▝'
+			case y == h-1 && x == w-1:
+				ch = '▘'
+			case y == 0:
+				ch = '▄'
+			case y == h-1:
+				ch = '▀'
+			case x == 0:
+				ch = '▐'
+			case x == w-1:
+				ch = '▌'
+			default:
+				continue
+			}
+			if edge.FG == "" {
+				// An unpainted surface (ansi16) has no edge to draw.
+				ch = ' '
+			}
+			g.Set(x, y, termgrid.Cell{Ch: ch, FG: edge.FG, Faint: edge.Faint})
+		}
 	}
 	return g
 }
@@ -33,21 +59,53 @@ func roundedBox(p dusk.Palette, w, h int, surface dusk.Token) *termgrid.Grid {
 // RenderDialog draws the Foundations Dialog: a tier-1 confirmation without a
 // note, through the same layout as the live confirm dialogs (page 09).
 func RenderDialog(p dusk.Palette, w, h int, title, body, verb string) string {
-	return renderGrid(confirmationGrid(p, w, h, confirmation{title: title, body: body, verb: verb}))
+	return renderGrid(onBg(p, confirmationGrid(p, w, h, confirmation{title: title, body: body, verb: verb})))
 }
 
-// ApplyScrim repaints the visible backdrop without changing its glyphs or bold.
+// onBg sets a standalone panel on the page background, which its edge's
+// outer half shows.
+func onBg(p dusk.Palette, panel *termgrid.Grid) *termgrid.Grid {
+	g := termgrid.New(panel.W, panel.H, tokenBG(p, dusk.Bg))
+	g.Blit(0, 0, panel)
+	return g
+}
+
+// ApplyScrim repaints the visible backdrop: every fill flattens to surface,
+// block glyphs drawing a fill's edge follow it, and every other glyph
+// (accent bars included) turns text-faint.
 func ApplyScrim(g *termgrid.Grid, p dusk.Palette) {
 	fg, bg := tokenFG(p, dusk.TextFaint, false), tokenBG(p, dusk.Bg)
+	surface := tokenFG(p, dusk.Surface, false)
+	fills := map[string]bool{}
+	for _, t := range []dusk.Token{dusk.Surface, dusk.SurfaceDone, dusk.SurfaceSelected} {
+		if c := tokenBG(p, t); c != "" && c != bg {
+			fills[c] = true
+		}
+	}
 	for i := range g.Cells {
 		c := &g.Cells[i]
-		c.BG = bg
+		if fills[c.BG] {
+			c.BG = surface.FG
+		} else {
+			c.BG = bg
+		}
+		if isFillGlyph(c.Ch) {
+			if fills[c.FG] {
+				c.FG, c.Faint, c.Bold = surface.FG, surface.Faint, false
+				continue
+			}
+		}
 		if c.Ch != ' ' && c.Ch != 0 {
 			c.FG, c.Faint = fg.FG, fg.Faint
 		} else {
 			c.FG, c.Faint, c.Bold = "", false, false
 		}
 	}
+}
+
+// isFillGlyph reports block elements that draw part of a fill.
+func isFillGlyph(r rune) bool {
+	return strings.ContainsRune("▄▀▗▖▝▘▐▌", r)
 }
 
 func (m *model) placeDialog(board, dialog *termgrid.Grid) string {

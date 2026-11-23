@@ -33,7 +33,7 @@ func TestDetailSizeDoesNotDependOnDescription(t *testing.T) {
 		for _, corner := range []struct {
 			x, y int
 			ch   rune
-		}{{30, 8, '╭'}, {89, 8, '╮'}, {30, 27, '╰'}, {89, 27, '╯'}} {
+		}{{30, 8, '▗'}, {89, 8, '▖'}, {30, 27, '▝'}, {89, 27, '▘'}} {
 			if c := g.At(corner.x, corner.y); c.Ch != corner.ch {
 				t.Errorf("description length %d: (%d,%d) got %q, want %q", len(desc), corner.x, corner.y, c.Ch, corner.ch)
 			}

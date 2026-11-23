@@ -70,5 +70,5 @@ func menuGrid(p dusk.Palette, width int, items []MenuItem) *termgrid.Grid {
 
 // RenderMenu draws the Foundations Menu around a list of rows.
 func RenderMenu(p dusk.Palette, width int, items []MenuItem) string {
-	return renderGrid(menuGrid(p, width, items))
+	return renderGrid(onBg(p, menuGrid(p, width, items)))
 }

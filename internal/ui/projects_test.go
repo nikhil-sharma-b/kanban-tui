@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -42,6 +43,9 @@ func TestSwitcherEscClearsQueryIntoManagementKeepingSelection(t *testing.T) {
 	}
 }
 
+// dailyRow is a switcher row for the daily board: its name, then its count.
+var dailyRow = regexp.MustCompile(`daily\s+(current\s+)?\d+ tasks`)
+
 func TestSwitcherListsCountsIncludingDoneAndCurrentMarker(t *testing.T) {
 	m := projectsModel(t)
 	m = pressKeys(t, m, typed(" pp")...)
@@ -49,8 +53,10 @@ func TestSwitcherListsCountsIncludingDoneAndCurrentMarker(t *testing.T) {
 	if !strings.Contains(view, "current    14 tasks") || !strings.Contains(view, "8 tasks") {
 		t.Fatalf("counts or current marker missing:\n%s", view)
 	}
-	if strings.Contains(strings.ToLower(view[strings.Index(view, "╭"):]), "daily") {
-		t.Fatal("daily board listed")
+	for _, line := range strings.Split(view, "\n") {
+		if dailyRow.MatchString(strings.ToLower(line)) {
+			t.Fatalf("daily board listed: %q", line)
+		}
 	}
 	m = pressKeys(t, m, escKey)
 	m = pressKeys(t, m, typed("j")...)
