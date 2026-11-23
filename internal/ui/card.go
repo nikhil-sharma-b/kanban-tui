@@ -81,17 +81,20 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 		surface, title = dusk.SurfaceDone, tokenFG(p, dusk.TextDone, false)
 	}
 	bg := tokenBG(p, surface)
-	textWidth := width - 3
+	// Col 0 is the bar column, page background unless selected; the
+	// surface starts at col 1 and text at col 3.
+	sx, sw := x+1, width-1
+	textWidth := width - 4
 	h := cardHeight(c)
 
 	inset := func(row int, left, mid, right rune) {
 		fg := tokenFG(p, surface, false)
-		for col := 0; col < width; col++ {
+		for col := 0; col < sw; col++ {
 			ch := mid
 			switch col {
 			case 0:
 				ch = left
-			case width - 1:
+			case sw - 1:
 				ch = right
 			}
 			if fg.FG == "" {
@@ -99,21 +102,21 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 				// the glyphs would show in the terminal's own colour.
 				ch = ' '
 			}
-			g.Set(x+col, row, termgrid.Cell{Ch: ch, FG: fg.FG, Faint: fg.Faint, BG: g.At(x+col, row).BG})
+			g.Set(sx+col, row, termgrid.Cell{Ch: ch, FG: fg.FG, Faint: fg.Faint, BG: g.At(sx+col, row).BG})
 		}
 	}
 	top := y + 1
 	if c.Compact {
-		g.Fill(x, y, width, h, bg)
+		g.Fill(sx, y, sw, h, bg)
 		top = y
 	} else {
-		inset(y, '▗', '▄', '▖')
-		inset(y+h-1, '▝', '▀', '▘')
-		g.Fill(x, y+1, width, h-2, bg)
+		inset(y, '▄', '▄', '▄')
+		inset(y+h-1, '▀', '▀', '▀')
+		g.Fill(sx, y+1, sw, h-2, bg)
 	}
 
 	row := top
-	g.Text(x+2, row, truncateCell(c.Title, textWidth), title)
+	g.Text(x+3, row, truncateCell(c.Title, textWidth), title)
 	if c.State == CardSelected {
 		row++
 		if c.Desc != "" {
@@ -124,13 +127,20 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 					desc = lines[0]
 				}
 			}
-			g.Text(x+2, row, truncateCell(desc, textWidth), tokenFG(p, dusk.TextMuted, false))
+			g.Text(x+3, row, truncateCell(desc, textWidth), tokenFG(p, dusk.TextMuted, false))
 			row++
 		}
 		row++ // one blank row before the meta
-		g.Text(x+2, row, truncateCell(c.Meta, textWidth), tokenFG(p, dusk.TextDim, false))
+		g.Text(x+3, row, truncateCell(c.Meta, textWidth), tokenFG(p, dusk.TextDim, false))
+		// The bar fills the right half of the bar column, flush with the
+		// surface and exactly its height, half-row insets included.
+		accent := tokenFG(p, dusk.Accent, false)
 		for r := top; r <= row; r++ {
-			g.Text(x, r, "▌", tokenFG(p, dusk.Accent, false))
+			g.Text(x, r, "▐", accent)
+		}
+		if !c.Compact {
+			g.Text(x, y, "▗", accent)
+			g.Text(x, y+h-1, "▝", accent)
 		}
 	}
 	return h

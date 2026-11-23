@@ -502,6 +502,42 @@ func (r *renderer) fill(n *node, f paint, cx, cy, cw, ch float64) {
 		}
 		return
 	}
+	// Card bar in the right half of its own column: ▐ on every row, ▗ and ▝
+	// in a regular card's half-row insets.
+	if math.Abs(cw-0.5) < eps && math.Abs(cx-math.Floor(cx)-0.5) < eps && okH {
+		bx := int(math.Floor(cx))
+		top, bottom := int(math.Floor(cy)), int(math.Floor(cy))+h-1
+		half := math.Abs(cy-math.Floor(cy)-0.5) < eps
+		if half {
+			bottom = top + h
+		}
+		for row := top; row <= bottom; row++ {
+			ch := '▐'
+			if half && row == top {
+				ch = '▗'
+			} else if half && row == bottom {
+				ch = '▝'
+			}
+			r.e.Grid.set(bx, row, Cell{Ch: ch, FG: tok, BG: r.e.Grid.At(bx, row).BG})
+		}
+		return
+	}
+	// Accent bar spanning a regular card's half-row insets: ▖, ▌…, ▘.
+	if okX && okH && math.Abs(cw-0.5) < eps && math.Abs(cy-math.Floor(cy)-0.5) < eps && h >= 2 {
+		top := int(math.Floor(cy))
+		bottom := top + h
+		for row := top; row <= bottom; row++ {
+			ch := '▌'
+			switch row {
+			case top:
+				ch = '▖'
+			case bottom:
+				ch = '▘'
+			}
+			r.e.Grid.set(x, row, Cell{Ch: ch, FG: tok, BG: r.e.Grid.At(x, row).BG})
+		}
+		return
+	}
 	// Accent bar: half a cell wide at col 0 → ▌ on every row it spans.
 	if okX && okY && okH && math.Abs(cw-0.5) < eps {
 		for row := y; row < y+h; row++ {
@@ -516,12 +552,6 @@ func (r *renderer) fill(n *node, f paint, cx, cy, cw, ch float64) {
 		bottom := top + h
 		for col := x; col < x+w; col++ {
 			tg, bgl := '▄', '▀'
-			switch col {
-			case x:
-				tg, bgl = '▗', '▝'
-			case x + w - 1:
-				tg, bgl = '▖', '▘'
-			}
 			r.e.Grid.set(col, top, Cell{Ch: tg, FG: tok, BG: r.e.Grid.At(col, top).BG})
 			r.e.Grid.set(col, bottom, Cell{Ch: bgl, FG: tok, BG: r.e.Grid.At(col, bottom).BG})
 		}
