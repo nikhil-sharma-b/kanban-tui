@@ -445,6 +445,9 @@ func (m *model) boardWindow() (int, int) {
 
 // renderDuskBoard draws the whole board screen on the cell grid.
 func (m *model) duskBoard() *termgrid.Grid {
+	if m.focus.on {
+		return m.focusView()
+	}
 	p := m.palette
 	g := termgrid.New(m.width, m.height, tokenBG(p, dusk.Bg))
 	inner := m.width - 2*screenGutter

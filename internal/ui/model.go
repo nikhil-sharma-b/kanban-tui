@@ -241,6 +241,7 @@ type model struct {
 	palette       dusk.Palette
 	now           func() time.Time
 	pal           paletteState
+	focus         focusState
 }
 
 // ansiStripRe matches ANSI escape sequences for the dim/blur effect.
@@ -584,6 +585,14 @@ func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.focus.on {
+		if handled, next, cmd := m.updateFocus(normalizeKey(msg)); handled {
+			return next, cmd
+		}
+	} else if msg.String() == "z" && len(m.pendingKeys) == 0 {
+		m.focus = focusState{on: true}
+		return m, nil
+	}
 	if handled, cmd := m.leaderKeyStep(normalizeKey(msg)); handled {
 		return m, cmd
 	}
@@ -663,6 +672,9 @@ func (m *model) runBoardAction(action boardAction) (tea.Model, tea.Cmd) {
 	case actTaskMoveLeft:
 		return m.shiftSelected(-1)
 	case actTaskMoveRight:
+		if m.focus.on {
+			return m, m.focusMoveRight()
+		}
 		return m.shiftSelected(1)
 	case actColumnMoveLeft:
 		return m.moveColumn(-1)

@@ -71,6 +71,34 @@ func TaskDetailWithoutWhiteboards(now time.Time) *domain.Workspace {
 	return w
 }
 
+// Focus is the home board as page 13 Focus mode shows it: the two doing
+// tasks and the top of todo carry the descriptions, ages and whiteboard its
+// frames show.
+func Focus(now time.Time) *domain.Workspace {
+	tasks := homeTasks()
+	day := 24 * time.Hour
+	tasks["todo"][0] = taskSpec{id: "c29e4a10b3d84f6e9a1c2b3d4e5f6071", title: "Archive search by date", desc: "Filter archived tasks by updated date", age: 5 * day}
+	tasks["doing"][0] = taskSpec{id: "e2d81b4a6c094f1e8b3d5a7c9e1f2468", title: "Live reload from CLI writes", age: 30 * time.Hour, whiteboards: 1,
+		desc: "Watch board.db for writes from the kanban CLI and reload the board in place. Keep the selection on the same task id after a reload; if that task is gone, fall back to the same column and row. Debounce bursts so a script that adds ten tasks causes one repaint. Show ● reloaded in the header for two seconds, and never reload while a dialog has unsaved edits: queue it and apply on close."}
+	tasks["doing"][1] = taskSpec{title: "Revamp the TUI", age: 4 * day,
+		desc: "Restyle every screen to the Dusk direction: card-per-task board, one rose accent, one Menlo size, and a key hint for every action. Build each screen from the 00 Foundations components. Keep board.db and board.json exactly as they are; anything new goes in an optional config file."}
+	w := workspace(project("home", now, tasks), dailyWithTasks(now))
+	t := w.ActiveProject().Board.Tasks["e2d81b4a6c094f1e8b3d5a7c9e1f2468"]
+	t.Whiteboards[0].Name = "reload-watch"
+	return w
+}
+
+// FocusNoDoing is Focus with nothing in doing (13/no-doing).
+func FocusNoDoing(now time.Time) *domain.Workspace {
+	w := Focus(now)
+	board := w.ActiveProject().Board
+	for _, id := range board.Order["doing"] {
+		delete(board.Tasks, id)
+	}
+	board.Order["doing"] = nil
+	return w
+}
+
 // SearchFilter is the home board as page 05 Search and filter shows it: the
 // two tasks matching "CLI" carry the descriptions and ages its frames show.
 func SearchFilter(now time.Time) *domain.Workspace {

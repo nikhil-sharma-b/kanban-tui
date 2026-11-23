@@ -193,6 +193,10 @@ var Scenarios = map[string]Scenario{
 	"12/second-step":            paletteScenario(sample.FourProjects, 120, 36, false, "s", "w", "i", "t", "c", "h", "enter"),
 	"12/second-step-80x24":      paletteScenario(sample.FourProjects, 80, 24, false, "s", "w", "i", "t", "c", "h", "enter"),
 	"12/from-dialog":            {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", ":"}},
+	"13/doing":                  focusScenario(sample.Focus, 120, 36),
+	"13/doing-80x24":            focusScenario(sample.Focus, 80, 24),
+	"13/advanced":               focusScenario(sample.Focus, 120, 36, "space", "t", "l"),
+	"13/no-doing":               focusScenario(sample.FocusNoDoing, 120, 36),
 	"09/delete-project":         deleteProjectScenario(120, 36),
 	"09/delete-project-80x24":   deleteProjectScenario(80, 24),
 	"09/delete-project-typing":  deleteProjectScenario(120, 36, "w", "o", "r"),
@@ -213,6 +217,11 @@ func paletteScenario(ws func(time.Time) *domain.Workspace, w, h int, recent bool
 		s.PaletteRecent = []string{"space t l", "space t y", "space t w"}
 	}
 	return s
+}
+
+// focusScenario opens focus mode on the doing column, then presses keys.
+func focusScenario(ws func(time.Time) *domain.Workspace, w, h int, keys ...string) Scenario {
+	return Scenario{Workspace: ws, W: w, H: h, Palette: dusk.Dark, Keys: append([]string{"l", "l", "z"}, keys...)}
 }
 
 // confirmScenario selects “Undo for move and delete” in todo (the board every

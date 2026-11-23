@@ -19,7 +19,7 @@ Build the finished design in design.figcraft and DESIGN.md so the app matches ev
 - [x] [15 — Feedback: toasts, undo, sync states](issues/15-feedback.md) · blocked by: 05 — Dialog shell and task detail view
 - [x] [16 — Which-key](issues/16-which-key.md) · blocked by: 06 — Task editing; 15 — Feedback: toasts, undo, sync states
 - [x] [17 — Command palette](issues/17-command-palette.md) · blocked by: 06 — Task editing
-- [ ] [18 — Focus mode](issues/18-focus-mode.md) · blocked by: 15 — Feedback: toasts, undo, sync states
+- [x] [18 — Focus mode](issues/18-focus-mode.md) · blocked by: 15 — Feedback: toasts, undo, sync states
 - [ ] [19 — Theme setting and fallbacks](issues/19-theme-setting.md) · blocked by: 17 — Command palette
 - [ ] [20 — Light Dusk](issues/20-light-dusk.md) · blocked by: 11 — Projects; 17 — Command palette; 18 — Focus mode; 19 — Theme setting and fallbacks
 - [ ] [21 — First run and cheat sheet](issues/21-first-run-cheat-sheet.md) · blocked by: 11 — Projects

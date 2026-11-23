@@ -124,10 +124,10 @@ enforced 12/typing
 enforced 12/from-dialog
 enforced 12/empty-80x24
 enforced 12/second-step-80x24
-pending  13/doing
-pending  13/doing-80x24
-pending  13/advanced
-pending  13/no-doing
+enforced 13/doing
+enforced 13/doing-80x24
+enforced 13/advanced
+enforced 13/no-doing
 enforced 14/root
 enforced 14/unbound
 enforced 14/pending
