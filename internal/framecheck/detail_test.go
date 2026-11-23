@@ -127,7 +127,7 @@ func TestDetailEditScrollFollowsVimCursor(t *testing.T) {
 		if size.Height == 24 {
 			rows = 7
 		}
-		x, y := (size.Width-60)/2+3, (size.Height-20)/2+3+rows-1
+		x, y := (size.Width-60)/2+2, (size.Height-20)/2+3+rows-1
 		if c := g.At(x, y); c.Ch != 'l' || c.BG != "text" {
 			t.Fatalf("%dx%d: last line caret = %+v, row %q", size.Width, size.Height, c, g.Rows()[y])
 		}
@@ -171,16 +171,16 @@ func TestDetailRetainsTaskWhenSaveRemovesItFromFilter(t *testing.T) {
 func TestDetailCaretAfterFullWidthDescriptionLine(t *testing.T) {
 	w := sample.TaskDetail(sample.Now)
 	task := w.ActiveProject().Board.Tasks[sample.DetailTaskID]
-	task.Description = strings.Repeat("x", 55) + "\nlast line"
+	task.Description = strings.Repeat("x", 56) + "\nlast line"
 	m := ui.New(w, nil, "")
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
 	m = press(m, "l", "j", "enter", "e", "tab", "esc", "$")
 	g := ReadScreen(m.View(), 120, 36, dusk.Dark)
-	if end, caret := g.At(87, 11), g.At(33, 12); end.Ch != 'x' || end.BG == "text" || caret.Ch != ' ' || caret.BG != "text" {
+	if end, caret := g.At(87, 11), g.At(32, 12); end.Ch != 'x' || end.BG == "text" || caret.Ch != ' ' || caret.BG != "text" {
 		t.Fatalf("full-line end = %+v, wrapped caret = %+v", end, caret)
 	}
 	m = press(m, "j")
-	if caret := ReadScreen(m.View(), 120, 36, dusk.Dark).At(33, 13); caret.Ch != 'l' || caret.BG != "text" {
+	if caret := ReadScreen(m.View(), 120, 36, dusk.Dark).At(32, 13); caret.Ch != 'l' || caret.BG != "text" {
 		t.Fatalf("vertical motion did not reach next visual row: %+v", caret)
 	}
 }

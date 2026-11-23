@@ -249,7 +249,7 @@ func (m *model) promoteDialog() *termgrid.Grid {
 		return nil
 	}
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 	task := m.selectedTask()
 
 	title := ""
@@ -265,7 +265,7 @@ func (m *model) promoteDialog() *termgrid.Grid {
 	if m.promoteStep == promoteStepColumn {
 		project := m.promoteProject()
 		if project != nil {
-			g.Text(3, 1, truncateCell(project.Name+" ›", left-3), tokenFG(p, dusk.Text, false))
+			g.Text(2, 1, truncateCell(project.Name+" ›", left-3), tokenFG(p, dusk.Text, false))
 		}
 		columns := m.promoteColumns()
 		if project == nil {
@@ -283,7 +283,7 @@ func (m *model) promoteDialog() *termgrid.Grid {
 		hasColumns := m.promoteHasColumns()
 		if hasColumns {
 			lines, col := cutInput(m.promoteFilter.Value(), m.promoteFilter.Position(), left-3)
-			drawFocusedInput(g, p, 1, 1, left-1, 1, lines, IdleInputField, "Filter projects…", &inputPoint{col: col})
+			drawFocusedInput(g, p, 0, 1, left-1, 1, lines, IdleInputField, "Filter projects…", &inputPoint{col: col})
 		}
 		groups := m.promoteProjects()
 		rows := promoteListRows
@@ -291,7 +291,7 @@ func (m *model) promoteDialog() *termgrid.Grid {
 			rows-- // the last row carries the status message
 		}
 		if len(groups) == 0 {
-			g.Text(3, listY, "No matching projects", tokenFG(p, dusk.TextMuted, false))
+			g.Text(2, listY, "No matching projects", tokenFG(p, dusk.TextMuted, false))
 		}
 		first := max(0, min(m.promoteProjectCursor-rows+1, len(groups)-rows))
 		for i := first; i < len(groups) && i < first+rows; i++ {
@@ -313,16 +313,16 @@ func (m *model) promoteDialog() *termgrid.Grid {
 			drawPromoteRow(g, p, w, listY+i-first, project.Name, hint, state)
 		}
 		if !hasColumns {
-			drawStatusMessage(g, p, 3, statusY, width, StatusInfo, "no project has a column · add one with SPC c n")
+			drawStatusMessage(g, p, 2, statusY, width, StatusInfo, "no project has a column · add one with SPC c n")
 		}
 	}
 	if m.lastErr != nil {
-		drawStatusMessage(g, p, 3, h-3, width, StatusDanger, m.lastErr.Error())
+		drawStatusMessage(g, p, 2, h-3, width, StatusDanger, m.lastErr.Error())
 	}
 	if m.promotionPending {
-		drawStatusMessage(g, p, 3, h-2, width, StatusInfo, "promoting…")
+		drawStatusMessage(g, p, 2, h-2, width, StatusInfo, "promoting…")
 	} else {
-		drawDialogHints(g, p, 3, h-2, width, m.promoteHints())
+		drawDialogHints(g, p, 2, h-2, width, m.promoteHints())
 	}
 	return g
 }
@@ -331,6 +331,6 @@ func (m *model) promoteDialog() *termgrid.Grid {
 // projects switcher (11/promote-project); a project without columns is
 // disabled (11/no-columns-fallback).
 func drawPromoteRow(g *termgrid.Grid, p dusk.Palette, w, y int, label, hint string, state ListRowState) {
-	drawListRow(g, p, 1, y, w-3, label, hint, state)
+	drawListRow(g, p, 0, y, w-2, label, hint, state)
 	g.Text(w-2-ansi.StringWidth(hint), y, hint, tokenFG(p, dusk.TextMuted, false))
 }

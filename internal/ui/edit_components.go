@@ -20,7 +20,7 @@ func drawCaret(g *termgrid.Grid, p dusk.Palette, x, y int) {
 
 func drawFocusedInput(g *termgrid.Grid, p dusk.Palette, x, y, w, h int, lines []string, kind IdleInputKind, placeholder string, caret *inputPoint) {
 	for i := 0; i < h; i++ {
-		g.Text(x, y+i, "▌", tokenFG(p, dusk.Accent, false))
+		g.Text(x, y+i, "▐", tokenFG(p, dusk.Accent, false))
 	}
 	if len(lines) == 0 && placeholder != "" && w > 3 && h > 0 {
 		g.Text(x+3, y, truncateCell(placeholder, w-3), tokenFG(p, dusk.TextFaint, false))
@@ -63,7 +63,7 @@ type MenuItem struct {
 func menuGrid(p dusk.Palette, width int, items []MenuItem) *termgrid.Grid {
 	g := panelBox(p, width, len(items)+2, dusk.Surface)
 	for i, item := range items {
-		drawListRow(g, p, 1, i+1, width-2, item.Label, item.Hint, item.State)
+		drawListRow(g, p, 0, i+1, width-1, item.Label, item.Hint, item.State)
 	}
 	return g
 }

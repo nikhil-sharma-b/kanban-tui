@@ -155,7 +155,7 @@ func whichKeyGrid(p dusk.Palette, w int, entries []whichKeyEntry, nested bool) *
 	g := panelBox(p, w, rows+4, dusk.Surface)
 	colWidth := (w - 4) / 2
 	for i, e := range entries {
-		x := 3 + (i%2)*colWidth
+		x := 2 + (i%2)*colWidth
 		y := 1 + i/2
 		end := g.Text(x, y, e.key, tokenFG(p, dusk.TextCard, false))
 		g.Text(end+1, y, e.desc, tokenFG(p, dusk.TextDim, false))
@@ -165,7 +165,7 @@ func whichKeyGrid(p dusk.Palette, w int, entries []whichKeyEntry, nested bool) *
 		hints = append(hints, KeyHint{"backspace", "back"})
 	}
 	hints = append(hints, KeyHint{"?", "help"})
-	x := 3
+	x := 2
 	for i, h := range hints {
 		if i > 0 {
 			x += 2

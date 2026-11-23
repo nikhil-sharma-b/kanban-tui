@@ -50,15 +50,15 @@ func (m *model) whiteboardsDialog() *termgrid.Grid {
 	}
 	h := fixed + listRows
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 
 	label := "whiteboards"
 	g.Text(w-2-ansi.StringWidth(label), 1, label, tokenFG(p, dusk.TextDim, false))
-	g.Text(3, 1, truncateCell(task.Title, width-ansi.StringWidth(label)-1), tokenFG(p, dusk.TextCard, false))
+	g.Text(2, 1, truncateCell(task.Title, width-ansi.StringWidth(label)-1), tokenFG(p, dusk.TextCard, false))
 
 	y := 3
 	if n == 0 {
-		g.Text(3, y, "No whiteboards yet", tokenFG(p, dusk.TextMuted, false))
+		g.Text(2, y, "No whiteboards yet", tokenFG(p, dusk.TextMuted, false))
 	}
 	first := max(0, min(m.whiteboardCursor-listRows+1, n-listRows))
 	for i := first; i < n && i < first+listRows; i++ {
@@ -67,17 +67,17 @@ func (m *model) whiteboardsDialog() *termgrid.Grid {
 			state = ListRowSelected
 		}
 		name, hint := m.whiteboardRow(i)
-		drawListRow(g, p, 1, y+i-first, w-3, name, hint, state)
+		drawListRow(g, p, 0, y+i-first, w-2, name, hint, state)
 	}
 	if status != "" {
 		if kind := m.whiteboardStatusKind(); kind == StatusSuccess {
 			// The editor-opened line has no glyph (08/open-in-editor).
-			g.Text(3, h-4, truncateCell(status, width), tokenFG(p, dusk.Success, false))
+			g.Text(2, h-4, truncateCell(status, width), tokenFG(p, dusk.Success, false))
 		} else {
-			drawStatusMessage(g, p, 3, h-4, width, kind, status)
+			drawStatusMessage(g, p, 2, h-4, width, kind, status)
 		}
 	}
-	drawDialogHints(g, p, 3, h-2, width, m.whiteboardHints(n == 0))
+	drawDialogHints(g, p, 2, h-2, width, m.whiteboardHints(n == 0))
 	return g
 }
 
@@ -107,16 +107,16 @@ func (m *model) whiteboardRenameDialog() *termgrid.Grid {
 		return nil
 	}
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 	label := "rename whiteboard"
 	g.Text(w-2-ansi.StringWidth(label), 1, label, tokenFG(p, dusk.TextDim, false))
 	inputWidth := width - ansi.StringWidth(label) - 1
 	lines, col := cutInput(m.whiteboardInput.Value(), m.whiteboardInput.Position(), inputWidth)
-	drawFocusedInput(g, p, 1, 1, inputWidth+2, 1, lines, IdleInputField, "", &inputPoint{col: col})
+	drawFocusedInput(g, p, 0, 1, inputWidth+2, 1, lines, IdleInputField, "", &inputPoint{col: col})
 	if m.lastErr != nil {
-		drawStatusMessage(g, p, 3, 2, width, StatusDanger, m.lastErr.Error())
+		drawStatusMessage(g, p, 2, 2, width, StatusDanger, m.lastErr.Error())
 	}
-	drawDialogHints(g, p, 3, h-2, width, []KeyHint{{"↵", "rename"}, {"esc", "cancel"}, {"backspace", "delete character"}})
+	drawDialogHints(g, p, 2, h-2, width, []KeyHint{{"↵", "rename"}, {"esc", "cancel"}, {"backspace", "delete character"}})
 	return g
 }
 

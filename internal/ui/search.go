@@ -20,7 +20,6 @@ type boardPlace struct {
 	windowFirst int
 }
 
-
 // filtering reports whether a query is narrowing the board, live or applied.
 func (m *model) filtering() bool { return strings.TrimSpace(m.filter) != "" }
 
@@ -150,7 +149,7 @@ func (m *model) searchDialog() *termgrid.Grid {
 		return nil
 	}
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 	label := "filter tasks"
 	g.Text(w-2-ansi.StringWidth(label), 1, label, tokenFG(p, dusk.TextDim, false))
 	inputWidth := width - ansi.StringWidth(label) - 1
@@ -164,14 +163,14 @@ func (m *model) searchDialog() *termgrid.Grid {
 	if value != "" {
 		lines = []string{ansi.Cut(value, left, left+inputWidth)}
 	}
-	drawFocusedInput(g, p, 1, 1, inputWidth+2, 1, lines, IdleInputField, "", &inputPoint{col: before - left})
+	drawFocusedInput(g, p, 0, 1, inputWidth+2, 1, lines, IdleInputField, "", &inputPoint{col: before - left})
 
 	matches, total := m.filterCounts()
 	result := fmt.Sprintf("%d of %d tasks match", matches, total)
 	if matches == 0 {
 		result = "No tasks match"
 	}
-	g.Text(3, 3, truncateCell(result, width), tokenFG(p, dusk.TextMuted, false))
-	drawDialogHints(g, p, 3, h-2, width, []KeyHint{{"↵", "apply"}, {"esc", "restore"}, {"backspace", "delete character"}})
+	g.Text(2, 3, truncateCell(result, width), tokenFG(p, dusk.TextMuted, false))
+	drawDialogHints(g, p, 2, h-2, width, []KeyHint{{"↵", "apply"}, {"esc", "restore"}, {"backspace", "delete character"}})
 	return g
 }

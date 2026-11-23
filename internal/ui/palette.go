@@ -523,24 +523,24 @@ func (m *model) paletteDialog() *termgrid.Grid {
 		return nil
 	}
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 
 	context := m.paletteContext(width - 16)
 	g.Text(w-2-ansi.StringWidth(context), 1, context, tokenFG(p, dusk.TextDim, false))
 	inputWidth := width - ansi.StringWidth(context) - 1
 	placeholder := map[paletteStep]string{paletteActions: "Type an action…", paletteProjects: "Filter projects…", paletteStatuses: "Filter columns…", paletteThemes: "Filter themes…", paletteKeys: "Filter keys…"}[m.pal.step]
 	lines, col := cutInput(m.pal.input.Value(), m.pal.input.Position(), inputWidth)
-	drawFocusedInput(g, p, 1, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
+	drawFocusedInput(g, p, 0, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
 
 	sections := m.paletteSections()
 	query := strings.TrimSpace(m.pal.input.Value())
 	noMatch := m.pal.step == paletteActions && len(sections) == 0 && query != ""
 	if noMatch {
-		drawStatusMessage(g, p, 1, 3, width+2, StatusInfo, "no action matches “"+query+"”")
-		drawListRow(g, p, 1, 5, w-3, "search tasks for “"+query+"”", "/", ListRowSelected)
+		drawStatusMessage(g, p, 2, 3, width, StatusInfo, "no action matches “"+query+"”")
+		drawListRow(g, p, 0, 5, w-2, "search tasks for “"+query+"”", "/", ListRowSelected)
 	}
 	if m.pal.step == paletteKeys && len(sections) == 0 {
-		drawStatusMessage(g, p, 1, 3, width+2, StatusInfo, "no key matches “"+query+"”")
+		drawStatusMessage(g, p, 2, 3, width, StatusInfo, "no key matches “"+query+"”")
 	}
 
 	var rows []paletteRow
@@ -577,7 +577,7 @@ func (m *model) paletteDialog() *termgrid.Grid {
 		r, y := rows[top+i], 3+i
 		switch {
 		case r.header != "":
-			g.Text(3, y, truncateCell(r.header, width), tokenFG(p, dusk.TextDim, false))
+			g.Text(2, y, truncateCell(r.header, width), tokenFG(p, dusk.TextDim, false))
 		case r.item >= 0:
 			item := items[r.item]
 			state := ListRowDefault
@@ -587,7 +587,7 @@ func (m *model) paletteDialog() *termgrid.Grid {
 			if item.current {
 				state = ListRowDisabled
 			}
-			drawListRow(g, p, 1, y, w-3, item.label, item.hint, state)
+			drawListRow(g, p, 0, y, w-2, item.label, item.hint, state)
 		}
 	}
 	more := 0
@@ -600,6 +600,6 @@ func (m *model) paletteDialog() *termgrid.Grid {
 		label := fmt.Sprintf("↓ %d more", more)
 		g.Text(w-2-ansi.StringWidth(label), 3+shown, label, tokenFG(p, dusk.TextDim, false))
 	}
-	drawDialogHints(g, p, 3, h-2, width, m.paletteHints(noMatch))
+	drawDialogHints(g, p, 2, h-2, width, m.paletteHints(noMatch))
 	return g
 }

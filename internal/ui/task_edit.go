@@ -15,7 +15,7 @@ import (
 
 func (m *model) resizeDetailEditor() {
 	w, _ := m.dialogSize(dialogMaxHeight)
-	m.descInput.SetWidth(max(1, w-5))
+	m.descInput.SetWidth(max(1, w-4))
 }
 
 func (m *model) updateDetailEdit(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -56,7 +56,7 @@ func (m *model) updateTaskEditor(msg tea.KeyMsg, l detailLayout) (tea.Model, tea
 	previousMode := m.mode
 	next, cmd := m.updateEditorInput(msg)
 	if m.mode == previousMode && m.descInput.Focused() && l.descRows > 0 {
-		lines := wrapEditText(m.descInput.Value(), l.width-5)
+		lines := wrapEditText(m.descInput.Value(), l.width-4)
 		m.followDetailEditCursor(lines, l.descRows)
 	}
 	return next, cmd
@@ -87,7 +87,7 @@ func (m *model) detailEditVerticalMotion(msg tea.KeyMsg) int {
 
 func (m *model) moveDetailEditCursor(l detailLayout, delta int) {
 	buf := descBuffer{m}
-	lines := wrapEditText(buf.Text(), l.width-5)
+	lines := wrapEditText(buf.Text(), l.width-4)
 	caret := editPosition(lines, buf.Cursor())
 	m.vimStatus = ""
 	if next := caret.row + delta; next >= 0 && next < len(lines) {
@@ -204,10 +204,10 @@ func (m *model) drawEditTitle(g *termgrid.Grid, width int, placeholder string) {
 	if value != "" {
 		lines = []string{text}
 	}
-	drawFocusedInput(g, m.palette, 1, 1, width+2, 1, lines, IdleInputTitle, placeholder, caret)
+	drawFocusedInput(g, m.palette, 0, 1, width+2, 1, lines, IdleInputTitle, placeholder, caret)
 	if m.vimVisual != nil {
 		offset := len([]rune(ansi.Cut(value, 0, left)))
-		drawEditSelection(g, m.palette, 3, 1, []editLine{{text, offset}}, m.vimVisual, len(runes))
+		drawEditSelection(g, m.palette, 2, 1, []editLine{{text, offset}}, m.vimVisual, len(runes))
 	}
 }
 
@@ -229,19 +229,19 @@ func (m *model) drawEditDescription(g *termgrid.Grid, l detailLayout, width int,
 			visible = append(visible, line.text)
 		}
 	}
-	drawFocusedInput(g, m.palette, 1, detailDescRow, width+2, l.descRows, visible, IdleInputBody, "description (optional)", cursor)
-	drawEditSelection(g, m.palette, 3, detailDescRow, lines[top:end], m.vimVisual, len([]rune(value)))
+	drawFocusedInput(g, m.palette, 0, detailDescRow, width+2, l.descRows, visible, IdleInputBody, "description (optional)", cursor)
+	drawEditSelection(g, m.palette, 2, detailDescRow, lines[top:end], m.vimVisual, len([]rune(value)))
 	return len(lines) - end
 }
 
 func (m *model) drawEditFooter(g *termgrid.Grid, l detailLayout, width, remaining int) {
 	p := m.palette
 	if m.vimCommand != "" {
-		drawCommandLine(g, p, 3, l.footer, width, m.vimCommand)
+		drawCommandLine(g, p, 2, l.footer, width, m.vimCommand)
 		return
 	}
 	if m.vimStatus != "" && m.detailStatus == "" && !m.editDiscard {
-		drawStatusMessage(g, p, 3, l.footer, width, StatusInfo, m.vimStatus)
+		drawStatusMessage(g, p, 2, l.footer, width, StatusInfo, m.vimStatus)
 		return
 	}
 	hints := []KeyHint{{":wq", "save"}, {"tab", "next field"}, {"esc", "normal"}, {"?", "more"}}
@@ -258,11 +258,11 @@ func (m *model) drawEditFooter(g *termgrid.Grid, l detailLayout, width, remainin
 		label := fmt.Sprintf("↓ %d more", remaining)
 		slot := ansi.StringWidth(label) + 3
 		if width >= dialogHintsWidth(hints)+slot {
-			g.Text(3+width-ansi.StringWidth(label)-1, l.footer, label, tokenFG(p, dusk.TextFaint, false))
+			g.Text(2+width-ansi.StringWidth(label)-2, l.footer, label, tokenFG(p, dusk.TextFaint, false))
 			width -= slot
 		}
 	}
-	drawDialogHints(g, p, 3, l.footer, width, hints)
+	drawDialogHints(g, p, 2, l.footer, width, hints)
 }
 
 func (m *model) updateDetailStatusMenu(key string) (tea.Model, tea.Cmd) {
@@ -324,5 +324,5 @@ func (m *model) drawDetailStatusMenu(g *termgrid.Grid, l detailLayout, current d
 		}
 		items = append(items, item)
 	}
-	g.Blit(l.width-width-3, 2, menuGrid(m.palette, width, items))
+	g.Blit(l.width-width-4, 2, menuGrid(m.palette, width, items))
 }

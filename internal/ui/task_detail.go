@@ -56,7 +56,7 @@ func (m *model) scrollDetail(down bool) {
 		return
 	}
 	l := m.detailLayout(len(task.Whiteboards))
-	lines := wrapDialogText(task.Description, l.width-5)
+	lines := wrapDialogText(task.Description, l.width-4)
 	if down {
 		m.detailScroll = min(max(0, len(lines)-l.descRows), m.detailScroll+1)
 	} else {
@@ -79,7 +79,7 @@ func (m *model) taskDetail() *termgrid.Grid {
 		return nil
 	}
 	g := newDialog(p, l.width, l.height)
-	const x = 3
+	const x = 2
 	right := l.width - 2 // exclusive right edge of content
 	textWidth := right - x
 	status := strings.ToLower(task.Status.Title())
@@ -102,7 +102,7 @@ func (m *model) taskDetail() *termgrid.Grid {
 	if editing && !m.editDiscard && m.titleInput.Focused() {
 		m.drawEditTitle(g, titleWidth, "")
 	} else {
-		drawIdleInput(g, p, 1, 1, titleWidth+2, []string{title}, IdleInputTitle, "")
+		drawIdleInput(g, p, 0, 1, titleWidth+2, []string{title}, IdleInputTitle, "")
 	}
 
 	lines := wrapDialogText(description, textWidth)
@@ -118,7 +118,7 @@ func (m *model) taskDetail() *termgrid.Grid {
 	if editing && !m.editDiscard && m.descInput.Focused() {
 		editRemaining = m.drawEditDescription(g, l, textWidth, true)
 	} else {
-		drawIdleInput(g, p, 1, detailDescRow, textWidth+2, lines[start:end], IdleInputBody, "")
+		drawIdleInput(g, p, 0, detailDescRow, textWidth+2, lines[start:end], IdleInputBody, "")
 	}
 
 	if l.listRows > 0 {
@@ -143,7 +143,7 @@ func (m *model) taskDetail() *termgrid.Grid {
 				format = strings.TrimPrefix(w.Extension(), ".")
 			}
 			hint := format + " · " + relativeTime(m.clock(), w.UpdatedAt)
-			drawListRow(g, p, 1, y+1+i-first, right-1, "◇ "+w.Name, hint, state)
+			drawListRow(g, p, 0, y+1+i-first, right, "◇ "+w.Name, hint, state)
 		}
 	}
 
@@ -177,7 +177,7 @@ func (m *model) taskDetail() *termgrid.Grid {
 		// Keep the painted frames' 18-cell slot at full dialog width.
 		slot := ansi.StringWidth(text) + 2
 		if l.width == dialogMaxWidth {
-			slot = max(slot, 18)
+			slot = max(slot, 19)
 		}
 		if slot <= textWidth {
 			g.Text(right-slot, l.footer, text, tokenFG(p, dusk.TextFaint, false))
@@ -193,7 +193,7 @@ func (m *model) taskDetail() *termgrid.Grid {
 }
 
 func drawDiscardFooter(g *termgrid.Grid, p dusk.Palette, row, width int) {
-	const x = 3
+	const x = 2
 	prompt := "discard unsaved changes?"
 	hints := []KeyHint{{"y", "yes"}, {"n", "no"}}
 	if hintWidth := dialogHintsWidth(hints) + 2; width > hintWidth {

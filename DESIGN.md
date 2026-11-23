@@ -87,7 +87,7 @@ Everything lives on a character grid. There is one type size, hierarchy comes fr
 Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in the **Dusk** collection, with three modes: `dark` (the frontmatter values), `light`, and `ansi16`. Always bind the variable; never paste a hex.
 
 ### Primary
-- **Dusk Rose** (`accent`): active column header, selection bar `▌`, selected list row text, focused-field bar, current project name in the App header, active filter chip, the `●` of info messages, badge fill. Nothing else.
+- **Dusk Rose** (`accent`): active column header, selection bar `▐`, selected list row text, focused-field bar, current project name in the App header, active filter chip, the `●` of info messages, badge fill. Nothing else.
 
 ### Neutral
 - **Night Plum** (`bg`): screen background.
@@ -102,7 +102,7 @@ Plum-tinted neutrals with one rose accent. All colours are FigCraft variables in
 - **Clay Red** (`danger`): errors and destructive confirmations.
 
 ### Named Rules
-**The One Rose Rule.** `accent` marks focus or selection: the active column header, `▌` bars and the text of the selected list row (a selected card keeps `text`). Four fixed markers also use it: the current project name in the App header, the active filter chip (`/ query` in `bg` on an `accent` fill), the `●` of an info Status message, Toast or `Sync=reloaded` header, and the badge fill. Nothing else is rose: no headings, no decoration.
+**The One Rose Rule.** `accent` marks focus or selection: the active column header, `▐` bars and the text of the selected list row (a selected card keeps `text`). Four fixed markers also use it: the current project name in the App header, the active filter chip (`/ query` in `bg` on an `accent` fill), the `●` of an info Status message, Toast or `Sync=reloaded` header, and the badge fill. Nothing else is rose: no headings, no decoration.
 
 **The Variables-Only Rule.** Every fill and text colour is bound to a Dusk variable so the `light` and `ansi16` modes work. A raw hex on a screen frame is a bug.
 
@@ -142,9 +142,9 @@ Flat. Terminals have no shadows or transparency. Depth comes from tonal layering
 
 ## Shapes
 
-- **Cards:** square corners. Col 0 is the bar column; the surface starts at col 1 and text at col 3 in every state, so titles never shift when the selection moves. One col of right padding, so the text area is card width − 4 cols.
-- **Dialogs and menus:** no stroke. The fill stops half a cell inside the outer ring of cells (1 row top and bottom, 1 col left and right), whose half blocks in the fill colour draw a clean edge: `▗▄…▄▖`, `▐` / `▌` down the sides, `▝▀…▀▘`. Inside a dialog the content starts at col 1; a row with a focus bar puts `▌` in col 1 and its text from col 3, and all other dialog text (title, body, labels, hints) also starts at col 3. One blank col stays inside the right edge. A menu's rows start at col 1, their `▌` in col 1 and text from col 3.
-- **Focus:** a `▌` accent bar down every text row of the focused item, never an outline (an outline costs 2 rows and 2 cols). Rows with a bar (list rows, text inputs) put the bar in their col 0 and their text at col 2. Cards differ: their bar is `▐` in a column of its own left of the surface (see **Shape → glyph rules**).
+- **Cards:** square corners. Col 0 is the bar column; the surface starts at col 1 and text at col 2 in every state, so titles never shift when the selection moves. One col of padding inside the surface on each side, so the text area is card width − 3 cols.
+- **Dialogs and menus:** no stroke. The fill stops half a cell inside the outer ring of cells (1 row top and bottom, 1 col left and right), whose half blocks in the fill colour draw a clean edge: `▗▄…▄▖`, `▐` / `▌` down the sides, `▝▀…▀▘`. Inside a dialog or menu all text (title, body, labels, hints, list rows, inputs) starts at col 2, one col in from the fill's left edge, and one blank col stays inside the right edge, so both sides read the same. A focused row's bar replaces the edge glyph in col 0: `▐` in `accent`, flush with the fill, like a card's bar.
+- **Focus:** a `▐` accent bar down every text row of the focused item, never an outline (an outline costs 2 rows and 2 cols). Rows with a bar (list rows, text inputs, cards) put the bar in their col 0 and their text at col 2; inside a dialog or menu that col 0 is the fill's edge column (see **Shape → glyph rules**).
 - **Carets:** one full cell (8.4 × 18), in field inputs and in the command line.
 
 ### Shape → glyph rules
@@ -155,7 +155,7 @@ Every cell the app paints can be read from a frame: a text node gives the glyph,
 |---|---|
 | Card `surface` rectangle: square corners, inset 9 px from the top and bottom of its whole-row card frame (`Density=regular`) | Top inset row `▄` across the full width; bottom inset row `▀` across the full width (no corner glyphs, so the inset rows line up with the surface rows); across the card's width, foreground = the surface colour, background = what is behind the card. The rows between are the surface colour as background. |
 | Card `surface` rectangle at `Density=compact` (square, full height) | Plain background cells, no corner or inset glyphs. |
-| Accent bar 4.2 px wide at col 0: Card `bar`, List row `focus bar`, Text input `Input focus bar` | `▌` in `accent` on the row's background, in every row the bar spans. A card's bar is the exception: it sits in its own column left of the surface (Card col 0, 4.2 px wide at x 4.2, surface from col 1, text from col 3) and draws `▐` in `accent` on `bg`; at `Density=regular` it spans the surface's full height, `▗` in the top inset row and `▝` in the bottom one. The column stays empty on unselected cards. |
+| Accent bar 4.2 px wide at x 4.2 (the right half of col 0): Card `bar`, List row `focus bar`, Text input `Input focus bar` | `▐` in `accent` on what is behind the row, in every row the bar spans; in a dialog or menu it replaces the edge glyph. A card's bar sits in its own column left of the surface (Card col 0, 4.2 px wide at x 4.2, surface from col 1, text from col 2) and draws `▐` in `accent` on `bg`; at `Density=regular` it spans the surface's full height, `▗` in the top inset row and `▝` in the bottom one. The column stays empty on unselected cards. |
 | Dialog and Menu frame (`surface` / `surface-selected` fill, square corners, no stroke) | Outer ring: `▗`, `▄` repeated, `▖` in the top row; `▐` in the left col and `▌` in the right col; `▝`, `▀` repeated, `▘` in the bottom row; foreground = the frame's fill, background = what is behind the frame. Cells inside the ring take the fill as background. |
 | Caret rectangle (one full cell, `text` fill) | That cell with `text` as background (reverse video), not the terminal cursor. |
 | Scrim instance (full-frame `scrim` overlay) | No overlay: the board behind the dialog is repainted: every fill (`surface`, `surface-done`, `surface-selected`) flattens to `surface` and the block glyphs drawing its edges follow it; every other foreground, accent bars included, is set to `text-faint`. Card shapes stay visible, faintly. |

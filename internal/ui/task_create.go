@@ -181,7 +181,7 @@ func (m *model) taskCreate() *termgrid.Grid {
 		if title := m.titleInput.Value(); title != "" {
 			lines = []string{title}
 		}
-		drawIdleInput(g, p, 1, 1, titleWidth+2, lines, IdleInputTitle, "title")
+		drawIdleInput(g, p, 0, 1, titleWidth+2, lines, IdleInputTitle, "title")
 	}
 	if l.descRows > 0 {
 		if m.descInput.Focused() && !m.detailStatusMenu && !m.editDiscard && m.vimCommand == "" {
@@ -189,7 +189,7 @@ func (m *model) taskCreate() *termgrid.Grid {
 		} else {
 			lines := wrapDialogText(m.descInput.Value(), width)
 			top := min(m.editDescTop, max(0, len(lines)-l.descRows))
-			drawIdleInput(g, p, 1, detailDescRow, width+2, lines[top:min(top+l.descRows, len(lines))], IdleInputBody, "description (optional)")
+			drawIdleInput(g, p, 0, detailDescRow, width+2, lines[top:min(top+l.descRows, len(lines))], IdleInputBody, "description (optional)")
 		}
 	}
 
@@ -198,15 +198,15 @@ func (m *model) taskCreate() *termgrid.Grid {
 		drawDiscardFooter(g, p, l.footer, width)
 	case m.detailStatusMenu:
 		m.drawDetailStatusMenu(g, l, m.createColumn)
-		drawDialogHints(g, p, 3, l.footer, width, []KeyHint{{"j k", "move"}, {"↵", "set"}, {"esc", "cancel"}})
+		drawDialogHints(g, p, 2, l.footer, width, []KeyHint{{"j k", "move"}, {"↵", "set"}, {"esc", "cancel"}})
 	case m.detailStatus != "":
-		drawStatusMessage(g, p, 3, l.footer, width, StatusDanger, m.detailStatus)
+		drawStatusMessage(g, p, 2, l.footer, width, StatusDanger, m.detailStatus)
 	case m.createSaving:
-		drawStatusMessage(g, p, 3, l.footer, width, StatusInfo, "saving…")
+		drawStatusMessage(g, p, 2, l.footer, width, StatusInfo, "saving…")
 	case m.vimCommand != "":
-		drawCommandLine(g, p, 3, l.footer, width, m.vimCommand)
+		drawCommandLine(g, p, 2, l.footer, width, m.vimCommand)
 	case m.vimStatus != "":
-		drawStatusMessage(g, p, 3, l.footer, width, StatusInfo, m.vimStatus)
+		drawStatusMessage(g, p, 2, l.footer, width, StatusInfo, m.vimStatus)
 	default:
 		hints := []KeyHint{{"↵", "create"}, {"tab", "description"}, {"esc", "normal"}, {"?", "more"}}
 		if m.descInput.Focused() {
@@ -222,7 +222,7 @@ func (m *model) taskCreate() *termgrid.Grid {
 				hints = []KeyHint{{"tab", "next field"}, {"ctrl+e", "$EDITOR"}, {"esc", "back"}, {"?", "insert ?"}}
 			}
 		}
-		drawDialogHints(g, p, 3, l.footer, width, hints)
+		drawDialogHints(g, p, 2, l.footer, width, hints)
 	}
 	return g
 }

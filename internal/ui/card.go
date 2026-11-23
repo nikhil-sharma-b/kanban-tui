@@ -82,9 +82,9 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 	}
 	bg := tokenBG(p, surface)
 	// Col 0 is the bar column, page background unless selected; the
-	// surface starts at col 1 and text at col 3.
+	// surface starts at col 1 and text at col 2, one col in from each edge.
 	sx, sw := x+1, width-1
-	textWidth := width - 4
+	textWidth := width - 3
 	h := cardHeight(c)
 
 	inset := func(row int, left, mid, right rune) {
@@ -116,7 +116,7 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 	}
 
 	row := top
-	g.Text(x+3, row, truncateCell(c.Title, textWidth), title)
+	g.Text(x+2, row, truncateCell(c.Title, textWidth), title)
 	if c.State == CardSelected {
 		row++
 		if c.Desc != "" {
@@ -127,11 +127,11 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 					desc = lines[0]
 				}
 			}
-			g.Text(x+3, row, truncateCell(desc, textWidth), tokenFG(p, dusk.TextMuted, false))
+			g.Text(x+2, row, truncateCell(desc, textWidth), tokenFG(p, dusk.TextMuted, false))
 			row++
 		}
 		row++ // one blank row before the meta
-		g.Text(x+3, row, truncateCell(c.Meta, textWidth), tokenFG(p, dusk.TextDim, false))
+		g.Text(x+2, row, truncateCell(c.Meta, textWidth), tokenFG(p, dusk.TextDim, false))
 		// The bar fills the right half of the bar column, flush with the
 		// surface and exactly its height, half-row insets included.
 		accent := tokenFG(p, dusk.Accent, false)

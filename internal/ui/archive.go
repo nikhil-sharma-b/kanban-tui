@@ -175,7 +175,7 @@ func (m *model) updateArchiveDetail(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.detailHelp = !m.detailHelp
 	case "J", "K":
 		l := m.detailLayout(max(1, len(task.Whiteboards)))
-		lines := wrapDialogText(task.Description, l.width-5)
+		lines := wrapDialogText(task.Description, l.width-4)
 		if msg.String() == "J" {
 			m.detailScroll = min(max(0, len(lines)-l.descRows), m.detailScroll+1)
 		} else {
@@ -282,7 +282,7 @@ func (m *model) archiveDialog() *termgrid.Grid {
 	}
 	h := rows + 7 // borders, search, blanks around the list, two footer rows
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 
 	total := len(m.board.ArchivedTasks())
 	archived := m.filteredArchivedTasks()
@@ -296,13 +296,13 @@ func (m *model) archiveDialog() *termgrid.Grid {
 	placeholder := "Search archive…"
 	if m.archiveFiltering {
 		lines, col := cutInput(m.archiveFilterInput.Value(), m.archiveFilterInput.Position(), inputWidth)
-		drawFocusedInput(g, p, 1, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
+		drawFocusedInput(g, p, 0, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
 	} else {
 		var lines []string
 		if query != "" {
 			lines = []string{query}
 		}
-		drawIdleInput(g, p, 1, 1, inputWidth+2, lines, IdleInputField, placeholder)
+		drawIdleInput(g, p, 0, 1, inputWidth+2, lines, IdleInputField, placeholder)
 	}
 
 	const top = 3
@@ -310,11 +310,11 @@ func (m *model) archiveDialog() *termgrid.Grid {
 	case total == 0:
 		for i, line := range []string{"nothing archived yet", "SPC t a on the board archives one task", "a archives done tasks older than 30 days"} {
 			if i < rows {
-				drawListRow(g, p, 1, top+i, w-3, line, "", ListRowDisabled)
+				drawListRow(g, p, 0, top+i, w-2, line, "", ListRowDisabled)
 			}
 		}
 	case len(archived) == 0:
-		drawListRow(g, p, 1, top, w-3, fmt.Sprintf("no archived task matches “%s”", query), "", ListRowDisabled)
+		drawListRow(g, p, 0, top, w-2, fmt.Sprintf("no archived task matches “%s”", query), "", ListRowDisabled)
 	}
 	now := m.clock()
 	first := max(0, min(m.archiveCursor-rows+1, len(archived)-rows))
@@ -325,19 +325,19 @@ func (m *model) archiveDialog() *termgrid.Grid {
 			state = ListRowSelected
 		}
 		hint := fmt.Sprintf("from %s · %s", task.ArchivedFrom, archiveWhen(now, *task.ArchivedAt))
-		drawListRow(g, p, 1, top+i-first, w-3, task.Title, hint, state)
+		drawListRow(g, p, 0, top+i-first, w-2, task.Title, hint, state)
 		// The hint reads text-muted, as in the projects list (10/list).
 		g.Text(w-2-ansi.StringWidth(hint), top+i-first, hint, tokenFG(p, dusk.TextMuted, false))
 	}
 
 	switch {
 	case m.lastErr != nil:
-		drawStatusMessage(g, p, 3, h-3, width, StatusDanger, m.lastErr.Error())
+		drawStatusMessage(g, p, 2, h-3, width, StatusDanger, m.lastErr.Error())
 	case m.archiveStatus != "":
-		drawStatusMessage(g, p, 3, h-3, width, m.archiveStatusKind, m.archiveStatus)
+		drawStatusMessage(g, p, 2, h-3, width, m.archiveStatusKind, m.archiveStatus)
 	default:
 		for i, row := range m.archiveHints(len(archived), total) {
-			drawDialogHints(g, p, 3, h-3+i, width, row)
+			drawDialogHints(g, p, 2, h-3+i, width, row)
 		}
 	}
 	return g
@@ -356,12 +356,12 @@ func (m *model) archiveDetail() *termgrid.Grid {
 		return nil
 	}
 	g := newDialog(p, l.width, l.height)
-	const x = 3
+	const x = 2
 	right := l.width - 2
 	textWidth := right - x
 	now := m.clock()
 
-	drawIdleInput(g, p, 1, 1, textWidth+2, []string{task.Title}, IdleInputTitle, "")
+	drawIdleInput(g, p, 0, 1, textWidth+2, []string{task.Title}, IdleInputTitle, "")
 	target, deleted := m.restoreTarget(task)
 	meta := fmt.Sprintf("archived %s · from %s", archiveWhen(now, *task.ArchivedAt), task.ArchivedFrom)
 	if deleted {
@@ -374,7 +374,7 @@ func (m *model) archiveDetail() *termgrid.Grid {
 	lines := wrapDialogText(task.Description, textWidth)
 	start := min(m.detailScroll, max(0, len(lines)-l.descRows))
 	end := min(len(lines), start+l.descRows)
-	drawIdleInput(g, p, 1, detailDescRow, textWidth+2, lines[start:end], IdleInputBody, "")
+	drawIdleInput(g, p, 0, detailDescRow, textWidth+2, lines[start:end], IdleInputBody, "")
 
 	if l.listRows > 0 {
 		y := detailDescRow + l.descRows + 1
@@ -385,7 +385,7 @@ func (m *model) archiveDetail() *termgrid.Grid {
 			if format == "" {
 				format = strings.TrimPrefix(wb.Extension(), ".")
 			}
-			drawListRow(g, p, 1, y+1+i, right-1, "◇ "+wb.Name, format+" · "+relativeTime(now, wb.UpdatedAt), ListRowDefault)
+			drawListRow(g, p, 0, y+1+i, right, "◇ "+wb.Name, format+" · "+relativeTime(now, wb.UpdatedAt), ListRowDefault)
 		}
 	}
 

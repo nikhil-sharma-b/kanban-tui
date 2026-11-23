@@ -247,7 +247,7 @@ func (m *model) projectsDialog() *termgrid.Grid {
 	}
 	h := fixed + listRows + 1
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 
 	label := "projects"
 	g.Text(w-2-ansi.StringWidth(label), 1, label, tokenFG(p, dusk.TextDim, false))
@@ -255,14 +255,14 @@ func (m *model) projectsDialog() *termgrid.Grid {
 	placeholder := "Filter projects…"
 	if m.projectFiltering {
 		lines, col := cutInput(m.projectFilterInput.Value(), m.projectFilterInput.Position(), inputWidth)
-		drawFocusedInput(g, p, 1, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
+		drawFocusedInput(g, p, 0, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
 	} else {
-		drawIdleInput(g, p, 1, 1, inputWidth+2, nil, IdleInputField, placeholder)
+		drawIdleInput(g, p, 0, 1, inputWidth+2, nil, IdleInputField, placeholder)
 	}
 
 	y := 3
 	if len(projects) == 0 {
-		g.Text(3, y, "No matching projects", tokenFG(p, dusk.TextMuted, false))
+		g.Text(2, y, "No matching projects", tokenFG(p, dusk.TextMuted, false))
 		y++
 	}
 	first := max(0, min(m.projectCursor-listRows+1, len(projects)-listRows))
@@ -279,15 +279,15 @@ func (m *model) projectsDialog() *termgrid.Grid {
 		if project.ID == m.workspace.ActiveProjectID {
 			marker = "current    "
 		}
-		drawListRow(g, p, 1, y, w-3, label, marker+count, state)
+		drawListRow(g, p, 0, y, w-2, label, marker+count, state)
 		g.Text(w-2-ansi.StringWidth(marker+count), y, marker+count, tokenFG(p, dusk.TextMuted, false))
 		y++
 	}
 	if m.projectErr != nil {
-		drawStatusMessage(g, p, 3, y, width, StatusDanger, m.projectErr.Error())
+		drawStatusMessage(g, p, 2, y, width, StatusDanger, m.projectErr.Error())
 	}
 	for i, row := range hints {
-		drawDialogHints(g, p, 3, h-1-len(hints)+i, width, row)
+		drawDialogHints(g, p, 2, h-1-len(hints)+i, width, row)
 	}
 	return g
 }
@@ -304,7 +304,7 @@ func (m *model) projectEditDialog() *termgrid.Grid {
 		return nil
 	}
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 	label, verb, placeholder := "new project", "create", "Project name…"
 	if m.projectDraft != "" {
 		label, verb, placeholder = "rename project", "rename", ""
@@ -312,11 +312,11 @@ func (m *model) projectEditDialog() *termgrid.Grid {
 	g.Text(w-2-ansi.StringWidth(label), 1, label, tokenFG(p, dusk.TextDim, false))
 	inputWidth := width - ansi.StringWidth(label) - 1
 	lines, col := cutInput(m.projectInput.Value(), m.projectInput.Position(), inputWidth)
-	drawFocusedInput(g, p, 1, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
+	drawFocusedInput(g, p, 0, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
 	if m.projectErr != nil {
-		drawStatusMessage(g, p, 3, 2, width, StatusDanger, m.projectErr.Error())
+		drawStatusMessage(g, p, 2, 2, width, StatusDanger, m.projectErr.Error())
 	}
-	drawDialogHints(g, p, 3, h-2, width, []KeyHint{{"↵", verb}, {"esc", "cancel"}, {"backspace", "delete character"}})
+	drawDialogHints(g, p, 2, h-2, width, []KeyHint{{"↵", verb}, {"esc", "cancel"}, {"backspace", "delete character"}})
 	return g
 }
 

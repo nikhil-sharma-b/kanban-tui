@@ -64,16 +64,16 @@ func (m *model) addColumnDialog() *termgrid.Grid {
 		return nil
 	}
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 	label := "new column"
 	g.Text(w-2-ansi.StringWidth(label), 1, label, tokenFG(p, dusk.TextDim, false))
 	inputWidth := width - ansi.StringWidth(label) - 1
 	lines, col := cutInput(m.columnInput.Value(), m.columnInput.Position(), inputWidth)
-	drawFocusedInput(g, p, 1, 1, inputWidth+2, 1, lines, IdleInputField, "", &inputPoint{col: col})
+	drawFocusedInput(g, p, 0, 1, inputWidth+2, 1, lines, IdleInputField, "", &inputPoint{col: col})
 	if m.columnErr != nil {
-		drawStatusMessage(g, p, 3, 2, width, StatusDanger, m.columnErr.Error())
+		drawStatusMessage(g, p, 2, 2, width, StatusDanger, m.columnErr.Error())
 	}
-	drawDialogHints(g, p, 3, h-2, width, addColumnHints)
+	drawDialogHints(g, p, 2, h-2, width, addColumnHints)
 	return g
 }
 

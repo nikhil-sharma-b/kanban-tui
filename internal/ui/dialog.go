@@ -163,7 +163,7 @@ func drawListRow(g *termgrid.Grid, p dusk.Palette, x, y, width int, label, hint 
 	labelToken, hintToken := dusk.TextCard, dusk.TextDim
 	switch state {
 	case ListRowSelected:
-		g.Text(x, y, "▌", tokenFG(p, dusk.Accent, false))
+		g.Text(x, y, "▐", tokenFG(p, dusk.Accent, false))
 		labelToken = dusk.Accent
 	case ListRowDisabled:
 		labelToken, hintToken = dusk.TextFaint, dusk.TextFaint

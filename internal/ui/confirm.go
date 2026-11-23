@@ -96,11 +96,11 @@ func plural(n int, one string) string {
 // draws the input, the status line and the footer.
 func confirmationGrid(p dusk.Palette, w, h int, c confirmation) *termgrid.Grid {
 	g := newDialog(p, w, h)
-	width := w - 5
+	width := w - 4
 	if width < 1 || h < 4 {
 		return g
 	}
-	g.Text(3, 1, truncateCell(c.title, width), tokenFG(p, dusk.Text, true))
+	g.Text(2, 1, truncateCell(c.title, width), tokenFG(p, dusk.Text, true))
 	end := h - 3 // the blank row above the footer
 	switch {
 	case c.typed():
@@ -112,13 +112,13 @@ func confirmationGrid(p dusk.Palette, w, h int, c confirmation) *termgrid.Grid {
 		if 3+i >= end {
 			break
 		}
-		g.Text(3, 3+i, line, tokenFG(p, dusk.TextMuted, false))
+		g.Text(2, 3+i, line, tokenFG(p, dusk.TextMuted, false))
 	}
 	if !c.typed() {
 		if c.note != "" {
-			drawStatusMessage(g, p, 3, h-4, width, c.noteKind, c.note)
+			drawStatusMessage(g, p, 2, h-4, width, c.noteKind, c.note)
 		}
-		drawDialogHints(g, p, 3, h-2, width, []KeyHint{{"esc", "keep"}, {"y", c.verb}})
+		drawDialogHints(g, p, 2, h-2, width, []KeyHint{{"esc", "keep"}, {"y", c.verb}})
 	}
 	return g
 }
@@ -139,7 +139,7 @@ func (m *model) confirmDialog() *termgrid.Grid {
 	c := m.confirm
 	p := m.palette
 	w := m.dialogW()
-	width := w - 5
+	width := w - 4
 	if width < 4 {
 		return nil
 	}
@@ -152,13 +152,13 @@ func (m *model) confirmDialog() *termgrid.Grid {
 		return g
 	}
 	statusRow := h - 4
-	m.drawConfirmInput(g, 3, statusRow-2, width)
+	m.drawConfirmInput(g, 2, statusRow-2, width)
 	if m.confirmMatched() {
-		drawStatusMessage(g, p, 3, statusRow, width, StatusDanger, c.matched)
-		drawDialogHints(g, p, 3, h-2, width, []KeyHint{{"↵", "delete"}, {"esc", "keep"}})
+		drawStatusMessage(g, p, 2, statusRow, width, StatusDanger, c.matched)
+		drawDialogHints(g, p, 2, h-2, width, []KeyHint{{"↵", "delete"}, {"esc", "keep"}})
 	} else {
-		drawStatusMessage(g, p, 3, statusRow, width, StatusInfo, c.prompt)
-		drawDialogHints(g, p, 3, h-2, width, []KeyHint{{"esc", "keep"}})
+		drawStatusMessage(g, p, 2, statusRow, width, StatusInfo, c.prompt)
+		drawDialogHints(g, p, 2, h-2, width, []KeyHint{{"esc", "keep"}})
 	}
 	return g
 }

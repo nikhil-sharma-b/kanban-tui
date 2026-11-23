@@ -83,7 +83,7 @@ func (m *unreadableModel) View() string {
 	drawAppHeader(g, p, screenGutter, 1, m.width-2*screenGutter, AppHeader{Sync: SyncUnreadable})
 
 	w := min(unreadableDialogWidth, m.width)
-	textWidth := w - 5
+	textWidth := w - 4
 	reason := strings.TrimSuffix(m.err.Error(), ".")
 	lines := wrapDialogText(m.shownPath+": "+reason+".", textWidth)
 	if m.more {
@@ -92,12 +92,12 @@ func (m *unreadableModel) View() string {
 	}
 	h := 8 + len(lines)
 	d := newDialog(p, w, h)
-	d.Text(3, 1, "Can't read the board", tokenFG(p, dusk.Text, true))
+	d.Text(2, 1, "Can't read the board", tokenFG(p, dusk.Text, true))
 	for i, line := range lines {
-		d.Text(3, 3+i, line, tokenFG(p, dusk.TextMuted, false))
+		d.Text(2, 3+i, line, tokenFG(p, dusk.TextMuted, false))
 	}
-	drawStatusMessage(d, p, 3, 4+len(lines), textWidth, StatusInfo, "nothing was changed or overwritten")
-	drawDialogHints(d, p, 3, h-2, textWidth, unreadableHints)
+	drawStatusMessage(d, p, 2, 4+len(lines), textWidth, StatusInfo, "nothing was changed or overwritten")
+	drawDialogHints(d, p, 2, h-2, textWidth, unreadableHints)
 	g.Blit((m.width-w)/2, (m.height-h)/2, d)
 	return renderGrid(g)
 }
