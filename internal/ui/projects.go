@@ -233,7 +233,7 @@ func (m *model) projectHints(shown int) [][]KeyHint {
 // one List row per regular project with its task count, and the footer.
 func (m *model) projectsDialog() *termgrid.Grid {
 	p := m.palette
-	w := min(dialogMaxWidth, m.width-8)
+	w := m.dialogW()
 	projects := m.filteredProjects()
 	hints := m.projectHints(len(projects))
 	listRows := max(1, len(projects))
@@ -295,7 +295,7 @@ func (m *model) projectsDialog() *termgrid.Grid {
 // projectEditDialog is the name dialog for new and rename (07/new, 07/rename).
 func (m *model) projectEditDialog() *termgrid.Grid {
 	p := m.palette
-	w := min(dialogMaxWidth, m.width-8)
+	w := m.dialogW()
 	h := projectEditDialogHeight
 	if m.projectErr != nil {
 		h++

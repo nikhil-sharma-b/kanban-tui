@@ -138,7 +138,7 @@ func confirmationHeight(c confirmation, n int) int {
 func (m *model) confirmDialog() *termgrid.Grid {
 	c := m.confirm
 	p := m.palette
-	w := min(dialogMaxWidth, m.width-8)
+	w := m.dialogW()
 	width := w - 5
 	if width < 4 {
 		return nil

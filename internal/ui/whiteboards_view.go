@@ -37,7 +37,7 @@ func (m *model) whiteboardsDialog() *termgrid.Grid {
 		return nil
 	}
 	p := m.palette
-	w := min(dialogMaxWidth, m.width-8)
+	w := m.dialogW()
 	n := len(task.Whiteboards)
 	status := m.whiteboardStatusLine()
 	fixed := 6 // borders, title, blanks around the list, hints
@@ -98,7 +98,7 @@ func (m *model) whiteboardStatusKind() StatusKind {
 // whiteboardRenameDialog is the name dialog for rename (08/rename).
 func (m *model) whiteboardRenameDialog() *termgrid.Grid {
 	p := m.palette
-	w := min(dialogMaxWidth, m.width-8)
+	w := m.dialogW()
 	h := whiteboardRenameDialogHeight
 	if m.lastErr != nil {
 		h++

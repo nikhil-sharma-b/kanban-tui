@@ -55,7 +55,7 @@ func RenderColumnHeaderEditing(p dusk.Palette, value string, count int) string {
 // error under it, and the footer.
 func (m *model) addColumnDialog() *termgrid.Grid {
 	p := m.palette
-	w := min(dialogMaxWidth, m.width-8)
+	w := m.dialogW()
 	h := addColumnDialogHeight
 	if m.columnErr != nil {
 		h++

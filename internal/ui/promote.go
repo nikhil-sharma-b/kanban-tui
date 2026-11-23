@@ -244,7 +244,7 @@ func (m *model) promoteHints() []KeyHint {
 // 11/no-columns-fallback.
 func (m *model) promoteDialog() *termgrid.Grid {
 	p := m.palette
-	w, h := min(dialogMaxWidth, m.width-8), promoteDialogHeight
+	w, h := m.dialogW(), promoteDialogHeight
 	if w < 24 || h > m.height {
 		return nil
 	}

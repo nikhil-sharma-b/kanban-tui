@@ -16,8 +16,20 @@ const (
 	detailDescRow   = 3
 )
 
-func (m *model) dialogSize(maxHeight int) (int, int) {
-	return min(dialogMaxWidth, m.width-8), min(maxHeight, m.height-4)
+// dialogW is a dialog's width: half the screen, held between 60 and 96
+// cols, and never closer than 4 cols to either side.
+func (m *model) dialogW() int {
+	return min(max(dialogMaxWidth, min(m.width/2, 96)), m.width-8)
+}
+
+// dialogH is a full-height dialog's height: 5/9 of the screen, held between
+// 20 and 32 rows, and never closer than 2 rows to the top or bottom.
+func (m *model) dialogH() int {
+	return min(max(dialogMaxHeight, min(m.height*5/9, 32)), m.height-4)
+}
+
+func (m *model) dialogSize(int) (int, int) {
+	return m.dialogW(), m.dialogH()
 }
 
 type detailLayout struct {

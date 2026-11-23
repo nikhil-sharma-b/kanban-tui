@@ -20,8 +20,6 @@ type boardPlace struct {
 	windowFirst int
 }
 
-// searchDialogWidth is min(60, W−8) cells (page 05 DEV NOTE).
-const searchDialogWidth = 60
 
 // filtering reports whether a query is narrowing the board, live or applied.
 func (m *model) filtering() bool { return strings.TrimSpace(m.filter) != "" }
@@ -143,7 +141,7 @@ func (m *model) filterCounts() (matches, total int) {
 
 func (m *model) searchDialog() *termgrid.Grid {
 	p := m.palette
-	w := min(searchDialogWidth, m.width-8)
+	w := m.dialogW()
 	h := 8
 	if m.compact() {
 		h = 7

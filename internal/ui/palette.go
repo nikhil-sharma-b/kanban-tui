@@ -514,11 +514,11 @@ type paletteRow struct {
 	item   int // index into the items, or -1
 }
 
-// paletteDialog is the 00 Dialog at min(60, W−8) × min(20, H−4): the input,
+// paletteDialog is the 00 Dialog at dialogW × dialogH: the input,
 // the scrolling list and the footer, which never moves.
 func (m *model) paletteDialog() *termgrid.Grid {
 	p := m.palette
-	w, h := min(dialogMaxWidth, m.width-8), min(20, m.height-4)
+	w, h := m.dialogW(), m.dialogH()
 	if w < 24 || h < 8 {
 		return nil
 	}

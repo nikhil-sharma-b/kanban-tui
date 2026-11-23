@@ -275,7 +275,7 @@ func (m *model) archiveHints(shown, total int) [][]KeyHint {
 // 10/empty, 10/restored): the search field, seven rows, and the footer.
 func (m *model) archiveDialog() *termgrid.Grid {
 	p := m.palette
-	w := min(dialogMaxWidth, m.width-8)
+	w := m.dialogW()
 	rows := min(archiveListRows, m.height-8)
 	if w < 24 || rows < 1 {
 		return nil

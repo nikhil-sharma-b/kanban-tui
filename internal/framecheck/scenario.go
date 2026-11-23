@@ -70,6 +70,7 @@ var Scenarios = withLightScenarios(map[string]Scenario{
 	"03/whiteboards":      {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "w"}},
 	"03/copied":           {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "y"}, WriteClipboard: func(string) error { return nil }},
 	"03/view-80x24":       {Workspace: sample.TaskDetail, W: 80, H: 24, Palette: dusk.Dark, Keys: []string{"l", "j", "enter"}},
+	"03/view-190x48":      {Workspace: sample.TaskDetail, W: 190, H: 48, Palette: dusk.Dark, Keys: []string{"l", "j", "enter"}},
 	"03/edit-title":       {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e"}},
 	// Insert the extra space after the third period, then return to the top.
 	"03/edit-description":   {Workspace: sample.TaskDetail, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", "e", "tab", "esc", "f", ".", "f", ".", "f", ".", "a", "space", "esc", "g", "g", "i"}},

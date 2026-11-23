@@ -25,6 +25,7 @@ enforced 03/edit-description
 enforced 03/edit-title
 enforced 03/command-line-80x24
 enforced 03/view-80x24
+enforced 03/view-190x48
 enforced 04/empty
 enforced 04/created
 enforced 04/empty-title
