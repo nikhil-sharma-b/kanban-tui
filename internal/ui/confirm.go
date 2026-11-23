@@ -91,6 +91,50 @@ func plural(n int, one string) string {
 	return fmt.Sprintf("%d %ss", n, one)
 }
 
+// confirmationGrid draws c in a w×h Dialog: title, wrapped body, then for
+// tier 1 its note (when set) and esc keep · y verb. For tier 2 the caller
+// draws the input, the status line and the footer.
+func confirmationGrid(p dusk.Palette, w, h int, c confirmation) *termgrid.Grid {
+	g := newDialog(p, w, h)
+	width := w - 5
+	if width < 1 || h < 4 {
+		return g
+	}
+	g.Text(3, 1, truncateCell(c.title, width), tokenFG(p, dusk.Text, true))
+	end := h - 3 // the blank row above the footer
+	switch {
+	case c.typed():
+		end = h - 7
+	case c.note != "":
+		end = h - 5
+	}
+	for i, line := range wrapDialogText(c.body, width) {
+		if 3+i >= end {
+			break
+		}
+		g.Text(3, 3+i, line, tokenFG(p, dusk.TextMuted, false))
+	}
+	if !c.typed() {
+		if c.note != "" {
+			drawStatusMessage(g, p, 3, h-4, width, c.noteKind, c.note)
+		}
+		drawDialogHints(g, p, 3, h-2, width, []KeyHint{{"esc", "keep"}, {"y", c.verb}})
+	}
+	return g
+}
+
+// confirmationHeight fits c around a body of n wrapped lines.
+func confirmationHeight(c confirmation, n int) int {
+	h := 6 + n
+	switch {
+	case c.typed():
+		h += 4
+	case c.note != "":
+		h += 2
+	}
+	return h
+}
+
 func (m *model) confirmDialog() *termgrid.Grid {
 	c := m.confirm
 	p := m.palette
@@ -99,33 +143,15 @@ func (m *model) confirmDialog() *termgrid.Grid {
 	if width < 4 {
 		return nil
 	}
-	body := wrapDialogText(c.body, width)
-	h := 8 + len(body)
-	if c.typed() {
-		h += 2
-	}
-	h = min(h, m.height)
+	h := min(confirmationHeight(c, len(wrapDialogText(c.body, width))), m.height)
 	if h < 4 {
 		return nil
 	}
-	g := newDialog(p, w, h)
-	g.Text(3, 1, truncateCell(c.title, width), tokenFG(p, dusk.Text, true))
-	statusRow := h - 4
-	end := statusRow - 1
-	if c.typed() {
-		end -= 2
-	}
-	for i, line := range body {
-		if 3+i >= end {
-			break
-		}
-		g.Text(3, 3+i, line, tokenFG(p, dusk.TextMuted, false))
-	}
+	g := confirmationGrid(p, w, h, c)
 	if !c.typed() {
-		drawStatusMessage(g, p, 3, statusRow, width, c.noteKind, c.note)
-		drawDialogHints(g, p, 3, h-2, width, []KeyHint{{"esc", "keep"}, {"y", c.verb}})
 		return g
 	}
+	statusRow := h - 4
 	m.drawConfirmInput(g, 3, statusRow-2, width)
 	if m.confirmMatched() {
 		drawStatusMessage(g, p, 3, statusRow, width, StatusDanger, c.matched)

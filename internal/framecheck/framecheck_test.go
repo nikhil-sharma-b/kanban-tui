@@ -169,7 +169,7 @@ func TestComponents(t *testing.T) {
 			func(p dusk.Palette, w int) string { return ui.RenderKeybar(p, ui.KeybarNarrow, w, keybarHints) }},
 		{"Column rail", "Components/Column rail", "Components · light preview/Chrome/Column rail#0",
 			func(p dusk.Palette, w int) string { return ui.RenderColumnRail(p, w, nil, []string{"doing", "done"}) }},
-		{"Key hint", "Components/Key hint", "Components · light preview/Chrome/Keybar#0/hints/Key hint#0",
+		{"Key hint", "Components/Key hint", "Components · light preview/Status/Key hint#0",
 			func(p dusk.Palette, _ int) string { return ui.RenderKeyHint(p, ui.KeyHint{Key: "n", Label: "new"}) }},
 		{"Card State=default", "Components/Card/State=default, Density=regular", "Components · light preview/Card/Card#0",
 			func(p dusk.Palette, w int) string {
@@ -230,10 +230,9 @@ func TestComponentsDialogs(t *testing.T) {
 		name, dark, light string
 		render            func(dusk.Palette, int, int) string
 	}
-	keepDelete := []ui.KeyHint{{Key: "esc", Label: "keep"}, {Key: "y", Label: "delete"}}
 	cases := []fixture{
 		{"Dialog", "Dialog", "Dialog", func(p dusk.Palette, w, h int) string {
-			return ui.RenderDialog(p, w, h, "Delete column “backlog”?", "5 tasks will move to the archive. You can restore them later.", false, keepDelete)
+			return ui.RenderDialog(p, w, h, "Delete column “backlog”?", "5 tasks will move to the archive. You can restore them later.", "delete")
 		}},
 		{"Scrim", "Scrim", "Scrim", func(p dusk.Palette, w, h int) string {
 			g := termgrid.New(w, h, "")

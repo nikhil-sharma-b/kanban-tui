@@ -66,7 +66,7 @@ Override the whiteboard root or launcher with:
 
 ```bash
 KANBAN_TUI_WHITEBOARD_DIR=/path/to/whiteboards
-KANBAN_TUI_WHITEBOARD_CMD=rnote
+KANBAN_TUI_WHITEBOARD_CMD=xournalpp
 ```
 
 Existing JSON data is migrated automatically on first run:
@@ -98,28 +98,31 @@ The CLI and TUI can run at the same time. The TUI picks up CLI changes within a 
 
 ## Keys
 
-Board keys follow Neovim: bare keys only navigate, and everything that creates, changes or opens something sits behind the leader, `space` (shown as `SPC`). Press `space` and a which-key popup in the bottom-right lists what can follow; groups like `+task` open a submenu. `esc` cancels a half-typed sequence.
+Board keys follow Neovim: bare keys only navigate, and everything that creates, changes or opens something sits behind the leader, `space` (shown as `SPC`). Press `space` and a which-key popover lists what can follow; groups like `+task` open a submenu, `backspace` steps back, `?` opens the cheat sheet and `esc` cancels. Every screen lists its keys in the bottom bar or dialog footer, and `?` shows the rest.
 
-Navigation:
+Board:
 
-- `h` / `l`: switch columns
-- `j` / `k`: move selection
+- `h` / `l` (or arrows): select column
+- `j` / `k` (or arrows): select task
 - `gg` / `G`: first / last task in the column
-- `/`: search tasks
 - `enter`: open task details
-- `?`: open the key cheat sheet (type to filter, `enter` to run, `esc` to close)
-- `q`: quit
+- `/`: search tasks; `esc` on the board clears the filter
+- `:`: command palette, every action by name
+- `z`: focus mode on the selected task: `J` / `K` scroll its description, `SPC t l` moves it right and focuses the next task, `j` / `k` pick a card when the column is empty, `z` or `esc` returns
+- `u`: undo the last move or archive while its toast is showing
+- `?`: key cheat sheet (type to filter, `enter` to run, `esc` to close)
+- `q` / `ctrl+c`: quit
 
 `SPC t` (+task):
 
-- `n` new · `e` edit · `x` delete · `a` archive (with confirm)
+- `n` new · `e` edit · `x` delete · `a` archive (delete and archive confirm first)
 - `h` / `l`: move task to the previous / next column
 - `k` / `j`: reorder within the column
-- `w`: whiteboards
+- `w`: whiteboards · `y`: copy the task ID
 
 `SPC c` (+column):
 
-- `n` new · `r` rename · `d` delete (at least one column always kept; tasks move to the nearest adjacent column)
+- `n` new · `r` rename in place · `d` delete (its tasks move to the adjacent column; at least one column is kept)
 - `h` / `l`: move the column left / right
 
 `SPC d` (+daily):
@@ -129,54 +132,77 @@ Navigation:
 
 `SPC a` (+archive):
 
-- `v`: open archive view
+- `v`: open the archive
 - `o`: archive Done tasks not updated in more than 30 days (with confirm)
 
 `SPC p` (+project):
 
-- `p`: open project manager (list / switch)
+- `p`: switch project
 - `n`: new project
 - `r`: rename current project
 - `x`: delete current project (with confirm)
 
-Inside task details:
+Task details:
 
-- `w`: open the whiteboard manager for the selected task
-- `e`: edit task
-- `esc`: close
+- `e`: edit · `s`: set status · `w`: whiteboards · `y`: copy ID
+- `J` / `K`: scroll the description
+- `:`: command palette
+- `esc` / `enter` / `q`: close · `?`: more keys
+- in the whiteboards list (`w` when the task has some): `j` / `k` move, `enter` / `o` open, `esc` back
 
-Inside the whiteboard manager:
+Editing a task and the new-task dialog edit Vim-style:
+
+- type to insert; `esc` for normal mode, `i` to insert again
+- `tab`: next field · `ctrl+e`: write the description in `$EDITOR`
+- `:w` saves (editing), `:wq` saves and closes (or creates the new task)
+- new task only: `enter` in the title creates it, `s` (normal mode) picks its column
+- `esc` in normal mode closes, asking first when there are unsaved changes
+
+Search (`/`):
+
+- type to filter the board live
+- `enter`: keep the filter · `esc`: restore the previous one
+
+Command palette (`:`):
+
+- type to filter · `↑` / `↓` (or `ctrl+p` / `ctrl+n`): move · `enter`: run
+- `esc`: close, or back from a second step
+- with no match, `enter` searches tasks for the typed text
+- `theme…` switches the colour theme (see below)
+
+Project switcher (`SPC p p`):
+
+- type to filter · `↑` / `↓`: move · `enter`: switch
+- `esc`: manage projects: `j` / `k` move, `enter` switch, `/` filter, `n` new, `e` rename, `x` delete, `esc` close
+
+Whiteboard manager (`SPC t w`):
 
 - `j` / `k`: move between whiteboards
+- `enter`: open the selected whiteboard
 - `n`: create a new whiteboard and open it immediately
-- `enter` / `o`: open the selected whiteboard
-- `r`: rename the selected whiteboard
-- `x`: delete the selected whiteboard and its `.rnote` file
+- `r`: rename · `x`: delete it and its file (with confirm)
 - `esc`: close
 
-Inside the create dialog:
-
-- `tab`: switch fields
-- `:w`: save
-- `:wq`: save and close
-- `esc`: cancel
-
-Inside the archive view:
+Archive (`SPC a v`):
 
 - `j` / `k`: move between archived tasks
 - `/`: filter archived tasks (title + description)
-- `enter`: open read-only task details
-- `r`: restore selected task to its original column (or the first column if it was deleted)
+- `enter`: open read-only task details (`J` / `K` scroll, `r` restore, `esc` back)
+- `r`: restore the selected task to its original column (or the first column if it was deleted)
+- `a`: archive old Done tasks
 - `esc`: close
 
-Inside the project manager:
+Promote (`SPC d p` on the daily board):
 
-- `j` / `k`: move between projects
-- `enter`: switch to selected project
-- `n`: create project
-- `e`: rename selected project
-- `x`: delete selected project
-- `esc`: close
+- pick a project: type to filter, `↑` / `↓` move, `enter` next, `esc` cancel
+- pick a column: `j` / `k` move, `enter` promote, `esc` back to projects
+
+Confirm dialogs:
+
+- `y` confirms, `esc` keeps
+- deleting a column with tasks, deleting a project and clearing the daily board ask you to type its name first, then `enter`
+
+If the board can't be read, the app opens on a screen that never writes to it: `r` retries, `q` quits.
 
 ## Daily board
 
@@ -204,12 +230,22 @@ Keys inside the daily board:
 
 Each task can own multiple named whiteboards. New whiteboards are created with automatic names like `Whiteboard 1`, `Whiteboard 2`, and so on, but you can rename them later from the whiteboard manager.
 
-Creating a whiteboard requires `rnote-cli` to be available on `PATH`, because the app uses it to generate a valid `.rnote` file before opening it in Rnote.
+New whiteboards are Xournal++ (`.xopp`) files and open in Xournal++; older `.rnote` whiteboards still open in Rnote. Set `KANBAN_TUI_WHITEBOARD_CMD` to use another launcher.
 
 Whiteboard files use stable paths:
 
 ```text
-whiteboards/<project-slug>/<task-id>/<whiteboard-slug>.rnote
+whiteboards/<project-slug>/<task-id>/<whiteboard-slug>.xopp
 ```
 
-Renaming a whiteboard updates the display name in the TUI only. Deleting a whiteboard removes both the task link and the underlying `.rnote` file.
+Renaming a whiteboard updates the display name in the TUI only. Deleting a whiteboard removes both the task link and the underlying file.
+
+## Theme
+
+The TUI uses the Dusk palette. Pick a theme from the command palette (`:` then `theme…`) or set it in `config.toml` beside `board.db`:
+
+```toml
+theme = "dusk"   # or "dusk-light", or "terminal" to follow the terminal's background
+```
+
+Hand edits apply while the app runs. Terminals with fewer than 256 colours get a 16-colour version of the palette.

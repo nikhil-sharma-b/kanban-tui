@@ -4,7 +4,7 @@
 
 **Blocked by:** 06 — Task editing
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 11/daily, 11/empty, 11/promoted, 11/promote-project, 11/no-columns-fallback, 11/promote-column, 11/daily-80x24, 11/empty-80x24, 11/promote-column-80x24, 11/promote-project-80x24
 - [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md

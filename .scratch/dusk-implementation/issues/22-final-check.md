@@ -4,10 +4,10 @@
 
 **Blocked by:** 01 to 21 — every other ticket
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The ledger has no pending frames; the check passes for every frame on pages 01–18 (excluding 02/breakpoint-rule and DEV NOTE frames)
-- [ ] Every 00 Foundations component variant matches in dark and in the light preview
-- [ ] No legacy colour theme or unused rendering code remains
-- [ ] DESIGN.md keybind map has no "planned" rows; the README documents the current keys
-- [ ] Full test suite passes; board.db / board.json format unchanged from before the revamp
+- [x] The ledger has no pending frames; the check passes for every frame on pages 01–18 (excluding 02/breakpoint-rule and DEV NOTE frames)
+- [x] Every 00 Foundations component variant matches in dark and in the light preview
+- [x] No legacy colour theme or unused rendering code remains
+- [x] DESIGN.md keybind map has no "planned" rows; the README documents the current keys
+- [x] Full test suite passes; board.db / board.json format unchanged from before the revamp

@@ -2145,49 +2145,9 @@ func shortID(id string) string {
 	return id[:8]
 }
 
-func truncate(value string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-	runes := []rune(value)
-	if len(runes) <= width {
-		return value
-	}
-	if width <= 1 {
-		return string(runes[:width])
-	}
-	return string(runes[:width-1]) + "\u2026"
-}
-
 func singleLine(value string) string {
 	fields := strings.Fields(value)
 	return strings.Join(fields, " ")
-}
-
-func spacer(width int) string {
-	if width <= 0 {
-		return ""
-	}
-	return strings.Repeat(" ", width)
-}
-
-func statusIcon(status domain.Status) string {
-	switch status {
-	case domain.StatusBacklog:
-		return "\u25cb" // ○
-	case domain.StatusInProgress:
-		return "\u25d0" // ◐
-	case domain.StatusDone:
-		return "\u25cf" // ●
-	case domain.StatusWaiting:
-		return "\u25cb" // ○
-	case domain.StatusActive:
-		return "\u25d0" // ◐
-	case domain.StatusNext:
-		return "\u25d1" // ◑
-	default:
-		return "\u25cb"
-	}
 }
 
 func relativeTime(now, t time.Time) string {

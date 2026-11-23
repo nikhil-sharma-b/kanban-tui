@@ -3,13 +3,13 @@
 Build the finished design in design.figcraft and DESIGN.md so the app matches every frame cell for cell. Work the frontier: any ticket whose blockers are all done.
 
 - [x] [01 — Put the mockup on the cell grid](issues/01-cell-grid-mockup.md) · blocked by: none
-- [ ] [02 — Frame-matching test and the empty board](issues/02-frame-matching-test-empty-board.md) · blocked by: 01 — Put the mockup on the cell grid
-- [ ] [03 — Board at 120×36](issues/03-board-120x36.md) · blocked by: 02 — Frame-matching test and the empty board
-- [ ] [04 — Narrow board at 80×24](issues/04-narrow-board-80x24.md) · blocked by: 03 — Board at 120×36
-- [ ] [05 — Dialog shell and task detail view](issues/05-dialog-shell-task-detail.md) · blocked by: 04 — Narrow board at 80×24
-- [ ] [06 — Task editing](issues/06-task-editing.md) · blocked by: 05 — Dialog shell and task detail view
-- [ ] [07 — New task](issues/07-new-task.md) · blocked by: 06 — Task editing
-- [ ] [08 — Search and filter](issues/08-search-filter.md) · blocked by: 06 — Task editing
+- [x] [02 — Frame-matching test and the empty board](issues/02-frame-matching-test-empty-board.md) · blocked by: 01 — Put the mockup on the cell grid
+- [x] [03 — Board at 120×36](issues/03-board-120x36.md) · blocked by: 02 — Frame-matching test and the empty board
+- [x] [04 — Narrow board at 80×24](issues/04-narrow-board-80x24.md) · blocked by: 03 — Board at 120×36
+- [x] [05 — Dialog shell and task detail view](issues/05-dialog-shell-task-detail.md) · blocked by: 04 — Narrow board at 80×24
+- [x] [06 — Task editing](issues/06-task-editing.md) · blocked by: 05 — Dialog shell and task detail view
+- [x] [07 — New task](issues/07-new-task.md) · blocked by: 06 — Task editing
+- [x] [08 — Search and filter](issues/08-search-filter.md) · blocked by: 06 — Task editing
 - [x] [09 — Confirm pattern](issues/09-confirm-pattern.md) · blocked by: 06 — Task editing
 - [x] [10 — Columns](issues/10-columns.md) · blocked by: 09 — Confirm pattern
 - [x] [11 — Projects](issues/11-projects.md) · blocked by: 09 — Confirm pattern
@@ -21,6 +21,6 @@ Build the finished design in design.figcraft and DESIGN.md so the app matches ev
 - [x] [17 — Command palette](issues/17-command-palette.md) · blocked by: 06 — Task editing
 - [x] [18 — Focus mode](issues/18-focus-mode.md) · blocked by: 15 — Feedback: toasts, undo, sync states
 - [x] [19 — Theme setting and fallbacks](issues/19-theme-setting.md) · blocked by: 17 — Command palette
-- [ ] [20 — Light Dusk](issues/20-light-dusk.md) · blocked by: 11 — Projects; 17 — Command palette; 18 — Focus mode; 19 — Theme setting and fallbacks
-- [ ] [21 — First run and cheat sheet](issues/21-first-run-cheat-sheet.md) · blocked by: 11 — Projects
-- [ ] [22 — Final check: every frame enforced](issues/22-final-check.md) · blocked by: 01 to 21 — every other ticket
+- [x] [20 — Light Dusk](issues/20-light-dusk.md) · blocked by: 11 — Projects; 17 — Command palette; 18 — Focus mode; 19 — Theme setting and fallbacks
+- [x] [21 — First run and cheat sheet](issues/21-first-run-cheat-sheet.md) · blocked by: 11 — Projects
+- [x] [22 — Final check: every frame enforced](issues/22-final-check.md) · blocked by: 01 to 21 — every other ticket

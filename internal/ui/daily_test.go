@@ -195,7 +195,6 @@ func promoteKeys(m *model, keys ...tea.KeyMsg) (*model, tea.Cmd) {
 var (
 	keyEnter = tea.KeyMsg{Type: tea.KeyEnter}
 	keyEsc   = tea.KeyMsg{Type: tea.KeyEsc}
-	keyDown  = tea.KeyMsg{Type: tea.KeyDown}
 )
 
 func TestDailyPromoteOpensDestinationDialogAndCancels(t *testing.T) {

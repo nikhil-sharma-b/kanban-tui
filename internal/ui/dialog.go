@@ -30,32 +30,10 @@ func roundedBox(p dusk.Palette, w, h int, surface dusk.Token) *termgrid.Grid {
 	return g
 }
 
-// RenderDialog draws the Foundations shell with a confirmation body.
-// The body is shared by the live task-delete dialog.
-func RenderDialog(p dusk.Palette, w, h int, title, body string, warning bool, hints []KeyHint) string {
-	return renderGrid(confirmationDialog(p, w, h, title, body, warning, hints))
-}
-
-func confirmationDialog(p dusk.Palette, w, h int, title, body string, warning bool, hints []KeyHint) *termgrid.Grid {
-	g := newDialog(p, w, h)
-	if w < 6 || h < 4 {
-		return g
-	}
-	width := w - 5
-	g.Text(3, 1, truncateCell(title, width), tokenFG(p, dusk.Text, true))
-	end := h - 2
-	if warning && h >= 8 {
-		end -= 2
-		drawStatusMessage(g, p, 3, end, width, StatusDanger, "can't be undone")
-	}
-	for i, line := range wrapDialogText(body, width) {
-		if i+3 >= end {
-			break
-		}
-		g.Text(3, i+3, line, tokenFG(p, dusk.TextMuted, false))
-	}
-	drawDialogHints(g, p, 3, h-2, width, hints)
-	return g
+// RenderDialog draws the Foundations Dialog: a tier-1 confirmation without a
+// note, through the same layout as the live confirm dialogs (page 09).
+func RenderDialog(p dusk.Palette, w, h int, title, body, verb string) string {
+	return renderGrid(confirmationGrid(p, w, h, confirmation{title: title, body: body, verb: verb}))
 }
 
 // ApplyScrim repaints the visible backdrop without changing its glyphs or bold.

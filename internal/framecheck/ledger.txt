@@ -1,6 +1,6 @@
 # Frame ledger for the frame-matching check (make framecheck).
 # enforced: must match design.figcraft cell for cell. pending: reported, never fails.
-# Each Dusk ticket moves its frames to enforced.
+# Every frame on pages 01–18 is enforced; a new frame starts pending until the app matches it.
 enforced 01/default
 enforced 01/default-80x24
 enforced 01/sync-error

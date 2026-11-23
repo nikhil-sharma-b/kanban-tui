@@ -241,7 +241,7 @@ Every page in `design.figcraft`, with its ticket and frames (120×36 = 1008×648
 
 ## Tokens → lipgloss
 
-One `Palette` struct per theme, one field per token, built with `lipgloss.Color`. `dusk` uses the dark column, `dusk-light` the light column, `terminal` picks one of the two from the detected background (`lipgloss.HasDarkBackground()`, no answer → dark). When `termenv` reports fewer than 256 colours, use the ansi16 column whatever the theme. `NoColor{}` means leave the attribute unset (`lipgloss.NoColor{}`).
+One `Palette` struct per theme, one field per token, built with `lipgloss.Color`. `dusk` uses the dark column, `dusk-light` the light column, `terminal` picks one of the two from the detected background (the terminal's OSC 11 answer, else `COLORFGBG`, else dark). When `termenv` reports fewer than 256 colours, use the ansi16 column whatever the theme. `NoColor{}` means leave the attribute unset (`lipgloss.NoColor{}`).
 
 | Token | dark (`dusk`) | light (`dusk-light`) | ansi16 |
 |---|---|---|---|
@@ -278,7 +278,7 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 
 ## Keybind map
 
-Board keys. Rows marked *planned* come from the designs and are not yet in `internal/ui/leader.go`; every other row matches it. Board screens may only use keys listed here; dialog keys follow the Fixed Order Rule.
+Board keys, all built. The bindings table in `internal/ui/leader.go` holds every row except `esc`, `z` and `u`, which the board handles beside it. Board screens may only use keys listed here; dialog keys follow the Fixed Order Rule.
 
 | Keys | Action |
 |---|---|
