@@ -239,6 +239,7 @@ type model struct {
 	// prevProjectID is the project to return to when leaving the daily board.
 	prevProjectID string
 	palette       dusk.Palette
+	theme         ThemeSetting
 	now           func() time.Time
 	pal           paletteState
 	focus         focusState
@@ -355,6 +356,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 		now:                time.Now,
 		newTask:            domain.NewTask,
 		toastDuration:      defaultToastDuration,
+		theme:              defaultThemeSetting(),
 		whichKeyDelay:      defaultWhichKeyDelay,
 		saveRetryInterval:  defaultSaveRetryInterval,
 		reloadedDuration:   defaultReloadedDuration,
@@ -371,7 +373,7 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 }
 
 func (m *model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.scheduleExternalCheck())
+	return tea.Batch(textinput.Blink, m.scheduleExternalCheck(), m.themeWarning())
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {

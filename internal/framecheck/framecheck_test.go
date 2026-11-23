@@ -122,6 +122,10 @@ func TestFrames(t *testing.T) {
 			if want.Mode != scn.Palette.Name {
 				fail("%s: frame is in %s mode, scenario renders %s", e.Frame, want.Mode, scn.Palette.Name)
 			}
+			if scn.Palette.Name == dusk.ANSI16.Name {
+				// ansi16 tokens share colours; compare what the terminal shows.
+				want.Grid = Canonical(want.Grid, scn.Palette)
+			}
 			got := ReadScreen(scn.Run(), want.Grid.W, want.Grid.H, scn.Palette)
 			if path, diffs := checkGrid(t, e.Frame, want, got); path != "" {
 				fail("%s (%s): %d cells differ, %d design problems; report: %s\n%s",

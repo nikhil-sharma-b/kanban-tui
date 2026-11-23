@@ -4,10 +4,10 @@
 
 **Blocked by:** 17 — Command palette
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 17/dusk, 17/dusk-light, 17/terminal, 17/dusk-ansi16, 17/palette-theme, 17/palette-theme-80x24 (each in the theme it shows)
-- [ ] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
-- [ ] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
-- [ ] Nothing theme-related is written to board.db / board.json
-- [ ] Tests cover missing file, missing key, unknown value, each valid value, terminal detection with and without an answer, and the ansi16 fallback
+- [x] Every frame listed here is enforced by the frame-matching check: zero cell differences (glyph, foreground token, background token, bold) at the frame's size in Dusk dark: 17/dusk, 17/dusk-light, 17/terminal, 17/dusk-ansi16, 17/palette-theme, 17/palette-theme-80x24 (each in the theme it shows)
+- [x] Key hints in every keybar and dialog footer follow the Fixed Order Rule in DESIGN.md
+- [x] Existing tests still pass, updated only where the design deliberately changes behaviour; board.db / board.json format unchanged
+- [x] Nothing theme-related is written to board.db / board.json
+- [x] Tests cover missing file, missing key, unknown value, each valid value, terminal detection with and without an answer, and the ansi16 fallback

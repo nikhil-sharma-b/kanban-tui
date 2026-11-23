@@ -11,7 +11,9 @@ import (
 	"github.com/nikhilsharma/kanban-tui/internal/cli"
 	"github.com/nikhilsharma/kanban-tui/internal/domain"
 	"github.com/nikhilsharma/kanban-tui/internal/store"
+	"github.com/nikhilsharma/kanban-tui/internal/themeconf"
 	"github.com/nikhilsharma/kanban-tui/internal/ui"
+	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
 )
 
 func main() {
@@ -41,19 +43,37 @@ func main() {
 		return boardStore, workspace, nil
 	}
 
+	opts := ui.Options{Theme: themeSetting(dataPath)}
+
 	// A board that can't be read gets its own screen instead of exiting;
 	// it never writes to the store (page 15).
 	var model tea.Model
 	if boardStore, workspace, err := open(); err != nil {
-		model = ui.NewUnreadable(dataPath, shortenHome(dataPath), err, open, ui.Options{})
+		model = ui.NewUnreadable(dataPath, shortenHome(dataPath), err, open, opts)
 	} else {
-		model = ui.New(workspace, boardStore, dataPath)
+		model = ui.NewWithOptions(workspace, boardStore, dataPath, opts)
 	}
 
 	program := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := program.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "run tui: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// themeSetting reads config.toml beside the data file (page 17). The
+// terminal is asked for its background once, before the TUI owns the input.
+func themeSetting(dataPath string) *ui.ThemeSetting {
+	path := themeconf.Path(dataPath)
+	setting, _ := themeconf.Read(path)
+	env := themeconf.Detect()
+	dark, ok := env.Background()
+	env.Background = func() (bool, bool) { return dark, ok }
+	return &ui.ThemeSetting{
+		Setting: setting,
+		Palette: func(n themeconf.Name) dusk.Palette { return themeconf.Palette(n, env) },
+		Save:    func(n themeconf.Name) error { return themeconf.Write(path, n) },
+		Load:    func() (themeconf.Setting, error) { return themeconf.Read(path) },
 	}
 }
 

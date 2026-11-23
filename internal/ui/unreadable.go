@@ -32,6 +32,9 @@ type unreadableModel struct {
 // reopen and, once it succeeds, swaps in the board; q quits.
 func NewUnreadable(dataPath, shownPath string, err error, reopen Reopen, opts Options) tea.Model {
 	m := &unreadableModel{dataPath: dataPath, shownPath: shownPath, err: err, reopen: reopen, opts: opts, palette: dusk.Dark}
+	if opts.Theme != nil && opts.Theme.Palette != nil {
+		m.palette = opts.Theme.Palette(opts.Theme.Setting.Name)
+	}
 	if opts.Palette != nil {
 		m.palette = *opts.Palette
 	}

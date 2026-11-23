@@ -28,6 +28,7 @@ const (
 	paletteActions paletteStep = iota
 	paletteProjects
 	paletteStatuses
+	paletteThemes
 )
 
 type paletteState struct {
@@ -291,6 +292,9 @@ func (m *model) paletteSections() []paletteSection {
 	case paletteStatuses:
 		items := m.statusPaletteItems()
 		return []paletteSection{{title: fmt.Sprintf("columns · %d", len(items)), items: items}}
+	case paletteThemes:
+		items := m.themeStepItems()
+		return []paletteSection{{title: fmt.Sprintf("themes · %d", len(items)), items: items}}
 	}
 	var board []paletteItem
 	first, skip := paletteFirst, map[boardAction]bool(nil)
@@ -305,7 +309,7 @@ func (m *model) paletteSections() []paletteSection {
 		detail = m.detailPaletteItems()
 	}
 	if query := strings.TrimSpace(m.pal.input.Value()); query != "" {
-		matches := rankPaletteItems(query, append(detail, board...))
+		matches := rankPaletteItems(query, append(append(detail, board...), m.themePaletteItem()))
 		if len(matches) == 0 {
 			return nil
 		}
@@ -453,6 +457,8 @@ func (m *model) paletteHints(noMatch bool) []KeyHint {
 		run = KeyHint{"↵", "switch"}
 	case paletteStatuses:
 		run = KeyHint{"↵", "move"}
+	case paletteThemes:
+		run = KeyHint{"↵", "set"}
 	}
 	return []KeyHint{{"↑↓", "move"}, run, leave, {"?", "more"}}
 }
@@ -464,6 +470,8 @@ func (m *model) paletteContext(width int) string {
 		return "switch project › pick one"
 	case paletteStatuses:
 		return "set status › pick one"
+	case paletteThemes:
+		return "theme › pick one"
 	}
 	task := m.selectedTask()
 	if task == nil {
@@ -495,7 +503,7 @@ func (m *model) paletteDialog() *termgrid.Grid {
 	context := m.paletteContext(width - 16)
 	g.Text(w-2-ansi.StringWidth(context), 1, context, tokenFG(p, dusk.TextDim, false))
 	inputWidth := width - ansi.StringWidth(context) - 1
-	placeholder := map[paletteStep]string{paletteActions: "Type an action…", paletteProjects: "Filter projects…", paletteStatuses: "Filter columns…"}[m.pal.step]
+	placeholder := map[paletteStep]string{paletteActions: "Type an action…", paletteProjects: "Filter projects…", paletteStatuses: "Filter columns…", paletteThemes: "Filter themes…"}[m.pal.step]
 	lines, col := cutInput(m.pal.input.Value(), m.pal.input.Position(), inputWidth)
 	drawFocusedInput(g, p, 1, 1, inputWidth+2, 1, lines, IdleInputField, placeholder, &inputPoint{col: col})
 

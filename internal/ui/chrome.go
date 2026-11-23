@@ -39,11 +39,21 @@ type Options struct {
 	// PaletteRecent seeds the command palette's recent actions, most recent
 	// first, as binding keys (e.g. "space t l").
 	PaletteRecent []string
+	// Theme connects the theme setting to config.toml (default: dusk,
+	// nothing written). Palette, when set, overrides its colours.
+	Theme *ThemeSetting
 }
 
 // NewWithOptions is New with a theme and clock.
 func NewWithOptions(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath string, opts Options) tea.Model {
 	m := New(workspace, boardStore, dataPath).(*model)
+	if opts.Theme != nil {
+		m.theme = *opts.Theme
+		if m.theme.Palette == nil {
+			m.theme.Palette = defaultThemeSetting().Palette
+		}
+		m.palette = m.theme.Palette(m.theme.Setting.Name)
+	}
 	if opts.Palette != nil {
 		m.palette = *opts.Palette
 	}

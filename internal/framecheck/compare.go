@@ -14,29 +14,26 @@ import (
 // palette token it came from. A colour no token has reads as "raw:<colour>".
 func ReadScreen(ansi string, w, h int, p dusk.Palette) *Grid {
 	tg := termgrid.Parse(ansi, w, h)
-	names := map[string]string{}
-	for i := len(dusk.Tokens) - 1; i >= 0; i-- { // earlier tokens win on shared values
-		t := dusk.Tokens[i]
-		if c, ok := p.Get(t).Color.(lipgloss.Color); ok {
-			names[strings.ToUpper(string(c))] = string(t)
-		}
-	}
+	names := tokenNames(p)
 	unsetBG := ""
 	if _, ok := p.Bg.Color.(lipgloss.NoColor); ok {
 		unsetBG = string(dusk.Bg)
 	}
-	name := func(col string) string {
+	name := func(col string, faint bool) string {
 		if col == "" {
 			return ""
 		}
-		if t, ok := names[strings.ToUpper(col)]; ok {
+		if t, ok := names[colorKey(col, faint)]; ok {
 			return t
+		}
+		if t, ok := names[colorKey(col, false)]; ok && faint {
+			return t + "+faint"
 		}
 		return "raw:" + col
 	}
 	g := newGrid(w, h, "")
 	for i, c := range tg.Cells {
-		out := Cell{Ch: c.Ch, FG: name(c.FG), BG: name(c.BG), Bold: c.Bold}
+		out := Cell{Ch: c.Ch, FG: name(c.FG, c.Faint), BG: name(c.BG, false), Bold: c.Bold}
 		if c.BG == "" {
 			out.BG = unsetBG
 		}
@@ -49,6 +46,66 @@ func ReadScreen(ansi string, w, h int, p dusk.Palette) *Grid {
 		g.Cells[i] = out
 	}
 	return g
+}
+
+func colorKey(col string, faint bool) string {
+	if faint {
+		return strings.ToUpper(col) + "+faint"
+	}
+	return strings.ToUpper(col)
+}
+
+// tokenNames maps each colour (with the faint attribute) to the first token
+// that has it; earlier tokens win on shared values.
+func tokenNames(p dusk.Palette) map[string]string {
+	names := map[string]string{}
+	for i := len(dusk.Tokens) - 1; i >= 0; i-- {
+		t := dusk.Tokens[i]
+		v := p.Get(t)
+		if c, ok := v.Color.(lipgloss.Color); ok {
+			names[colorKey(string(c), v.Faint)] = string(t)
+		}
+	}
+	return names
+}
+
+// Canonical renames each token in g to the first token with the same value
+// in p, so a frame in a mode where tokens share a colour (ansi16) compares
+// by what the terminal shows.
+func Canonical(g *Grid, p dusk.Palette) *Grid {
+	names := tokenNames(p)
+	unset := func(tok string) bool {
+		if tok == "" {
+			return false
+		}
+		_, ok := p.Get(dusk.Token(tok)).Color.(lipgloss.NoColor)
+		return ok
+	}
+	rename := func(tok string) string {
+		v := p.Get(dusk.Token(tok))
+		c, ok := v.Color.(lipgloss.Color)
+		if !ok {
+			return tok
+		}
+		if t, ok := names[colorKey(string(c), v.Faint)]; ok {
+			return t
+		}
+		return tok
+	}
+	out := newGrid(g.W, g.H, "")
+	for i, c := range g.Cells {
+		// A colour that is never painted: a fill reads as the terminal's
+		// own background, a glyph in it is not drawn at all.
+		if unset(c.BG) {
+			c.BG = string(dusk.Bg)
+		}
+		if unset(c.FG) {
+			c.Ch, c.FG, c.Bold = ' ', "", false
+		}
+		c.FG, c.BG = rename(c.FG), rename(c.BG)
+		out.Cells[i] = c
+	}
+	return out
 }
 
 // Diff is one cell that differs.

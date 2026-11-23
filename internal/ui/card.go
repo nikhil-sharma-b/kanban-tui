@@ -94,6 +94,11 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 			case width - 1:
 				ch = right
 			}
+			if fg.FG == "" {
+				// A surface that is never painted (ansi16) has no corners:
+				// the glyphs would show in the terminal's own colour.
+				ch = ' '
+			}
 			g.Set(x+col, row, termgrid.Cell{Ch: ch, FG: fg.FG, Faint: fg.Faint, BG: g.At(x+col, row).BG})
 		}
 	}

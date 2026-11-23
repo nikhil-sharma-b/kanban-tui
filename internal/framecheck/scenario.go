@@ -5,10 +5,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/muesli/termenv"
 
 	"github.com/nikhilsharma/kanban-tui/internal/domain"
 	"github.com/nikhilsharma/kanban-tui/internal/sample"
 	"github.com/nikhilsharma/kanban-tui/internal/store"
+	"github.com/nikhilsharma/kanban-tui/internal/themeconf"
 	"github.com/nikhilsharma/kanban-tui/internal/ui"
 	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
 )
@@ -192,6 +194,16 @@ var Scenarios = map[string]Scenario{
 	"12/no-match":               paletteScenario(sample.Workspace, 120, 36, false, "u", "n", "d", "o"),
 	"12/second-step":            paletteScenario(sample.FourProjects, 120, 36, false, "s", "w", "i", "t", "c", "h", "enter"),
 	"12/second-step-80x24":      paletteScenario(sample.FourProjects, 80, 24, false, "s", "w", "i", "t", "c", "h", "enter"),
+	"17/dusk":                   {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j"}},
+	"17/dusk-light":             {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Light, Keys: []string{"l", "j"}},
+	// theme = "terminal" on a terminal that answers with a light background.
+	"17/terminal": {Workspace: sample.Workspace, W: 120, H: 36, Keys: []string{"l", "j"},
+		Palette: themeconf.Palette(themeconf.Terminal, themeconf.Env{Background: func() (bool, bool) { return false, true }})},
+	// A 16-colour terminal gets ansi16 whatever the theme.
+	"17/dusk-ansi16": {Workspace: sample.Workspace, W: 120, H: 36, Keys: []string{"l", "j"},
+		Palette: themeconf.Palette(themeconf.Dusk, themeconf.Env{Profile: termenv.ANSI})},
+	"17/palette-theme":          paletteScenario(sample.Workspace, 120, 36, false, "t", "h", "e", "m", "e", "enter"),
+	"17/palette-theme-80x24":    paletteScenario(sample.Workspace, 80, 24, false, "t", "h", "e", "m", "e", "enter"),
 	"12/from-dialog":            {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j", "enter", ":"}},
 	"13/doing":                  focusScenario(sample.Focus, 120, 36),
 	"13/doing-80x24":            focusScenario(sample.Focus, 80, 24),

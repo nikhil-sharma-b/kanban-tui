@@ -71,10 +71,11 @@ func (m *model) canReload() bool {
 }
 
 func (m *model) handleExternalCheck() (tea.Model, tea.Cmd) {
+	theme := m.reloadTheme()
 	if !m.canReload() {
-		return m, m.scheduleExternalCheck()
+		return m, tea.Batch(m.scheduleExternalCheck(), theme)
 	}
-	return m, m.checkExternalChange()
+	return m, tea.Batch(m.checkExternalChange(), theme)
 }
 
 func (m *model) handleExternalChange(msg externalChangeMsg) (tea.Model, tea.Cmd) {
