@@ -219,7 +219,7 @@ func (m *model) focusView() *termgrid.Grid {
 		if task.ID != m.focus.scrollID {
 			m.focus.scroll, m.focus.scrollID = 0, task.ID
 		}
-		status := columnName(task.Status) + " · " + relativeTime(m.clock(), task.UpdatedAt)
+		status := columnName(task.Status) + " · " + elapsedTime(m.clock(), task.UpdatedAt)
 		titleWidth := textWidth
 		if status = truncateCell(status, textWidth/2); status != "" {
 			titleWidth -= ansi.StringWidth(status) + 1
@@ -259,7 +259,7 @@ func (m *model) focusView() *termgrid.Grid {
 				if format == "" {
 					format = w.Extension()[1:]
 				}
-				drawListRow(g, p, x0, y+1+i, sheetW, "◇ "+w.Name, format+" · "+relativeTime(m.clock(), w.UpdatedAt), ListRowDefault)
+				drawListRow(g, p, x0, y+1+i, sheetW, "◇ "+w.Name, format+" · "+elapsedTime(m.clock(), w.UpdatedAt), ListRowDefault)
 			}
 		}
 	}

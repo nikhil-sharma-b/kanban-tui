@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/nikhilsharma/kanban-tui/internal/domain"
 	"github.com/nikhilsharma/kanban-tui/internal/store"
@@ -36,58 +34,6 @@ const (
 	maxDescriptionHeight  = 14
 	minDescriptionHeight  = 4
 )
-
-// leftAccentBorder defines a border with only a left accent bar for modern card styling.
-var leftAccentBorder = lipgloss.Border{
-	Left: "┃",
-}
-
-var theme = struct {
-	Rosewater lipgloss.TerminalColor
-	Flamingo  lipgloss.TerminalColor
-	Pink      lipgloss.TerminalColor
-	Mauve     lipgloss.TerminalColor
-	Red       lipgloss.TerminalColor
-	Peach     lipgloss.TerminalColor
-	Yellow    lipgloss.TerminalColor
-	Green     lipgloss.TerminalColor
-	Teal      lipgloss.TerminalColor
-	Blue      lipgloss.TerminalColor
-	Lavender  lipgloss.TerminalColor
-	Text      lipgloss.TerminalColor
-	Subtext1  lipgloss.TerminalColor
-	Subtext0  lipgloss.TerminalColor
-	Overlay0  lipgloss.TerminalColor
-	Surface2  lipgloss.TerminalColor
-	Surface1  lipgloss.TerminalColor
-	Surface0  lipgloss.TerminalColor
-	Base      lipgloss.TerminalColor
-	Mantle    lipgloss.TerminalColor
-	Crust     lipgloss.TerminalColor
-}{
-	// Pre-Dusk names, mapped onto Dusk tokens until each screen is redrawn.
-	Rosewater: dusk.Dark.TextCard.Color,
-	Flamingo:  dusk.Dark.Danger.Color,
-	Pink:      dusk.Dark.Accent.Color,
-	Mauve:     dusk.Dark.Accent.Color,
-	Red:       dusk.Dark.Danger.Color,
-	Peach:     dusk.Dark.Meta.Color,
-	Yellow:    dusk.Dark.Meta.Color,
-	Green:     dusk.Dark.Success.Color,
-	Teal:      dusk.Dark.Success.Color,
-	Blue:      dusk.Dark.Meta.Color,
-	Lavender:  dusk.Dark.Accent.Color,
-	Text:      dusk.Dark.Text.Color,
-	Subtext1:  dusk.Dark.TextCard.Color,
-	Subtext0:  dusk.Dark.TextMuted.Color,
-	Overlay0:  dusk.Dark.TextDim.Color,
-	Surface2:  dusk.Dark.TextFaint.Color,
-	Surface1:  dusk.Dark.Border.Color,
-	Surface0:  dusk.Dark.Border.Color,
-	Base:      lipgloss.NoColor{},
-	Mantle:    lipgloss.NoColor{},
-	Crust:     lipgloss.NoColor{},
-}
 
 type mode int
 
@@ -245,9 +191,6 @@ type model struct {
 	focus         focusState
 }
 
-// ansiStripRe matches ANSI escape sequences for the dim/blur effect.
-var ansiStripRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
-
 func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath string) tea.Model {
 	if workspace == nil {
 		workspace = domain.NewWorkspace()
@@ -267,8 +210,6 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	titleInput.Placeholder = "What needs to be done?"
 	titleInput.CharLimit = taskTitleCharLimit
 	titleInput.Width = maxCreateInputWidth
-	titleInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
-	titleInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	descInput := textarea.New()
 	descInput.Prompt = ""
@@ -276,50 +217,33 @@ func New(workspace *domain.Workspace, boardStore store.WorkspaceStore, dataPath 
 	descInput.SetWidth(maxCreateInputWidth)
 	descInput.SetHeight(maxDescriptionHeight)
 	descInput.ShowLineNumbers = false
-	descInput.FocusedStyle.Base = lipgloss.NewStyle().Foreground(theme.Text)
-	descInput.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(theme.Overlay0)
-	descInput.FocusedStyle.CursorLine = lipgloss.NewStyle()
-	descInput.BlurredStyle.Base = lipgloss.NewStyle().Foreground(theme.Subtext1)
-	descInput.BlurredStyle.Placeholder = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	searchInput := textinput.New()
 	searchInput.Prompt = ""
 	searchInput.Placeholder = "Type to filter tasks..."
 	searchInput.Width = maxModalInputWidth
-	searchInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
-	searchInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	columnInput := textinput.New()
 	columnInput.Placeholder = "Column name"
 	columnInput.Width = maxModalInputWidth
-	columnInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
-	columnInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	projectInput := textinput.New()
 	projectInput.Placeholder = "Project name"
 	projectInput.Width = maxModalInputWidth
-	projectInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
-	projectInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	projectFilterInput := textinput.New()
 	projectFilterInput.Prompt = "/ "
 	projectFilterInput.Placeholder = "Fuzzy filter projects..."
 	projectFilterInput.Width = maxModalInputWidth
-	projectFilterInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
-	projectFilterInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	whiteboardInput := textinput.New()
 	whiteboardInput.Placeholder = "Whiteboard name"
 	whiteboardInput.Width = maxModalInputWidth
-	whiteboardInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
-	whiteboardInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	archiveFilterInput := textinput.New()
 	archiveFilterInput.Prompt = "/ "
 	archiveFilterInput.Placeholder = "Filter archived tasks..."
 	archiveFilterInput.Width = maxModalInputWidth
-	archiveFilterInput.TextStyle = lipgloss.NewStyle().Foreground(theme.Text)
-	archiveFilterInput.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Overlay0)
 
 	columns := board.Statuses()
 	selected := make(map[domain.Status]int, len(columns))
@@ -554,15 +478,10 @@ func (m *model) View() string {
 	if m.mode == modePalette {
 		return m.placeDialog(board, m.paletteDialog())
 	}
-	view := renderGrid(board)
-
-	switch m.mode {
-	default:
-		if m.showHelp {
-			return m.placeOverlayCenter(view, m.renderHelpOverlay())
-		}
-		return view
+	if m.showHelp {
+		return m.placeDialog(board, m.helpOverlay())
 	}
+	return renderGrid(board)
 }
 
 func (m *model) updateBoard(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1195,25 +1114,13 @@ func (m *model) updateCreateReplace(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// syncVimCursor recolors the input cursors to reflect the current vim mode:
-// green block in normal, yellow while an operator/prefix is pending, red in
-// replace mode, default blinking cursor in insert.
+// syncVimCursor keeps the caret static outside insert mode. The grid renderer
+// paints it with palette tokens; the input models only drive blinking.
 func (m *model) syncVimCursor() tea.Cmd {
-	style := lipgloss.NewStyle()
 	mode := cursor.CursorBlink
-	switch {
-	case m.vimReplace:
-		style = style.Foreground(theme.Red)
-		mode = cursor.CursorStatic
-	case m.vimNormal && m.vim.pending():
-		style = style.Foreground(theme.Yellow)
-		mode = cursor.CursorStatic
-	case m.vimNormal:
-		style = style.Foreground(theme.Green)
+	if m.vimReplace || m.vimNormal {
 		mode = cursor.CursorStatic
 	}
-	m.titleInput.Cursor.Style = style
-	m.descInput.Cursor.Style = style
 	titleCmd := m.titleInput.Cursor.SetMode(mode)
 	descCmd := m.descInput.Cursor.SetMode(mode)
 	if m.mode == modeCreate && m.descInput.Focused() && mode == cursor.CursorBlink {
@@ -2067,44 +1974,6 @@ func (m *model) dialogContentWidth(dialogWidth, padding int) int {
 	return content
 }
 
-func (m *model) placeOverlayCenter(base string, overlay string) string {
-	// Dim the base to create a frosted backdrop
-	bg := dimContent(base)
-	bgLines := strings.Split(bg, "\n")
-	overlayLines := strings.Split(overlay, "\n")
-
-	// Pad background to fill terminal height
-	for len(bgLines) < m.height {
-		bgLines = append(bgLines, "")
-	}
-
-	// Center the overlay on top of the dimmed background
-	startRow := max(0, (m.height-len(overlayLines))/2)
-	for i, oLine := range overlayLines {
-		row := startRow + i
-		if row >= len(bgLines) {
-			break
-		}
-		oWidth := lipgloss.Width(oLine)
-		padLeft := max(0, (m.width-oWidth)/2)
-		bgLines[row] = spacer(padLeft) + oLine
-	}
-
-	return strings.Join(bgLines, "\n")
-}
-
-// dimContent strips ANSI codes and re-renders all visible characters
-// in a muted color to create a frosted/blurred backdrop effect.
-func dimContent(s string) string {
-	dimStyle := lipgloss.NewStyle().Foreground(theme.Surface0)
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		plain := ansiStripRe.ReplaceAllString(line, "")
-		lines[i] = dimStyle.Render(plain)
-	}
-	return strings.Join(lines, "\n")
-}
-
 func (m *model) activeProjectIndex() int {
 	if m.workspace == nil {
 		return 0
@@ -2312,25 +2181,6 @@ func spacer(width int) string {
 	return strings.Repeat(" ", width)
 }
 
-func statusAccent(status domain.Status) lipgloss.TerminalColor {
-	switch status {
-	case domain.StatusBacklog:
-		return theme.Blue
-	case domain.StatusInProgress:
-		return theme.Peach
-	case domain.StatusDone:
-		return theme.Green
-	case domain.StatusWaiting:
-		return theme.Blue
-	case domain.StatusActive:
-		return theme.Peach
-	case domain.StatusNext:
-		return theme.Mauve
-	default:
-		return theme.Lavender
-	}
-}
-
 func statusIcon(status domain.Status) string {
 	switch status {
 	case domain.StatusBacklog:
@@ -2351,6 +2201,14 @@ func statusIcon(status domain.Status) string {
 }
 
 func relativeTime(now, t time.Time) string {
+	if age := now.Sub(t); age >= 24*time.Hour && age < 48*time.Hour {
+		return "yesterday"
+	}
+	return elapsedTime(now, t)
+}
+
+// elapsedTime uses compact numeric ages, including "1d ago" in Focus.
+func elapsedTime(now, t time.Time) string {
 	d := now.Sub(t)
 	switch {
 	case d < time.Minute:
@@ -2369,9 +2227,6 @@ func relativeTime(now, t time.Time) string {
 		return fmt.Sprintf("%dh ago", hours)
 	case d < 7*24*time.Hour:
 		days := int(d.Hours() / 24)
-		if days == 1 {
-			return "yesterday"
-		}
 		return fmt.Sprintf("%dd ago", days)
 	default:
 		return t.Local().Format("2 Jan")

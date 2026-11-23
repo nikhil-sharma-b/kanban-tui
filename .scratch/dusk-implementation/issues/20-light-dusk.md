@@ -4,8 +4,10 @@
 
 **Blocked by:** 11 — Projects; 17 — Command palette; 18 — Focus mode; 19 — Theme setting and fallbacks
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Every frame listed here is enforced by the frame-matching check with zero cell differences in Dusk light: 16/board, 16/board-80x24, 16/task-detail, 16/task-detail-80x24, 16/projects, 16/projects-80x24, 16/palette, 16/palette-80x24, 16/focus, 16/focus-80x24
-- [ ] Every 00 Foundations component matches the Components · light preview
-- [ ] No rendering code chooses a colour except through the palette
+- [x] Every frame listed here is enforced by the frame-matching check with zero cell differences in Dusk light: 16/board, 16/board-80x24, 16/task-detail, 16/task-detail-80x24, 16/projects, 16/projects-80x24, 16/palette, 16/palette-80x24, 16/focus, 16/focus-80x24
+- [x] Every 00 Foundations component matches the Components · light preview
+- [x] No rendering code chooses a colour except through the palette
+
+The wide palette frame shows `12/typing`. The light task detail copies' overflow counts and narrow card preview were aligned with their shared description and page 03; page 13 focus timestamps now use page 16's `1d ago` in both themes.

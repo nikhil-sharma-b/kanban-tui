@@ -11,7 +11,10 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/nikhilsharma/kanban-tui/internal/termgrid"
+	"github.com/nikhilsharma/kanban-tui/internal/ui/dusk"
 )
 
 type boardAction int
@@ -211,41 +214,82 @@ func displayKeys(seq string) string {
 	return strings.ReplaceAll(seq, leaderKey, "SPC")
 }
 
-// renderHelpOverlay lists every board binding, grouped the way the leader
-// tree is.
-func (m *model) renderHelpOverlay() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(theme.Mauve).Render("◆  Keys")
-	keyStyle := lipgloss.NewStyle().Foreground(theme.Mauve).Bold(true)
-	headStyle := lipgloss.NewStyle().Foreground(theme.Blue).Bold(true)
-	descStyle := lipgloss.NewStyle().Foreground(theme.Text)
-
+// helpOverlay lists every board binding, grouped the way the leader tree is.
+func (m *model) helpOverlay() *termgrid.Grid {
 	// One row per action: arrow keys and ctrl+c are aliases of keys already
 	// listed, and repeating them only makes the overlay taller.
+	type row struct{ key, label string }
+	type section struct{ title, prefix string }
 	listed := map[boardAction]bool{}
-	section := func(name, prefix string) string {
-		lines := []string{headStyle.Render(name)}
-		for _, b := range boardBindings {
-			if listed[b.action] || !bindingInSection(b.keys, prefix) {
-				continue
+	var columns [][]row
+	for _, sections := range [][]section{
+		{{"Navigate", ""}},
+		{{"+task", "space t"}, {"+column", "space c"}},
+		{{"+project", "space p"}, {"+daily", "space d"}, {"+archive", "space a"}},
+	} {
+		var rows []row
+		for i, s := range sections {
+			if i > 0 {
+				rows = append(rows, row{})
 			}
-			listed[b.action] = true
-			k := displayKeys(b.keys)
-			lines = append(lines, keyStyle.Render(k+strings.Repeat(" ", max(10-len(k), 1)))+descStyle.Render(b.desc))
+			rows = append(rows, row{label: s.title})
+			for _, b := range boardBindings {
+				if listed[b.action] || !bindingInSection(b.keys, s.prefix) {
+					continue
+				}
+				listed[b.action] = true
+				rows = append(rows, row{displayKeys(b.keys), b.desc})
+			}
 		}
-		return strings.Join(lines, "\n")
+		columns = append(columns, rows)
 	}
-	gap := "    "
-	left := section("Navigate", "")
-	middle := lipgloss.JoinVertical(lipgloss.Left, section("+task", "space t"), "", section("+column", "space c"))
-	right := lipgloss.JoinVertical(lipgloss.Left, section("+project", "space p"), "", section("+daily", "space d"), "", section("+archive", "space a"))
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, gap, middle, gap, right)
-	hint := lipgloss.NewStyle().Foreground(theme.Overlay0).Render("esc / ? close")
-	lines := []string{title, "", body, "", hint}
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Mauve).
-		Padding(1, 3).
-		Render(strings.Join(lines, "\n"))
+	keyWidth := func(key string) int {
+		if key == "" {
+			return 0
+		}
+		return max(10, ansi.StringWidth(key)+1)
+	}
+	widths := make([]int, len(columns))
+	bodyW, bodyH := 0, 0
+	for i, rows := range columns {
+		bodyH = max(bodyH, len(rows))
+		for _, r := range rows {
+			widths[i] = max(widths[i], keyWidth(r.key)+ansi.StringWidth(r.label))
+		}
+		bodyW += widths[i]
+	}
+	pad, gap := 4, 4
+	if bodyW+2*pad+(len(columns)-1)*gap > m.width {
+		pad, gap = 2, 1
+	}
+	w := bodyW + 2*pad + (len(columns)-1)*gap
+	p := m.palette
+	g := newDialog(p, min(w, m.width), min(bodyH+8, m.height))
+	if g.W < 2*pad || g.H < 8 {
+		return g
+	}
+	draw := func(x, y int, s string, token dusk.Token, bold bool) {
+		g.Text(x, y, truncateCell(s, g.W-1-x), tokenFG(p, token, bold))
+	}
+	draw(pad, 2, "Keys", dusk.Text, true)
+	x := pad
+	for i, rows := range columns {
+		for j, r := range rows {
+			y := 4 + j
+			if y >= g.H-3 {
+				break
+			}
+			if r.key == "" {
+				draw(x, y, r.label, dusk.Meta, true)
+			} else {
+				draw(x, y, r.key, dusk.TextMuted, true)
+				draw(x+keyWidth(r.key), y, r.label, dusk.Text, false)
+			}
+		}
+		x += widths[i] + gap
+	}
+	drawDialogHints(g, p, pad, g.H-3, g.W-pad-1, []KeyHint{{"esc / ?", "close"}})
+	return g
 }
 
 func bindingInSection(keys, prefix string) bool {

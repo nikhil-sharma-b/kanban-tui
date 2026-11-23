@@ -354,6 +354,29 @@ func TestComponentsDialogs(t *testing.T) {
 	}
 }
 
+func TestBoardHelpUsesActivePalette(t *testing.T) {
+	for _, source := range []string{"01/default", "01/default-80x24"} {
+		t.Run(source, func(t *testing.T) {
+			h := Scenarios[source]
+			h.Keys = append(append([]string(nil), h.Keys...), "?")
+			dark := ReadScreen(h.Run(), h.W, h.H, h.Palette)
+			h.Palette = dusk.Light
+			light := ReadScreen(h.Run(), h.W, h.H, h.Palette)
+			if !strings.Contains(strings.Join(light.Rows(), "\n"), "promote to project") {
+				t.Fatal("help did not show the full daily action")
+			}
+			for i, c := range light.Cells {
+				if strings.HasPrefix(c.FG, "raw:") || strings.HasPrefix(c.BG, "raw:") {
+					t.Fatalf("non-palette colour at row %d col %d: %+v", i/light.W+1, i%light.W+1, c)
+				}
+			}
+			if diffs := Compare(dark, light); len(diffs) != 0 {
+				t.Errorf("changing theme changed help cells beyond their palette values:\n%s", summary(diffs))
+			}
+		})
+	}
+}
+
 // A one-cell change to the render must fail the check and name that cell.
 func TestOneCellChangeIsReported(t *testing.T) {
 	scn := Scenarios["01/empty-board"]

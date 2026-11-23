@@ -50,7 +50,7 @@ type Scenario struct {
 
 // Scenarios maps a frame name to how to reach it. Frames without one are
 // reported as missing a scenario.
-var Scenarios = map[string]Scenario{
+var Scenarios = withLightScenarios(map[string]Scenario{
 	"01/default":     {Workspace: sample.Workspace, W: 120, H: 36, Palette: dusk.Dark, Keys: []string{"l", "j"}},
 	"01/empty-board": {Workspace: sample.EmptyBoard, W: 120, H: 36, Palette: dusk.Dark},
 	// The doing column is empty; todo stays active.
@@ -213,6 +213,31 @@ var Scenarios = map[string]Scenario{
 	"09/delete-project-80x24":   deleteProjectScenario(80, 24),
 	"09/delete-project-typing":  deleteProjectScenario(120, 36, "w", "o", "r"),
 	"09/delete-project-matched": deleteProjectScenario(120, 36, "w", "o", "r", "k"),
+})
+
+func withLightScenarios(scenarios map[string]Scenario) map[string]Scenario {
+	// Page 16 repeats source scenarios in light mode. The wide palette
+	// shows the filtered state; its narrow counterpart shows the empty state.
+	for light, source := range map[string]string{
+		"16/board":             "01/default",
+		"16/board-80x24":       "01/default-80x24",
+		"16/task-detail":       "03/view",
+		"16/task-detail-80x24": "03/view-80x24",
+		"16/projects":          "07/switcher",
+		"16/projects-80x24":    "07/switcher-80x24",
+		"16/palette":           "12/typing",
+		"16/palette-80x24":     "12/empty-80x24",
+		"16/focus":             "13/doing",
+		"16/focus-80x24":       "13/doing-80x24",
+	} {
+		scenario, ok := scenarios[source]
+		if !ok {
+			panic("missing source scenario for " + light + ": " + source)
+		}
+		scenario.Palette = dusk.Light
+		scenarios[light] = scenario
+	}
+	return scenarios
 }
 
 // whichKeyScenario presses keys; wait lets the which-key delay pass after the
