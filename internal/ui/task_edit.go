@@ -272,10 +272,11 @@ func (m *model) updateDetailStatusMenu(key string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m.updateStatusMenu(key, t.Status, func(cursor int) tea.Cmd {
+		spot := m.spotOf(t)
 		m.board.MoveTask(t.ID, m.board.Statuses()[cursor], -1)
 		m.recalculateVisible()
 		m.selectTask(t.ID)
-		return m.saveWorkspaceCmd()
+		return tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusSuccess, "Moved to "+columnName(t.Status), moveUndo(spot)))
 	})
 }
 

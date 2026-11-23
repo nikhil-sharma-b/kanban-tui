@@ -509,7 +509,7 @@ func (m *model) duskBoard() *termgrid.Grid {
 			status = KeybarStatus{Text: "✗ " + m.columnErr.Error(), Token: dusk.Danger}
 		}
 	}
-	if m.toast.text != "" {
+	if m.toast.text != "" && m.mode == modeBoard {
 		// The toast sits right-aligned one blank row above the keybar, and
 		// above the Column rail when it shows (page 15).
 		y := m.height - 4

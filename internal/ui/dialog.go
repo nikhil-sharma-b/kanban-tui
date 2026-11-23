@@ -77,6 +77,12 @@ func (m *model) placeDialog(board, dialog *termgrid.Grid) string {
 	if dialog != nil {
 		board.Blit((board.W-dialog.W)/2, (board.H-dialog.H)/2, dialog)
 	}
+	if m.toast.text != "" {
+		// A toast raised inside a dialog (a status move in detail) stays lit
+		// above the scrim.
+		toast := toastGrid(m.palette, m.toast.kind, truncateCell(m.toast.text, board.W-2*screenGutter-6), m.toast.hint)
+		board.Blit(board.W-screenGutter-toast.W, board.H-4, toast)
+	}
 	return renderGrid(board)
 }
 

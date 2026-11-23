@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -227,6 +228,14 @@ func (m *model) oldDoneTasks() []string {
 
 func (m *model) archiveOldDone(back mode) (tea.Model, tea.Cmd) {
 	ids := m.oldDoneTasks()
+	var spots []undoSpot
+	for _, id := range ids {
+		spot := m.spotOf(m.board.Tasks[id])
+		spot.archived = true
+		spots = append(spots, spot)
+	}
+	// Restore in column order so each task lands back at its own index.
+	sort.Slice(spots, func(i, j int) bool { return spots[i].index < spots[j].index })
 	for _, id := range ids {
 		if _, err := m.board.ArchiveTask(id); err != nil {
 			m.mode = back
@@ -235,9 +244,15 @@ func (m *model) archiveOldDone(back mode) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.lastErr = nil
-	m.say(back, StatusSuccess, fmt.Sprintf("archived %s", plural(len(ids), "done task")))
+	text := fmt.Sprintf("archived %s", plural(len(ids), "done task"))
 	m.recalculateVisible()
-	return m, m.saveWorkspaceCmd()
+	if back != modeBoard || len(spots) == 0 {
+		m.say(back, StatusSuccess, text)
+		return m, m.saveWorkspaceCmd()
+	}
+	m.mode = back
+	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusInfo, "A"+text[1:],
+		undoEntry{spots: spots, undone: "Restored " + plural(len(spots), "task")}))
 }
 
 func (m *model) archiveHints(shown, total int) [][]KeyHint {

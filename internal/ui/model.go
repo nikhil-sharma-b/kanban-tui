@@ -456,7 +456,7 @@ func (m *model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		undo := m.undo
 		m.createFeedback, m.lastInfo = "", ""
 		m.clearToast()
-		if undo != nil && m.mode == modeBoard && len(m.pendingKeys) == 0 && msg.String() == "u" {
+		if undo != nil && (m.mode == modeBoard || m.mode == modeDetail) && len(m.pendingKeys) == 0 && msg.String() == "u" {
 			return m.applyUndo(*undo)
 		}
 		switch m.mode {
@@ -1670,14 +1670,14 @@ func (m *model) shiftSelected(delta int) (tea.Model, tea.Cmd) {
 	if task == nil {
 		return m, nil
 	}
-	spot := m.undoSpot(task)
+	spot := m.spotOf(task)
 	if !m.board.ShiftTask(task.ID, delta) {
 		return m, nil
 	}
 
 	m.recalculateVisible()
 	m.selectTask(task.ID)
-	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusSuccess, "Moved to "+columnName(task.Status), spot))
+	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusSuccess, "Moved to "+columnName(task.Status), moveUndo(spot)))
 }
 
 func (m *model) reorderSelected(delta int) (tea.Model, tea.Cmd) {
@@ -1693,15 +1693,23 @@ func (m *model) reorderSelected(delta int) (tea.Model, tea.Cmd) {
 	status := statuses[m.activeColumn]
 	index := m.selected[status]
 	target := index + delta
+	task := m.boardSelectedTask()
+	if task == nil {
+		return m, nil
+	}
+	spot := m.spotOf(task)
 	if !m.board.MoveWithin(status, index, target) {
 		return m, nil
 	}
 
 	m.selected[status] = target
-	m.lastStatus = "reordered"
 	m.recalculateVisible()
 	m.syncScroll(status)
-	return m, m.saveWorkspaceCmd()
+	verb := "Moved down"
+	if delta < 0 {
+		verb = "Moved up"
+	}
+	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusSuccess, verb, undoEntry{spots: []undoSpot{spot}, undone: "Order restored"}))
 }
 
 func (m *model) deleteTask(task *domain.Task) (tea.Model, tea.Cmd) {
@@ -1729,7 +1737,7 @@ func (m *model) archiveSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	spot := m.undoSpot(task)
+	spot := m.spotOf(task)
 	spot.archived = true
 	if _, err := m.board.ArchiveTask(task.ID); err != nil {
 		m.mode = modeBoard
@@ -1740,7 +1748,8 @@ func (m *model) archiveSelected() (tea.Model, tea.Cmd) {
 	m.mode = modeBoard
 	m.lastErr = nil
 	m.recalculateVisible()
-	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusInfo, m.quotedToast("Archived ", task.Title, undoHint), spot))
+	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusInfo, m.quotedToast("Archived ", task.Title, undoHint),
+		undoEntry{spots: []undoSpot{spot}, undone: m.quotedToast("Restored ", task.Title, KeyHint{})}))
 }
 
 func (m *model) moveSelection(delta int) {
@@ -2154,15 +2163,17 @@ func (m *model) markDailyDone() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	spot := m.spotOf(task)
+	spot.archived = true
 	if _, err := m.board.ArchiveTask(task.ID); err != nil {
 		m.lastErr = err
 		return m, nil
 	}
 
 	m.lastErr = nil
-	m.lastStatus = fmt.Sprintf("done: %s", singleLine(truncate(task.Title, 30)))
 	m.recalculateVisible()
-	return m, m.saveWorkspaceCmd()
+	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusSuccess, m.quotedToast("Done ", task.Title, undoHint),
+		undoEntry{spots: []undoSpot{spot}, undone: m.quotedToast("Restored ", task.Title, KeyHint{})}))
 }
 
 // clearDailyBoard deletes every task on the daily board, archived ones

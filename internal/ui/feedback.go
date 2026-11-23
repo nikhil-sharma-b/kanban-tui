@@ -25,13 +25,19 @@ type toast struct {
 	hint KeyHint
 }
 
-// undoEntry puts one moved or archived task back where it was. It lives only
-// while the toast that offers it shows; nothing about it is stored.
-type undoEntry struct {
+// undoSpot is where one task sat before a move or archive.
+type undoSpot struct {
 	taskID   string
 	status   domain.Status
 	index    int
 	archived bool
+}
+
+// undoEntry puts the tasks of the last move or archive back where they were.
+// It lives only while the toast that offers it shows; nothing is stored.
+type undoEntry struct {
+	spots  []undoSpot // in board order, so restoring by index works forward
+	undone string     // toast after undoing
 }
 
 type toastExpiredMsg struct{ seq uint64 }
@@ -78,8 +84,8 @@ func (m *model) quotedToast(prefix, title string, hint KeyHint) string {
 	return prefix + "“" + truncateCell(title, room) + "”"
 }
 
-// undoSpot records where a task sits now, so undo can put it back.
-func (m *model) undoSpot(task *domain.Task) undoEntry {
+// spotOf records where a task sits now, so undo can put it back.
+func (m *model) spotOf(task *domain.Task) undoSpot {
 	index := 0
 	for i, id := range m.board.Order[task.Status] {
 		if id == task.ID {
@@ -87,25 +93,46 @@ func (m *model) undoSpot(task *domain.Task) undoEntry {
 			break
 		}
 	}
-	return undoEntry{taskID: task.ID, status: task.Status, index: index}
+	return undoSpot{taskID: task.ID, status: task.Status, index: index}
+}
+
+// moveUndo is the entry for moving one task out of spot.
+func moveUndo(spot undoSpot) undoEntry {
+	return undoEntry{spots: []undoSpot{spot}, undone: "Moved back to " + columnName(spot.status)}
 }
 
 func (m *model) applyUndo(e undoEntry) (tea.Model, tea.Cmd) {
-	task := m.board.Tasks[e.taskID]
-	if task == nil {
-		return m, m.showToast(StatusDanger, "Nothing to undo · task is gone", KeyHint{})
-	}
-	text := "Moved back to " + columnName(e.status)
-	if e.archived {
-		if _, err := m.board.RestoreTask(e.taskID); err != nil {
-			return m, m.showToast(StatusDanger, "Could not undo · "+err.Error(), KeyHint{})
+	for _, s := range e.spots {
+		if m.board.Tasks[s.taskID] == nil {
+			return m, m.showToast(StatusDanger, "Nothing to undo · task is gone", KeyHint{})
 		}
-		text = m.quotedToast("Restored ", task.Title, KeyHint{})
 	}
-	m.board.MoveTask(e.taskID, e.status, e.index)
+	for _, s := range e.spots {
+		task := m.board.Tasks[s.taskID]
+		if s.archived {
+			if _, err := m.board.RestoreTask(s.taskID); err != nil {
+				return m, m.showToast(StatusDanger, "Could not undo · "+err.Error(), KeyHint{})
+			}
+		}
+		if task.Status == s.status {
+			// MoveTask would land one short when moving down a column.
+			m.board.MoveWithin(s.status, indexIn(m.board.Order[s.status], s.taskID), s.index)
+		} else {
+			m.board.MoveTask(s.taskID, s.status, s.index)
+		}
+	}
 	m.recalculateVisible()
-	m.selectTask(e.taskID)
-	return m, tea.Batch(m.saveWorkspaceCmd(), m.showToast(StatusSuccess, text, KeyHint{}))
+	m.selectTask(e.spots[0].taskID)
+	return m, tea.Batch(m.saveWorkspaceCmd(), m.showToast(StatusSuccess, e.undone, KeyHint{}))
+}
+
+func indexIn(ids []string, id string) int {
+	for i, candidate := range ids {
+		if candidate == id {
+			return i
+		}
+	}
+	return -1
 }
 
 func columnName(status domain.Status) string {

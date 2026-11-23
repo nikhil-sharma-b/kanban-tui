@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/nikhilsharma/kanban-tui/internal/domain"
+	"github.com/nikhilsharma/kanban-tui/internal/sample"
 	"github.com/nikhilsharma/kanban-tui/internal/store"
 )
 
@@ -254,5 +255,86 @@ func TestUnreadableStoreIsNeverWritten(t *testing.T) {
 	}
 	if board.width != 120 || board.height != 36 {
 		t.Fatalf("board size %dx%d, want 120x36", board.width, board.height)
+	}
+}
+
+func undoKey(m *model) {
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+}
+
+func TestUndoReorder(t *testing.T) {
+	m, task := newFeedbackModel(t, nil)
+	status, index := spot(m, task.ID)
+	press(m, " ", "t", "j")
+	if _, i := spot(m, task.ID); i == index {
+		t.Fatal("task was not reordered")
+	}
+	undoKey(m)
+	if s, i := spot(m, task.ID); s != status || i != index {
+		t.Fatalf("after undo at %s/%d, want %s/%d", s, i, status, index)
+	}
+}
+
+func TestUndoStatusMoveFromDetail(t *testing.T) {
+	m, task := newFeedbackModel(t, nil)
+	status, index := spot(m, task.ID)
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	press(m, "s", "j")
+	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if s, _ := spot(m, task.ID); s == status {
+		t.Fatal("status menu did not move the task")
+	}
+	if m.mode != modeDetail || m.toast.hint != undoHint {
+		t.Fatalf("mode %v, toast %q: want detail with an undo toast", m.mode, m.toast.text)
+	}
+	if view := m.View(); !bytes.Contains([]byte(view), []byte("u")) || !bytes.Contains([]byte(view), []byte("undo")) {
+		t.Fatal("undo toast not drawn over the detail dialog")
+	}
+	undoKey(m)
+	if s, i := spot(m, task.ID); s != status || i != index {
+		t.Fatalf("after undo at %s/%d, want %s/%d", s, i, status, index)
+	}
+}
+
+func TestUndoDailyDone(t *testing.T) {
+	m := newDailyTestModel(t)
+	pressBoardSeq(m, " ", "d", "d")
+	task, err := m.board.AddTask("stand-up", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.recalculateVisible()
+	m.selectTask(task.ID)
+	status, index := spot(m, task.ID)
+	press(m, " ", "d", "m")
+	if !task.Archived() {
+		t.Fatal("done did not archive the task")
+	}
+	undoKey(m)
+	if task.Archived() {
+		t.Fatal("undo did not bring the task back")
+	}
+	if s, i := spot(m, task.ID); s != status || i != index {
+		t.Fatalf("after undo at %s/%d, want %s/%d", s, i, status, index)
+	}
+}
+
+func TestUndoArchiveOldDone(t *testing.T) {
+	m := New(sample.ArchiveOld(sample.Now), &stubWorkspaceStore{}, filepath.Join(t.TempDir(), "board.db")).(*model)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	before := append([]string(nil), m.board.Order[domain.StatusDone]...)
+	press(m, " ", "a", "o", "y")
+	if len(m.board.Order[domain.StatusDone]) == len(before) {
+		t.Fatal("nothing was archived")
+	}
+	undoKey(m)
+	after := m.board.Order[domain.StatusDone]
+	if len(after) != len(before) {
+		t.Fatalf("done = %v after undo, want %v", after, before)
+	}
+	for i := range before {
+		if after[i] != before[i] {
+			t.Fatalf("done = %v after undo, want %v", after, before)
+		}
 	}
 }
