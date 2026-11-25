@@ -98,17 +98,19 @@ The CLI and TUI can run at the same time. The TUI picks up CLI changes within a 
 
 ## Keys
 
-Board keys follow Neovim: bare keys only navigate, and everything that creates, changes or opens something sits behind the leader, `space` (shown as `SPC`). Press `space` and a which-key popover lists what can follow; groups like `+task` open a submenu, `backspace` steps back, `?` opens the cheat sheet and `esc` cancels. Every screen lists its keys in the bottom bar or dialog footer, and `?` shows the rest.
+Board keys follow Neovim: bare keys navigate, and everything that creates, changes or opens something sits behind the leader, `space` (shown as `SPC`). The everyday task actions also get one bare key each (`n` new, `e` edit, `H` / `L` move, `K` / `J` reorder); anything destructive stays behind the leader. Press `space` and a which-key popover lists what can follow; groups like `+task` open a submenu, `backspace` steps back, `?` opens the cheat sheet and `esc` cancels. Every screen lists its keys in the bottom bar or dialog footer, and `?` shows the rest.
 
 Board:
 
-- `h` / `l` (or arrows): select column
+- `h` / `l` (or arrows): select column, landing on the card nearest your current row
 - `j` / `k` (or arrows): select task
 - `gg` / `G`: first / last task in the column
 - `enter`: open task details
-- `/`: search tasks; `esc` on the board clears the filter
+- `n`: new task in the selected column · `e`: edit the selected task
+- `H` / `L`: move the selected task to the previous / next column · `K` / `J`: reorder it within the column
+- `/`: search tasks from the bottom row, with the board filtering live above it; `esc` on the board clears the filter
 - `:`: command palette, every action by name
-- `z`: focus mode on the selected task: `J` / `K` scroll its description, `SPC t l` moves it right and focuses the next task, `j` / `k` pick a card when the column is empty, `z` or `esc` returns
+- `z`: focus mode on the selected task: `J` / `K` scroll its description, `L` moves it right and focuses the next task, `j` / `k` pick a card when the column is empty, `z` or `esc` returns
 - `u`: undo the last move or archive while its toast is showing
 - `?`: key cheat sheet (type to filter, `enter` to run, `esc` to close)
 - `q` / `ctrl+c`: quit
@@ -116,8 +118,8 @@ Board:
 `SPC t` (+task):
 
 - `n` new · `e` edit · `x` delete · `a` archive (delete and archive confirm first)
-- `h` / `l`: move task to the previous / next column
-- `k` / `j`: reorder within the column
+- `h` / `l`: move task to the previous / next column (same as `H` / `L`)
+- `k` / `j`: reorder within the column (same as `K` / `J`)
 - `w`: whiteboards · `y`: copy the task ID
 
 `SPC c` (+column):
@@ -160,7 +162,7 @@ Editing a task and the new-task dialog edit Vim-style:
 
 Search (`/`):
 
-- type to filter the board live
+- the bottom row becomes `/query`; type to filter the board live, nothing covers it
 - `enter`: keep the filter · `esc`: restore the previous one
 
 Command palette (`:`):
@@ -219,8 +221,8 @@ Columns cannot be added, renamed, reordered, or deleted there.
 Keys inside the daily board:
 
 - `SPC d d`: leave the daily board and go back to the last project you were on
-- `SPC t n`: capture a new task in Waiting
-- `SPC t h` / `SPC t l`: move a task between Waiting, Active and Next
+- `n`: capture a new task in Waiting
+- `H` / `L`: move a task between Waiting, Active and Next
 - `SPC d m`: mark the selected task done - it disappears from the board and moves to the archive
 - `SPC d p`: promote the selected task into a project column
 - `SPC a v`: view the tasks you already marked done (`r` restores one to the board)

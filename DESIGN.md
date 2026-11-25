@@ -42,7 +42,7 @@ spacing:
 components:
   card:
     backgroundColor: "{colors.surface}"
-    textColor: "{colors.text-card}"
+    textColor: "{colors.text}"
     rounded: "{rounded.card}"
   card-selected:
     backgroundColor: "{colors.surface-selected}"
@@ -77,7 +77,7 @@ A plum-dark terminal at the end of the day: quiet surfaces, one rose accent, and
 Everything lives on a character grid. There is one type size, hierarchy comes from colour tokens and bold, and every visual effect must be something a real terminal can draw with text, block glyphs and colour.
 
 **Key Characteristics:**
-- Card-per-task board, 4 columns at 120×36, 2 at 80×24.
+- Card-per-task board, 4 columns at 120×36, one below 100 cols (80×24, a half-width split pane).
 - Single rose accent (`accent`) used only for focus, selection and a few fixed markers (see **The One Rose Rule**).
 - Every action on screen has a visible key hint, always in the same order.
 - Every screen is assembled from 00 Foundations components. No one-off look-alikes.
@@ -129,12 +129,13 @@ FigCraft rounds an auto-width text box up to a whole pixel, so a run of hugging 
 
 - **Cell grid:** 1 cell = 1 col × 1 row = 8.4 × 18 px. Every frame, instance and text box sits on whole cells relative to its screen frame and is whole cells in size; half rows exist only through block glyphs. The only exceptions are the shapes in **Shape → glyph rules** below.
 - **Frames:** each state at 120×36 cells (1008×648), plus an 80×24 variant whenever layout changes. Name frames `<ticket>/<state>` and `<ticket>/<state>-80x24`, one page per ticket.
-- **120×36 rows:** row 1 blank · row 2 header · row 4 column headers · rows 5–33 cards · row 35 keybar · row 36 blank. At 80×24 the same 1-row margin: header row 2, column rail row 21, keybar row 23. Screen gutter is 2 cols at every size (16.8 px, close to the 18 px row, so the margin looks even on all sides). Column gap is 4 cols at 120×36 and 2 at 80×24; columns are 26 cols wide at 120×36. The keybar sits on the same gutters, with hints 3 cols apart.
-- **Breakpoint rule** (frame `02/breakpoint-rule`): visible columns N = clamp(floor(W/28), 1, 4). Hidden columns are named in the **Column rail**.
+- **120×36 rows:** row 1 blank · row 2 header · row 4 column headers · rows 5–33 cards · row 35 keybar · row 36 blank. At 80×24 the same 1-row margin: header row 2, column tabs row 4, keybar row 23. Screen gutter is 2 cols at every size (16.8 px, close to the 18 px row, so the margin looks even on all sides). Column gap is 4 cols; columns are 26 cols wide at 120×36, and below 100 cols the one column takes the full width between the gutters. The keybar sits on the same gutters, with hints 3 cols apart.
+- **Breakpoint rule** (frame `02/breakpoint-rule`): visible columns N = 1 below 100 cols, else min(floor(W/28), 4). A half-width split pane gets one full-width column instead of three cramped ones; `h l` slide between columns and `H L` carry the task along. With one column the header row becomes **column tabs**: every Column header in board order, 3 cols apart, the active one rose, so every column’s count stays in view (`01/default-80x24`). When the tabs would not fit between the gutters, the single header and the **Column rail** take over. Columns hidden beside several visible ones (100–111 cols) are named in the **Column rail**.
 - **Dialogs:** scale with the screen and are centred on whole rows: min(clamp(W/2, 60, 96), W−8) cols wide (60 at 120 cols, 95 at 190). Full-height dialogs (task detail, new task, archive detail, command palette, cheat sheet) are min(clamp(5H/9, 20, 32), H−4) rows tall (20 at 36 rows, 26 at 48) and never change size while open. Every other dialog takes the height its frame shows: a confirm fits its body, a project or whiteboard list fits its rows, a name dialog fits its input, and the archive list keeps one height in every state. A content-sized dialog may grow or shrink by whole rows as its content changes (a filter drops list rows, an error adds its Status message row) and is re-centred.
 - **Truncation:** card titles and descriptions are one line each. Text wider than the card's text area (card width − 3 cols: 23 at 120×36, 34 at 80×24) is cut to width − 1 cols, trailing spaces dropped, and ends in `…`. lipgloss: `strings.TrimRight(ansi.Truncate(s, w-1, ""), " ") + "…"`.
-- **Cards in a column:** at regular density a one-line card is 3 rows (inset row, title row, inset row) and cards stack with no gap; the half-row insets make the visible 1-row gap. The first card's top inset row sits directly under the column header (row 5 at 120×36).
-- **Compact density** below 30 rows (every 80×24 frame): `Density=compact` cards, no inset rows, 1 blank row between cards and below the column header.
+- **Cards in a column:** a card shows its title in `text` and the first line of its description in `meta`, so the two lines differ in lightness and hue (done cards: both `text-done`; a blank row when there is no description), in every state, so every card is the same height and moving the selection never moves another card (**The Steady Card Rule**). At regular density a card is 4 rows (inset row, title row, description row, inset row) and cards stack with no gap; the half-row insets make the visible 1-row gap. The rest of the description, the ID, age and whiteboards live in task details and focus mode.
+- **Text column:** column headers, column tabs, scroll hints and empty-column hints start on the card text column (2 cols in from the column edge), so they line up with card titles whether or not a card is selected. The App header and the keybar stay on the screen gutter, in line with the card edges. In FigCraft the Column header’s `Indent` property (on by default) draws that offset; focus mode turns it off. The first card's top inset row sits directly under the column header (row 5 at 120×36).
+- **Compact density** below 30 rows (every 80×24 frame): `Density=compact` cards (title and description rows, no inset rows), 1 blank row between cards and below the column header.
 
 ## Elevation & Depth
 
@@ -166,9 +167,9 @@ All components live on **00 Foundations → Components**, with a light-mode prev
 
 | Component | Variants | Use it for |
 |---|---|---|
-| Card | `State=default / selected / done` × `Density=regular / compact` | Every task on a board or list of tasks (`compact` below 30 rows) |
-| Column header | `State=normal / active / editing` | Column titles, including in-place rename |
-| Column rail | — | Names of columns hidden at narrow widths |
+| Card | `State=default / selected / done` × `Density=regular / compact` | Every task on a board or list of tasks: title and one description line (`compact` below 30 rows) |
+| Column header | `State=normal / active / editing`, `Indent` (boolean, on) | Column titles, including in-place rename, and the column tabs of the one-column board; `Indent` puts the label on the card text column |
+| Column rail | — | Names of columns hidden beside the visible ones when the column tabs don’t show |
 | App header | `Sync=live / error / reloaded` | Row 1 of every board screen |
 | Keybar | `Size=wide / narrow` | Bottom-row board key hints (120 vs 80 cols) |
 | Key hint | — | One `key label` pair, anywhere a key is shown |
@@ -198,13 +199,15 @@ The key hint system is what users rely on most, so it has the strictest rules.
 
 1. **Navigate:** `h j k l select`, `j k move`, `↑↓ move`
 2. **Confirm / primary:** `↵ open`, `↵ set`, `↵ create`, `o open`, `:wq save`
-3. **Actions** for the current context: `n new`, `e edit`, `s status`, `r rename`, `x delete`, `tab next field`, `ctrl+e $EDITOR`, `SPC t …`
+3. **Actions** for the current context: `n new`, `e edit`, `H L move`, `s status`, `r rename`, `x delete`, `tab next field`, `ctrl+e $EDITOR`, `SPC t …`
 4. **Search / filter:** `/ search`, `/ refine`, `/ filter`
 5. **Leave:** `esc close`, `esc cancel`, `esc back`, `esc normal`, `esc clear filter`, and `backspace …` after it in text inputs
 6. **Help:** `? help` (board) or `? more` (dialogs), always last
 7. Overflow markers such as `↓ 1 more line` sit after the hints, aligned right
 
-**The Board Keybar Rule.** The board keybar is exactly: `h j k l select · ↵ open · / search · SPC t n new · SPC t h l move · SPC more · ? help` (85 cols; edit and delete live under `SPC t`, shown by which-key, so every keybar fits the 116 cols between the gutters). With a filter applied, `/ search` becomes `/ refine` and `SPC more` becomes `esc clear filter`. At 80×24 (`Size=narrow`) it keeps `h j k l select · ↵ open · SPC t n new · SPC more · ? help` (filter: `/ refine · esc clear filter` replace the middle). On the daily board the same slots carry the daily actions: `h j k l select · ↵ open · SPC t n new · SPC d m done · SPC d p promote · SPC d d back · SPC more · ? help` (narrow: `h j k l select · ↵ open · SPC d p promote · SPC more · ? help`). Don't reword or reorder it per screen.
+**The Board Keybar Rule.** The board keybar is exactly: `h j k l select · ↵ open · / search · n new · H L move · SPC more · ? help` (73 cols; delete, archive and the rest live under `SPC t`, shown by which-key, so every keybar fits the 116 cols between the gutters). With a filter applied, `/ search` becomes `/ refine` and `SPC more` becomes `esc clear filter`. At 80×24 (`Size=narrow`) it keeps `h j k l select · ↵ open · n new · H L move · SPC more · ? help` (filter: `h j k l select · ↵ open · / refine · esc clear filter · ? help`). `H L move` shows only while a task is selected. On the daily board the same slots carry the daily actions: `h j k l select · ↵ open · n new · SPC d m done · SPC d p promote · SPC d d back · SPC more · ? help` (narrow: `h j k l select · ↵ open · SPC d p promote · SPC more · ? help`). Don't reword or reorder it per screen.
+
+**The Search Line Rule.** `/` never opens a dialog. It turns the keybar row into the search prompt, the way vim searches on its command line: a Command line instance reads `/query` with its full-cell caret at the left, and `↵ apply · esc restore` sit at the right edge (3 cols apart, 2 at 80×24). No scrim: the board above stays fully lit and live-filters as you type, the header carries the match count (`2 of 14 match`) and the filter chip returns once the query is applied (frames `05/typing`, `05/no-results`).
 
 **The Safe-Key-First Rule.** Tier 1 confirmations (one task, one whiteboard, archive) are always `esc keep · y <verb>` (`delete`, `archive`), with the safe key first. `↵` is inert in them: only `y` acts and only `esc` keeps, so a reflex enter can't delete and `↵` never means cancel. Tier 2 (project, non-empty column, clear daily) asks the user to type the name: footer `esc keep` until it matches, then `↵ delete · esc keep`. This is the one exception to "confirm before leave". The discard-changes prompt while editing (`03/unsaved`) is not a confirmation dialog: it reads `discard unsaved changes?  y yes  n no`, and `esc` answers no.
 
@@ -270,19 +273,19 @@ One `Palette` struct per theme, one field per token, built with `lipgloss.Color`
 
 | Width W / height H | Rule |
 |---|---|
-| Visible columns | N = clamp(floor(W/28), 1, 4); hidden columns listed in the Column rail |
+| Visible columns | N = 1 when W < 100, else min(floor(W/28), 4); one column shows column tabs in the header row, otherwise hidden columns are listed in the Column rail |
 | Dialog size | min(clamp(W/2, 60, 96), W−8) cols; full-height dialogs min(clamp(5H/9, 20, 32), H−4) rows, fixed while open (frame `03/view-190x48` shows the large size); the rest fit their content (see **Layout → Dialogs**) |
 | Keybar | `Size=wide` at W ≥ 100, else `Size=narrow` |
 | Density | H < 30 → compact: no card insets, 1 blank row between cards |
-| Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`). At 80×24 both columns sit under it, so it drops onto the keybar instead, leaving a blank row below the selected card. Menus and dialogs are whole rows: the border is drawn inside the padding. The popover is only as tall as its entries plus its 1-row borders (root 7 rows, a group up to 9) and grows upward from a fixed bottom edge |
+| Which-key | bottom-right popover one row above the keybar; moves to bottom-left when it would cover the selected card (`14/placement-flip`). Below 100 cols the one column sits under it, so it drops onto the keybar instead, leaving a blank row below the selected card. Menus and dialogs are whole rows: the border is drawn inside the padding. The popover is only as tall as its entries plus its 1-row borders (root 7 rows, a group up to 9) and grows upward from a fixed bottom edge |
 
 ## Keybind map
 
-Board keys, all built. The bindings table in `internal/ui/leader.go` holds every row except `esc`, `z` and `u`, which the board handles beside it. Board screens may only use keys listed here; dialog keys follow the Fixed Order Rule.
+Board keys, all built. The bindings table in `internal/ui/leader.go` holds every row except `esc`, `z` and `u`, which the board handles beside it. Bare keys navigate; the everyday task actions (new, edit, move, reorder) also have one bare key each, listed right before their `SPC t` twin so hints, the palette and the cheat sheet show the faster key. Anything destructive (delete, archive, clear) stays behind the leader. Board screens may only use keys listed here; dialog keys follow the Fixed Order Rule.
 
 | Keys | Action |
 |---|---|
-| `h j k l` / arrows | select column / task |
+| `h j k l` / arrows | select column / task; `h l` land on the card nearest the selected card’s row |
 | `g g` · `G` | first · last task |
 | `↵` | open task detail |
 | `/` | search / refine filter |
@@ -291,6 +294,8 @@ Board keys, all built. The bindings table in `internal/ui/leader.go` holds every
 | `z` | focus mode (page 13); in it `J K` scroll the description, `z` · `esc` back to the board |
 | `?` | help / cheat sheet |
 | `q` · `ctrl+c` | quit |
+| `n` · `e` | task: new, edit |
+| `H L` · `K J` | task: move column · reorder |
 | `SPC t` `n e x a` | task: new, edit, delete, archive |
 | `SPC t` `h l` · `k j` | task: move column · reorder |
 | `SPC t` `w y` | task: whiteboards, copy id |

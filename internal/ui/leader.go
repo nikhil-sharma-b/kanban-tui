@@ -1,10 +1,12 @@
 package ui
 
 // Board keys resolve through one table, the way Neovim resolves mappings: bare
-// keys only navigate, and anything that creates, mutates or opens something
-// sits behind the leader (space). While a sequence is unfinished, a which-key
-// float lists what may follow it. The float, the command palette and the
-// resolver all read boardBindings.
+// keys navigate, and everything that creates, mutates or opens something sits
+// behind the leader (space). The everyday task actions (new, edit, move,
+// reorder) also get one bare key each, listed right before their leader twin
+// so hints, the palette and the cheat sheet show the faster key. While a
+// sequence is unfinished, a which-key float lists what may follow it. The
+// float, the command palette and the resolver all read boardBindings.
 
 import (
 	"strings"
@@ -88,13 +90,19 @@ var boardBindings = []boardBinding{
 	{"q", actQuit, "quit", ""},
 	{"ctrl+c", actQuit, "quit", ""},
 
+	{"n", actTaskNew, "new", "new task"},
 	{"space t n", actTaskNew, "new", "new task"},
+	{"e", actTaskEdit, "edit", "edit task"},
 	{"space t e", actTaskEdit, "edit", "edit task"},
 	{"space t x", actTaskDelete, "delete", "delete task"},
 	{"space t a", actTaskArchive, "archive", "archive task"},
+	{"H", actTaskMoveLeft, "move left", "move task left"},
 	{"space t h", actTaskMoveLeft, "move left", "move task left"},
+	{"L", actTaskMoveRight, "move right", "move task right"},
 	{"space t l", actTaskMoveRight, "move right", "move task right"},
+	{"K", actTaskReorderUp, "reorder up", "move task up"},
 	{"space t k", actTaskReorderUp, "reorder up", "move task up"},
+	{"J", actTaskReorderDown, "reorder down", "move task down"},
 	{"space t j", actTaskReorderDown, "reorder down", "move task down"},
 	{"space t w", actTaskWhiteboards, "whiteboards", "whiteboards…"},
 	{"space t y", actTaskCopyID, "copy ID", "copy task ID"},

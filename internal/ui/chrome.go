@@ -203,10 +203,11 @@ func drawColumnHeader(g *termgrid.Grid, p dusk.Palette, x, y int, label string, 
 	return g.Text(x, y, label, tokenFG(p, dusk.TextDim, false))
 }
 
-// RenderColumnHeader draws the Column header component (State=normal or active).
+// RenderColumnHeader draws the Column header component (State=normal or
+// active) with its Indent on: the label starts on the card text column.
 func RenderColumnHeader(p dusk.Palette, label string, active bool) string {
-	g := termgrid.New(len([]rune(label)), 1, tokenBG(p, dusk.Bg))
-	drawColumnHeader(g, p, 0, 0, label, active)
+	g := termgrid.New(columnTextIndent+len([]rune(label)), 1, tokenBG(p, dusk.Bg))
+	drawColumnHeader(g, p, columnTextIndent, 0, label, active)
 	return renderGrid(g)
 }
 
@@ -318,7 +319,67 @@ func RenderColumnRail(p dusk.Palette, width int, left, right []string) string {
 // visible columns they are marked on the column headers instead (01/more-columns).
 func (m *model) showRail() bool {
 	_, n := m.boardWindow()
-	return n < len(m.board.Statuses()) && n < duskMaxColumns
+	return n < len(m.board.Statuses()) && n < duskMaxColumns && !m.columnTabs()
+}
+
+// columnTabGap is the space between column tabs, the keybar's hint gap.
+const columnTabGap = 3
+
+// columnTabLabels are the headers of every column, as the tabs show them.
+func (m *model) columnTabLabels() []string {
+	var labels []string
+	for _, status := range m.board.Statuses() {
+		label := columnLabel(status, len(m.visible[status]))
+		if m.filter != "" {
+			label = fmt.Sprintf("%s/%d", label, len(m.board.Order[status]))
+		}
+		labels = append(labels, label)
+	}
+	return labels
+}
+
+// columnTabWidth is how wide the tab of column i draws, the in-place
+// rename field included.
+func (m *model) columnTabWidth(i int, label string) int {
+	if i == m.activeColumn && m.mode == modeRenameColumn {
+		return columnHeaderFieldWidth + len([]rune(fmt.Sprintf("· %d", len(m.visible[m.board.Statuses()[i]]))))
+	}
+	return len([]rune(label))
+}
+
+// columnTabs reports whether the one-column board names every column as a
+// tab in the header row instead of a Column rail: whenever one column shows
+// and all the tabs fit between the gutters.
+func (m *model) columnTabs() bool {
+	statuses := m.board.Statuses()
+	if len(statuses) < 2 || m.width >= narrowBelowCols {
+		return false
+	}
+	width := 0
+	for i, label := range m.columnTabLabels() {
+		if i > 0 {
+			width += columnTabGap
+		}
+		width += m.columnTabWidth(i, label)
+	}
+	return width <= m.width-2*screenGutter-columnTextIndent
+}
+
+// drawColumnTabs draws every column header on row y, the active one rose.
+func (m *model) drawColumnTabs(g *termgrid.Grid, x, y int) {
+	p := m.palette
+	statuses := m.board.Statuses()
+	for i, label := range m.columnTabLabels() {
+		if i > 0 {
+			x += columnTabGap
+		}
+		if i == m.activeColumn && m.mode == modeRenameColumn {
+			drawColumnHeaderEditing(g, p, x, y, m.columnInput.Value(), m.columnInput.Position(), len(m.visible[statuses[i]]))
+		} else {
+			drawColumnHeader(g, p, x, y, label, i == m.activeColumn)
+		}
+		x += m.columnTabWidth(i, label)
+	}
 }
 
 // ─── Board ───────────────────────────────────────────────────────────────────
@@ -360,7 +421,7 @@ func (m *model) appHeader() AppHeader {
 		}
 		return h
 	}
-	if first, n := m.boardWindow(); n < len(m.board.Statuses()) && !m.showRail() {
+	if first, n := m.boardWindow(); n < len(m.board.Statuses()) && !m.showRail() && !m.columnTabs() {
 		h.Counts = fmt.Sprintf("columns %d–%d of %d", first+1, first+n, len(m.board.Statuses()))
 		return h
 	}
@@ -391,7 +452,7 @@ func (m *model) boardHints(size KeybarSize) []KeyHint {
 	add(true, "h j k l", "select")
 	add(hasTask, "↵", "open")
 	if m.onDailyBoard() {
-		add(wide || !hasTask, "SPC t n", "new") // 11/empty-80x24
+		add(wide || !hasTask, "n", "new") // 11/empty-80x24
 		add(wide && hasTask, "SPC d m", "done")
 		add(hasTask, "SPC d p", "promote")
 		add(wide, "SPC d d", "back")
@@ -401,8 +462,8 @@ func (m *model) boardHints(size KeybarSize) []KeyHint {
 	}
 	add(filtered, "/", "refine")
 	add(!filtered && wide, "/", "search")
-	add(!filtered || wide, "SPC t n", "new")
-	add(wide && hasTask, "SPC t h l", "move")
+	add(!filtered || wide, "n", "new")
+	add(hasTask && (wide || !filtered), "H L", "move")
 	add(filtered, "esc", "clear filter")
 	add(!filtered, "SPC", "more")
 	add(true, "?", "help")
@@ -427,6 +488,11 @@ func (m *model) keybarStatus(width int, size KeybarSize, hints []KeyHint) Keybar
 		if size == KeybarNarrow || len([]rune(text)) > width {
 			text, _, _ = strings.Cut(text, " in ")
 		}
+		if len([]rune(text)) > width {
+			// A cut ID helps no one: say only that it was created.
+			text, _, _ = strings.Cut(text, "created ")
+			text += "created"
+		}
 		return KeybarStatus{Text: truncateCell(text, width), Token: dusk.Success}
 	case m.lastInfo != "":
 		return KeybarStatus{Text: m.lastInfo, Token: dusk.TextCard, Glyph: "●", GlyphToken: dusk.Accent}
@@ -436,12 +502,17 @@ func (m *model) keybarStatus(width int, size KeybarSize, hints []KeyHint) Keybar
 	return KeybarStatus{}
 }
 
-// boardWindow returns the first visible column and how many are shown:
-// N = clamp(floor(W/28), 1, 4). The window slides only as far as it must to
-// keep the active column visible, and remembers where it was.
+// boardWindow returns the first visible column and how many are shown: one
+// below 100 cols (a half-width split pane, 80×24), else min(floor(W/28), 4).
+// The window slides only as far as it must to keep the active column
+// visible, and remembers where it was.
 func (m *model) boardWindow() (int, int) {
 	total := len(m.board.Statuses())
-	n := min(total, max(1, min(duskMaxColumns, m.width/duskColumnPitch)))
+	n := max(1, min(duskMaxColumns, m.width/duskColumnPitch))
+	if m.width < narrowBelowCols {
+		n = 1
+	}
+	n = min(total, n)
 	first := max(0, min(m.windowFirst, total-n))
 	if m.activeColumn < first {
 		first = m.activeColumn
@@ -467,6 +538,7 @@ func (m *model) duskBoard() *termgrid.Grid {
 	statuses := m.board.Statuses()
 	first, n := m.boardWindow()
 	rail := m.showRail()
+	tabs := m.columnTabs()
 	gap := duskColumnGap
 	if m.width < narrowBelowCols {
 		gap = narrowColumnGap
@@ -486,26 +558,29 @@ func (m *model) duskBoard() *termgrid.Grid {
 			status := statuses[idx]
 			x := screenGutter + i*(colWidth+gap)
 			active := idx == m.activeColumn
-			hx := x
-			if i == 0 && first > 0 && !rail {
-				hx = g.Text(x, 3, "‹", tokenFG(p, dusk.TextDim, false)) + 1
+			hx := x + columnTextIndent
+			if i == 0 && first > 0 && !rail && !tabs {
+				g.Text(x, 3, "‹", tokenFG(p, dusk.TextDim, false))
 			}
 			label := columnLabel(status, len(m.visible[status]))
 			if m.filter != "" {
 				label = fmt.Sprintf("%s/%d", label, len(m.board.Order[status]))
 			}
-			if active && m.mode == modeRenameColumn {
+			switch {
+			case tabs:
+				m.drawColumnTabs(g, x+columnTextIndent, 3)
+			case active && m.mode == modeRenameColumn:
 				drawColumnHeaderEditing(g, p, hx, 3, m.columnInput.Value(), m.columnInput.Position(), len(m.visible[status]))
-			} else {
+			default:
 				hx = drawColumnHeader(g, p, hx, 3, label, active)
 			}
-			if i == n-1 && first+n < len(statuses) && !rail {
+			if i == n-1 && first+n < len(statuses) && !rail && !tabs {
 				g.Text(hx+1, 3, "›", tokenFG(p, dusk.TextDim, false))
 			}
 			showSelection := active && (m.mode != modeCreate || m.compact())
 			if showEmptyGuide {
 				if active {
-					m.drawBoardGuide(g, x, 5, colWidth, bodyHeight-1, firstRunEmptyHints)
+					m.drawBoardGuide(g, x+columnTextIndent, 5, colWidth-columnTextIndent, bodyHeight-1, firstRunEmptyHints)
 				}
 				continue
 			}
@@ -516,7 +591,7 @@ func (m *model) duskBoard() *termgrid.Grid {
 				if idx == len(statuses)-1 {
 					hints = hints[:1] // only open; there is no column to the right
 				}
-				m.drawBoardGuide(g, x, end+1, colWidth, 4+bodyHeight-end-1, hints)
+				m.drawBoardGuide(g, x+columnTextIndent, end+1, colWidth-columnTextIndent, 4+bodyHeight-end-1, hints)
 			}
 		}
 	}
@@ -559,6 +634,10 @@ func (m *model) duskBoard() *termgrid.Grid {
 		g.Blit(screenGutter+inner-toast.W, y, toast)
 	}
 	m.drawWhichKey(g)
+	if m.mode == modeSearch {
+		m.drawSearchLine(g, screenGutter, m.height-2, inner, size)
+		return g
+	}
 	drawKeybar(g, p, screenGutter, m.height-2, inner, size, hints, status)
 	return g
 }

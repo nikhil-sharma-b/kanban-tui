@@ -38,7 +38,7 @@ func (m *model) cheatSheetSections() []paletteSection {
 	}
 	rest := []paletteItem{
 		action("edit task", actTaskEdit),
-		entry("move task", "space t h l", func() (tea.Model, tea.Cmd) {
+		entry("move task", "H L", func() (tea.Model, tea.Cmd) {
 			move := actTaskMoveRight
 			if m.activeColumn == len(m.board.Statuses())-1 {
 				move = actTaskMoveLeft

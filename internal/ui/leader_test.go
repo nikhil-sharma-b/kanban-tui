@@ -40,10 +40,10 @@ func TestLeaderSequenceStaysPendingUntilComplete(t *testing.T) {
 	}
 }
 
-func TestBareMutatingKeysNoLongerFire(t *testing.T) {
+func TestBareDestructiveKeysNeverFire(t *testing.T) {
 	m, task := newArchiveTestModel(t)
 
-	for _, k := range []string{"x", "A", "n", "d"} {
+	for _, k := range []string{"x", "A", "d", "a"} {
 		m = pressBoardKeys(m, k)
 		if m.mode != modeBoard {
 			t.Fatalf("bare %q changed mode to %v", k, m.mode)
