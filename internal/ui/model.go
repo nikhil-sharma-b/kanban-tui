@@ -447,9 +447,6 @@ func (m *model) View() string {
 	if m.mode == modeConfirm {
 		return m.placeDialog(board, m.confirmDialog())
 	}
-	if m.mode == modeSearch {
-		return m.placeDialog(board, m.searchDialog())
-	}
 	if m.mode == modeAddColumn {
 		return m.placeAddColumnDialog(board)
 	}
@@ -568,12 +565,12 @@ func (m *model) runBoardAction(action boardAction) (tea.Model, tea.Cmd) {
 		return m.confirmClearDaily()
 	case actColumnLeft:
 		if m.activeColumn > 0 {
-			m.activeColumn--
+			m.changeColumn(m.activeColumn - 1)
 		}
 		m.syncScroll(statuses[m.activeColumn])
 	case actColumnRight:
 		if m.activeColumn < len(statuses)-1 {
-			m.activeColumn++
+			m.changeColumn(m.activeColumn + 1)
 		}
 		m.syncScroll(statuses[m.activeColumn])
 	case actTaskUp:
@@ -1696,6 +1693,53 @@ func (m *model) archiveSelected() (tea.Model, tea.Cmd) {
 	m.recalculateVisible()
 	return m, tea.Batch(m.saveWorkspaceCmd(), m.showUndoToast(StatusInfo, m.quotedToast("Archived ", task.Title, undoHint),
 		undoEntry{spots: []undoSpot{spot}, undone: m.quotedToast("Restored ", task.Title, KeyHint{})}))
+}
+
+// changeColumn makes column to active and selects its card nearest the row
+// the selected card sits on, so h and l move sideways across the board
+// instead of jumping to whatever that column last had selected.
+func (m *model) changeColumn(to int) {
+	statuses := m.board.Statuses()
+	row, ok := m.selectedCardRow(statuses[m.activeColumn])
+	m.activeColumn = to
+	if ok {
+		m.selectNearestRow(statuses[to], row)
+	}
+}
+
+// selectedCardRow is the top row of the column's selected card within the
+// column body, as drawn.
+func (m *model) selectedCardRow(status domain.Status) (int, bool) {
+	cards := m.columnCards(status, false)
+	for _, place := range layoutCards(cards, m.scroll[status], 0, m.duskBodyHeight()) {
+		if place.index == m.selected[status] {
+			return place.top, true
+		}
+	}
+	return 0, false
+}
+
+// selectNearestRow selects the shown card whose top row is nearest row; on a
+// tie the upper card wins.
+func (m *model) selectNearestRow(status domain.Status, row int) {
+	places := layoutCards(m.columnCards(status, false), m.scroll[status], 0, m.duskBodyHeight())
+	if len(places) == 0 {
+		return
+	}
+	best := places[0]
+	for _, place := range places[1:] {
+		if abs(place.top-row) < abs(best.top-row) {
+			best = place
+		}
+	}
+	m.selected[status] = best.index
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 func (m *model) moveSelection(delta int) {

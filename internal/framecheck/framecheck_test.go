@@ -173,29 +173,27 @@ func TestComponents(t *testing.T) {
 			func(p dusk.Palette, _ int) string { return ui.RenderKeyHint(p, ui.KeyHint{Key: "n", Label: "new"}) }},
 		{"Card State=default", "Components/Card/State=default, Density=regular", "Components · light preview/Card/Card#0",
 			func(p dusk.Palette, w int) string {
-				return ui.RenderCard(p, w, ui.Card{Title: "Archive search by date", State: ui.CardDefault})
+				return ui.RenderCard(p, w, ui.Card{Title: "Archive search by date", Desc: "Filter by archived date", State: ui.CardDefault})
 			}},
 		{"Card State=selected", "Components/Card/State=selected, Density=regular", "Components · light preview/Card/Card#1",
 			func(p dusk.Palette, w int) string {
-				return ui.RenderCard(p, w, ui.Card{Title: "Undo for move and delete", Desc: "Undo the last move or delete with u, from a toast",
-					Meta: "a3f91c07 · 2d ago · ◇2", State: ui.CardSelected})
+				return ui.RenderCard(p, w, ui.Card{Title: "Undo for move and delete", Desc: "Undo the last move", State: ui.CardSelected})
 			}},
 		{"Card State=done", "Components/Card/State=done, Density=regular", "Components · light preview/Card/Card#2",
 			func(p dusk.Palette, w int) string {
-				return ui.RenderCard(p, w, ui.Card{Title: "Copy task ID keybind", State: ui.CardDone})
+				return ui.RenderCard(p, w, ui.Card{Title: "Copy task ID keybind", Desc: "y in details copies it", State: ui.CardDone})
 			}},
 		{"Card State=default compact", "Components/Card/State=default, Density=compact", "Components · light preview/Card/Card#3",
 			func(p dusk.Palette, w int) string {
-				return ui.RenderCard(p, w, ui.Card{Title: "Archive search by date", State: ui.CardDefault, Compact: true})
+				return ui.RenderCard(p, w, ui.Card{Title: "Archive search by date", Desc: "Filter by archived date", State: ui.CardDefault, Compact: true})
 			}},
 		{"Card State=selected compact", "Components/Card/State=selected, Density=compact", "Components · light preview/Card/Card#4",
 			func(p dusk.Palette, w int) string {
-				return ui.RenderCard(p, w, ui.Card{Title: "Undo for move and delete", Desc: "Undo the last move or delete with u, from a toast",
-					Meta: "a3f91c07 · 2d ago · ◇2", State: ui.CardSelected, Compact: true})
+				return ui.RenderCard(p, w, ui.Card{Title: "Undo for move and delete", Desc: "Undo the last move", State: ui.CardSelected, Compact: true})
 			}},
 		{"Card State=done compact", "Components/Card/State=done, Density=compact", "Components · light preview/Card/Card#5",
 			func(p dusk.Palette, w int) string {
-				return ui.RenderCard(p, w, ui.Card{Title: "Copy task ID keybind", State: ui.CardDone, Compact: true})
+				return ui.RenderCard(p, w, ui.Card{Title: "Copy task ID keybind", Desc: "y in details copies it", State: ui.CardDone, Compact: true})
 			}},
 		{"Scroll hint Dir=up", "Components/Scroll hint/Dir=up", "Components · light preview/Toast + Scroll hint/Scroll hint#0",
 			func(p dusk.Palette, _ int) string { return ui.RenderScrollHint(p, ui.ScrollUp, 2) }},
@@ -237,8 +235,8 @@ func TestComponentsDialogs(t *testing.T) {
 		{"Scrim", "Scrim", "Scrim", func(p dusk.Palette, w, h int) string {
 			g := termgrid.New(w, h, "")
 			if p.Name == "light" {
-				g.Blit(0, 0, termgrid.Parse(ui.RenderCard(p, 26, ui.Card{Title: "Archive search by date"}), 26, 3))
-				g.Blit(0, 3, termgrid.Parse(ui.RenderCard(p, 26, ui.Card{Title: "Copy task ID keybind", State: ui.CardDone}), 26, 3))
+				g.Blit(0, 0, termgrid.Parse(ui.RenderCard(p, 26, ui.Card{Title: "Archive search by date", Desc: "Filter by archived date"}), 26, 3))
+				g.Blit(0, 3, termgrid.Parse(ui.RenderCard(p, 26, ui.Card{Title: "Copy task ID keybind", Desc: "y in details copies it", State: ui.CardDone}), 26, 3))
 			}
 			ui.ApplyScrim(g, p)
 			return g.Render(termenv.TrueColor)
@@ -362,7 +360,7 @@ func TestBoardHelpUsesActivePalette(t *testing.T) {
 			h.Palette = dusk.Light
 			light := ReadScreen(h.Run(), h.W, h.H, h.Palette)
 			rows := strings.Join(light.Rows(), "\n")
-			for _, binding := range []string{"start here", "everything else · : lists all", "SPC t h l"} {
+			for _, binding := range []string{"start here", "everything else · : lists all", "H L"} {
 				if !strings.Contains(rows, binding) {
 					t.Fatalf("help did not show %q", binding)
 				}
@@ -414,7 +412,7 @@ func TestFirstRunGuideFollowsActiveTaskCount(t *testing.T) {
 func TestFirstRunGuideStaysUsableBetweenFrameSizes(t *testing.T) {
 	s := firstRunScenario(112, 36)
 	rows := strings.Join(ReadScreen(s.Run(), s.W, s.H, s.Palette).Rows(), "\n")
-	if !strings.Contains(rows, "SPC t n add the first") {
+	if !strings.Contains(rows, "n add the first") {
 		t.Fatal("the primary guide should still show in a narrower four-column layout")
 	}
 }
@@ -451,10 +449,11 @@ func TestOneCellChangeIsReported(t *testing.T) {
 		t.Fatalf("got %d diffs, want 1:\n%s", len(diffs), summary(diffs))
 	}
 	report := Report("01/empty-board", want.Grid, got, diffs, nil)
-	if d := diffs[0]; d.Row != 4 || d.Col != 8 || d.Want.Ch != 'o' || d.Got.Ch != 'u' {
-		t.Fatalf("diff = %s, want row 4 col 8 'o' → 'u'", d)
+	// The header sits on the card text column: "backlog" starts at col 5.
+	if d := diffs[0]; d.Row != 4 || d.Col != 10 || d.Want.Ch != 'o' || d.Got.Ch != 'u' {
+		t.Fatalf("diff = %s, want row 4 col 10 'o' → 'u'", d)
 	}
-	if !strings.Contains(report, "row 4 col 8: want \"o\"") {
+	if !strings.Contains(report, "row 4 col 10: want \"o\"") {
 		t.Fatalf("report does not name the cell:\n%s", report)
 	}
 }

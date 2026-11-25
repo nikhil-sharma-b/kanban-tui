@@ -46,8 +46,8 @@ func drawColumnHeaderEditing(g *termgrid.Grid, p dusk.Palette, x, y int, value s
 // RenderColumnHeaderEditing draws the Column header component (State=editing).
 func RenderColumnHeaderEditing(p dusk.Palette, value string, count int) string {
 	label := fmt.Sprintf("· %d", count)
-	g := termgrid.New(columnHeaderFieldWidth+len([]rune(label)), 1, tokenBG(p, dusk.Bg))
-	drawColumnHeaderEditing(g, p, 0, 0, value, len([]rune(value)), count)
+	g := termgrid.New(columnTextIndent+columnHeaderFieldWidth+len([]rune(label)), 1, tokenBG(p, dusk.Bg))
+	drawColumnHeaderEditing(g, p, columnTextIndent, 0, value, len([]rune(value)), count)
 	return renderGrid(g)
 }
 

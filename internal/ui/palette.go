@@ -427,6 +427,7 @@ func (m *model) updatePalette(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			next, cmd := m.openSearch()
 			m.searchInput.SetValue(query)
 			m.searchInput.CursorEnd()
+			m.setFilter(query) // the board narrows at once, as if typed
 			return next, cmd
 		}
 		if m.pal.cursor < len(items) {

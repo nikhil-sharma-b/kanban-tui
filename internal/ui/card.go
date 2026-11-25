@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -35,30 +34,28 @@ const (
 	CardDone
 )
 
-// Card is what one task card shows. Desc and Meta show on a selected card only.
+// Card is what one task card shows: its title and the first line of its
+// description (blank when it has none), one line each. Every card is the same
+// height in every state, so moving the selection never reflows a column; the
+// rest of the description and the meta live in task details.
 type Card struct {
 	Title string
 	Desc  string
-	Meta  string
 	State CardState
 	// Compact is Density=compact: no inset rows, square full-height surface.
 	Compact bool
 }
 
+// cardRows are a card's text rows: title and description.
+const cardRows = 2
+
 // cardHeight is the card's height in rows: its text rows, plus an inset row
 // above and below at regular density.
 func cardHeight(c Card) int {
-	rows := 1
-	if c.State == CardSelected {
-		rows = 3 // title, blank, meta
-		if c.Desc != "" {
-			rows++
-		}
-	}
 	if c.Compact {
-		return rows
+		return cardRows
 	}
-	return rows + 2
+	return cardRows + 2
 }
 
 // cardSlot is the rows a card takes in a column: compact cards sit one blank
@@ -73,12 +70,14 @@ func cardSlot(c Card) int {
 // drawCard draws a card with its top-left corner at x, y and
 // returns its height.
 func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
-	surface, title := dusk.Surface, tokenFG(p, dusk.TextCard, false)
+	// Title and description differ in lightness and hue: the title in the
+	// brightest neutral, the description in the plum meta tone, selected or not.
+	surface, title, desc := dusk.Surface, tokenFG(p, dusk.Text, false), tokenFG(p, dusk.Meta, false)
 	switch c.State {
 	case CardSelected:
 		surface, title = dusk.SurfaceSelected, tokenFG(p, dusk.Text, true)
 	case CardDone:
-		surface, title = dusk.SurfaceDone, tokenFG(p, dusk.TextDone, false)
+		surface, title, desc = dusk.SurfaceDone, tokenFG(p, dusk.TextDone, false), tokenFG(p, dusk.TextDone, false)
 	}
 	bg := tokenBG(p, surface)
 	// Col 0 is the bar column, page background unless selected; the
@@ -115,27 +114,13 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 		g.Fill(sx, y+1, sw, h-2, bg)
 	}
 
-	row := top
-	g.Text(x+2, row, truncateCell(c.Title, textWidth), title)
+	g.Text(x+2, top, truncateCell(c.Title, textWidth), title)
+	g.Text(x+2, top+1, truncateCell(c.Desc, textWidth), desc)
 	if c.State == CardSelected {
-		row++
-		if c.Desc != "" {
-			desc := singleLine(c.Desc)
-			if c.Compact && strings.Contains(c.Desc, "\n") {
-				// Compact cards preview the first wrapped line of multiline descriptions.
-				if lines := wrapDialogText(c.Desc, textWidth); len(lines) > 0 {
-					desc = lines[0]
-				}
-			}
-			g.Text(x+2, row, truncateCell(desc, textWidth), tokenFG(p, dusk.TextMuted, false))
-			row++
-		}
-		row++ // one blank row before the meta
-		g.Text(x+2, row, truncateCell(c.Meta, textWidth), tokenFG(p, dusk.TextDim, false))
 		// The bar fills the right half of the bar column, flush with the
 		// surface and exactly its height, half-row insets included.
 		accent := tokenFG(p, dusk.Accent, false)
-		for r := top; r <= row; r++ {
+		for r := top; r < top+cardRows; r++ {
 			g.Text(x, r, "▐", accent)
 		}
 		if !c.Compact {
@@ -146,6 +131,20 @@ func drawCard(g *termgrid.Grid, p dusk.Palette, x, y, width int, c Card) int {
 	return h
 }
 
+// firstLine is the first non-blank line of s with its spaces collapsed.
+func firstLine(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if line = singleLine(line); line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+// columnTextIndent puts column headers, tabs and in-column hints on the
+// card text column (col 2 of a card), whether or not a card is selected.
+const columnTextIndent = 2
+
 // RenderCard draws the Card component on its own, width cells wide.
 func RenderCard(p dusk.Palette, width int, c Card) string {
 	g := termgrid.New(width, cardHeight(c), tokenBG(p, dusk.Bg))
@@ -155,36 +154,14 @@ func RenderCard(p dusk.Palette, width int, c Card) string {
 
 // taskCard is the card a task shows on the board.
 func (m *model) taskCard(task *domain.Task, selected bool) Card {
-	c := Card{Title: singleLine(task.Title), Compact: m.compact()}
+	c := Card{Title: singleLine(task.Title), Desc: firstLine(task.Description), Compact: m.compact()}
 	switch {
 	case selected:
 		c.State = CardSelected
-		c.Desc = task.Description
-		c.Meta = cardMeta(task, m.clock(), m.onDailyBoard())
 	case task.Status == domain.StatusDone:
 		c.State = CardDone
 	}
 	return c
-}
-
-// cardMeta is "short ID · relative age · ◇ whiteboard count", the count
-// hidden at 0. The daily board says "today" for anything touched today (11/daily).
-func cardMeta(task *domain.Task, now time.Time, daily bool) string {
-	age := relativeTime(now, task.UpdatedAt)
-	if daily && sameDay(now, task.UpdatedAt) {
-		age = "today"
-	}
-	meta := shortID(task.ID) + " · " + age
-	if n := len(task.Whiteboards); n > 0 {
-		meta += fmt.Sprintf(" · ◇%d", n)
-	}
-	return meta
-}
-
-func sameDay(a, b time.Time) bool {
-	ay, am, ad := a.Local().Date()
-	by, bm, bd := b.Local().Date()
-	return ay == by && am == bm && ad == bd
 }
 
 // ─── Scroll hint ─────────────────────────────────────────────────────────────
@@ -322,13 +299,13 @@ func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status
 			if m.onDailyBoard() {
 				label = "add what you’re on right now" // 11/empty
 			}
-			drawKeyHint(g, p, x, y+1, KeyHint{"SPC t n", label})
+			drawKeyHint(g, p, x+columnTextIndent, y+1, KeyHint{"n", label})
 		}
 		return y
 	}
 	scroll := min(m.scroll[status], len(cards)-1)
 	if scroll > 0 {
-		drawScrollHint(g, p, x, y+1, ScrollUp, scroll)
+		drawScrollHint(g, p, x+columnTextIndent, y+1, ScrollUp, scroll)
 	}
 	places := layoutCards(cards, scroll, y, height)
 	for _, c := range places {
@@ -337,7 +314,7 @@ func (m *model) drawColumnBody(g *termgrid.Grid, x, y, width, height int, status
 	last := places[len(places)-1]
 	end := last.top + cardHeight(cards[last.index])
 	if hidden := len(cards) - last.index - 1; hidden > 0 {
-		drawScrollHint(g, p, x, end, ScrollDown, hidden)
+		drawScrollHint(g, p, x+columnTextIndent, end, ScrollDown, hidden)
 	}
 	return end
 }

@@ -53,8 +53,8 @@ func TestResizeSwitchesLayoutAndKeepsSelection(t *testing.T) {
 	if rows := strings.Split(narrow, "\n"); len(rows) != 24 {
 		t.Fatalf("80×24 view has %d rows", len(rows))
 	}
-	if !strings.Contains(narrow, "‹ backlog") || !strings.Contains(narrow, "done ›") {
-		t.Fatalf("80×24 view should name hidden columns in the rail:\n%s", narrow)
+	if strings.Contains(narrow, "‹ backlog") || !strings.Contains(narrow, "backlog · 5   todo · 3   doing · 2   done · 4") {
+		t.Fatalf("80×24 view should name every column as a tab, with no rail:\n%s", narrow)
 	}
 	if got := m.(*model).selectedTask().ID; got != selected {
 		t.Fatalf("selection changed on resize: %s → %s", selected, got)

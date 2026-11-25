@@ -162,14 +162,14 @@ func (m *model) focusHints(size KeybarSize, task *domain.Task) []KeyHint {
 	if task == nil {
 		picked := m.focusPicked() != nil
 		add(picked, "j k", "select")
-		add(true, "SPC t n", "new")
-		add(picked, "SPC t l", "start")
+		add(true, "n", "new")
+		add(picked, "L", "start")
 	} else {
 		wide := size == KeybarWide
 		add(true, "j k", "task")
 		add(true, "↵", "details")
-		add(wide, "SPC t e", "edit")
-		add(right != "", "SPC t l", right)
+		add(wide, "e", "edit")
+		add(right != "", "L", right)
 		add(wide, "SPC t w", "whiteboards")
 		add(wide, "SPC", "more")
 	}
@@ -235,17 +235,20 @@ func (m *model) focusView() *termgrid.Grid {
 		label, next := m.focusUpNext(statuses[m.activeColumn])
 		listEnd := bottom
 		if next != nil {
-			card := Card{Title: singleLine(next.Title), Compact: m.compact()}
+			card := Card{Title: singleLine(next.Title), Desc: firstLine(next.Description), Compact: m.compact()}
 			if card.State = CardDefault; next.Status == domain.StatusDone {
 				card.State = CardDone
 			}
-			cardY := bottom - 3
+			// The card ends one row above the sheet's bottom edge; its label
+			// sits on the row above it, one blank row higher when compact.
+			cardY := bottom - cardHeight(card)
+			labelY := cardY - 1
 			if card.Compact {
-				cardY++
+				labelY = cardY - 2
 			}
 			drawCard(g, p, x0, cardY, sheetW, card)
-			g.Text(x0+2, bottom-4, truncateCell(label, textWidth), tokenFG(p, dusk.TextDim, false))
-			listEnd = bottom - 5
+			g.Text(x0+2, labelY, truncateCell(label, textWidth), tokenFG(p, dusk.TextDim, false))
+			listEnd = labelY - 1
 		}
 
 		if n := len(task.Whiteboards); n > 0 {

@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -138,39 +137,47 @@ func (m *model) filterCounts() (matches, total int) {
 	return matches, total
 }
 
-func (m *model) searchDialog() *termgrid.Grid {
-	p := m.palette
-	w := m.dialogW()
-	h := 8
-	if m.compact() {
-		h = 7
-	}
-	if w < 8 || h > m.height {
-		return nil
-	}
-	g := newDialog(p, w, h)
-	width := w - 4
-	label := "filter tasks"
-	g.Text(w-2-ansi.StringWidth(label), 1, label, tokenFG(p, dusk.TextDim, false))
-	inputWidth := width - ansi.StringWidth(label) - 1
+// searchHints are the keys the search prompt shows at the right of the
+// keybar row while a query is typed.
+var searchHints = []KeyHint{{"↵", "apply"}, {"esc", "restore"}}
 
+// drawSearchLine turns the keybar row into the search prompt, the way vim
+// types a search on its command line: the Command line component reads
+// "/query" with a full-cell caret at the cursor, and the prompt's keys sit at
+// the right. The board above stays fully visible and live-filters as you type.
+func (m *model) drawSearchLine(g *termgrid.Grid, x, y, width int, size KeybarSize) {
+	p := m.palette
+	gap := keybarWideGap
+	if size == KeybarNarrow {
+		gap = keybarNarrowGap
+	}
+	hintsWidth := 0
+	for i, h := range searchHints {
+		if i > 0 {
+			hintsWidth += gap
+		}
+		hintsWidth += h.width()
+	}
+	col := x + width - hintsWidth
+	for i, h := range searchHints {
+		if i > 0 {
+			col += gap
+		}
+		col = drawKeyHint(g, p, col, y, h)
+	}
+
+	// "/" plus as much of the query as fits before the hints, scrolled so the
+	// caret stays in view.
+	room := width - hintsWidth - gap - 1
+	if room < 2 {
+		return
+	}
 	value := m.searchInput.Value()
 	runes := []rune(value)
 	pos := min(m.searchInput.Position(), len(runes))
 	before := ansi.StringWidth(string(runes[:pos]))
-	left := max(0, before-inputWidth+1)
-	var lines []string
-	if value != "" {
-		lines = []string{ansi.Cut(value, left, left+inputWidth)}
-	}
-	drawFocusedInput(g, p, 0, 1, inputWidth+2, 1, lines, IdleInputField, "", &inputPoint{col: before - left})
-
-	matches, total := m.filterCounts()
-	result := fmt.Sprintf("%d of %d tasks match", matches, total)
-	if matches == 0 {
-		result = "No tasks match"
-	}
-	g.Text(2, 3, truncateCell(result, width), tokenFG(p, dusk.TextMuted, false))
-	drawDialogHints(g, p, 2, h-2, width, []KeyHint{{"↵", "apply"}, {"esc", "restore"}, {"backspace", "delete character"}})
-	return g
+	left := max(0, before-(room-1)+1)
+	end := g.Text(x, y, "/", tokenFG(p, dusk.Text, false))
+	g.Text(end, y, ansi.Cut(value, left, left+room-1), tokenFG(p, dusk.Text, false))
+	drawCaret(g, p, end+before-left, y)
 }
